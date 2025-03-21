@@ -1,8 +1,8 @@
 program zk_deck_shuffle.aleo;
 
-function setup_shuffle:
-    input r0 as i8.private;
-    input r1 as [[u128; 26u32]; 2u32].private;
+closure setup_shuffle:
+    input r0 as i8;
+    input r1 as [[u128; 26u32]; 2u32];
     abs r0 into r2;
     lt r0 0i8 into r3;
     not r3 into r4;
@@ -61,15 +61,15 @@ function setup_shuffle:
     ternary r3 r1[1u32][24u32] r1[0u32][24u32] into r57;
     ternary r3 r1[1u32][25u32] r1[0u32][25u32] into r58;
     cast  r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47 r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 into r59 as [u128; 26u32];
-    output r5 as i8.private;
-    output r32 as [u128; 26u32].private;
-    output r59 as [u128; 26u32].private;
+    output r5 as i8;
+    output r32 as [u128; 26u32];
+    output r59 as [u128; 26u32];
 
-function shuffle_deck:
-    input r0 as i8.private;
-    input r1 as u8.private;
-    input r2 as [u128; 26u32].private;
-    input r3 as [u128; 26u32].private;
+closure shuffle_deck:
+    input r0 as i8;
+    input r1 as u8;
+    input r2 as [u128; 26u32];
+    input r3 as [u128; 26u32];
     gte r0 1i8 into r4;
     assert.eq r4 true;
     lte r0 26i8 into r5;
@@ -1586,4 +1586,35 @@ function shuffle_deck:
     ternary r9 r11[25u32] r1462[25u32] into r1515;
     cast  r1490 r1491 r1492 r1493 r1494 r1495 r1496 r1497 r1498 r1499 r1500 r1501 r1502 r1503 r1504 r1505 r1506 r1507 r1508 r1509 r1510 r1511 r1512 r1513 r1514 r1515 into r1516 as [u128; 26u32];
     cast  r1489 r1516 into r1517 as [[u128; 26u32]; 2u32];
-    output r1517 as [[u128; 26u32]; 2u32].private;
+    output r1517 as [[u128; 26u32]; 2u32];
+
+function full_shuffle:
+    input r0 as i8.private;
+    input r1 as i8.private;
+    input r2 as i8.private;
+    input r3 as [[u128; 26u32]; 2u32].private;
+    abs r0 into r4;
+    gte r4 1i8 into r5;
+    abs r0 into r6;
+    lte r6 26i8 into r7;
+    and r5 r7 into r8;
+    assert.eq r8 true;
+    abs r1 into r9;
+    gte r9 1i8 into r10;
+    abs r1 into r11;
+    lte r11 26i8 into r12;
+    and r10 r12 into r13;
+    assert.eq r13 true;
+    abs r2 into r14;
+    gte r14 1i8 into r15;
+    abs r2 into r16;
+    lte r16 26i8 into r17;
+    and r15 r17 into r18;
+    assert.eq r18 true;
+    call setup_shuffle r0 r3 into r19 r20 r21;
+    call shuffle_deck r19 0u8 r20 r21 into r22;
+    call setup_shuffle r1 r22 into r23 r24 r25;
+    call shuffle_deck r23 0u8 r24 r25 into r26;
+    call setup_shuffle r2 r26 into r27 r28 r29;
+    call shuffle_deck r27 0u8 r28 r29 into r30;
+    output r30 as [[u128; 26u32]; 2u32].private;

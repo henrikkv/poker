@@ -16,16 +16,17 @@ program poker.aleo {
         buy_in: u64,
         deck: [[u128; 26]; 2],
     }
-    async transition new_game(game_id: u32) -> Future {
-        return finalize_new_game(game_id, self.caller);
+    async transition new_game(game_id: u32, element1: i8, element2: i8, element3: i8, e: u128, n: u128) -> Future {
+        let deck: [[u128; 26]; 2] = zk_deck_shuffle.aleo/full_shuffle(element1, element2, element3, zk_sra_encryption.aleo/encrypt_deck(e, n, get_new_deck()));
+        return finalize_new_game(game_id, deck, self.caller);
     }
-    async function finalize_new_game(game_id: u32, caller: address) {
+    async function finalize_new_game(game_id: u32, deck: [[u128; 26]; 2], caller: address) {
         let game: Game = Game {
             player1: caller,
             player2: 0u128 as address,
             player3: 0u128 as address, 
             buy_in: 10u64,
-            deck: get_new_deck(),
+            deck: deck,
         };
         Mapping::set(games, game_id, game);
     }

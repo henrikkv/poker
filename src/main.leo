@@ -1,3 +1,5 @@
+import zk_deck_shuffle.aleo;
+
 program poker.aleo {
     mapping games: u32 => Game;
 

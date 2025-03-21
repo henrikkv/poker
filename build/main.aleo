@@ -1,3 +1,4 @@
+import zk_deck_shuffle.aleo;
 program poker.aleo;
 
 struct Game:

@@ -1,1 +1,6 @@
-package = []
+[[package]]
+name = "zk_deck_shuffle.aleo"
+location = "local"
+path = "/home/henrik/Projects/poker/imports/zk_deck_shuffle/"
+checksum = "79282c62d877c1e2b4eb281c74e20bcb8f40fbf973da97b53452cb356d862c1c"
+dependencies = []

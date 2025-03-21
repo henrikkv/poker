@@ -10,6 +10,8 @@ struct Game:
     deck as [[u128; 26u32]; 2u32];
     state as u8;
     dealer_button as u8;
+    players_out as u8;
+    last_bet as u8;
 
 struct Chips:
     player1 as u16;
@@ -60,7 +62,7 @@ finalize create_game:
     input r2 as address.public;
     cast 0u128 into r3 as address;
     cast 0u128 into r4 as address;
-    cast r2 r3 r4 10u64 r1 0u8 3u8 into r5 as Game;
+    cast r2 r3 r4 10u64 r1 0u8 4u8 0u8 0u8 into r5 as Game;
     set r5 into games[r0];
 
 function join_game:
@@ -87,14 +89,14 @@ finalize join_game:
     is.eq r4.state 0u8 into r6;
     branch.eq r6 false to end_then_0_0;
     cast 0u128 into r7 as address;
-    cast r4.player1 r3 r7 r4.buy_in r2 1u8 3u8 into r8 as Game;
+    cast r4.player1 r3 r7 r4.buy_in r2 1u8 4u8 0u8 0u8 into r8 as Game;
     set r8 into games[r0];
     branch.eq true true to end_otherwise_0_1;
     position end_then_0_0;
     is.eq r4.state 1u8 into r9;
     branch.eq r9 false to end_then_1_2;
-    cast r4.player1 r4.player2 r3 r4.buy_in r2 2u8 3u8 into r10 as Game;
-    cast 0u16 0u16 0u16 0u16 0u16 0u16 into r11 as Chips;
+    cast r4.player1 r4.player2 r3 r4.buy_in r2 2u8 3u8 0u8 0u8 into r10 as Game;
+    cast 1000u16 1000u16 1000u16 0u16 0u16 0u16 into r11 as Chips;
     cast  r2[1u32][1u32] r2[1u32][4u32] into r12 as [u128; 2u32];
     cast  r2[1u32][2u32] r2[1u32][5u32] into r13 as [u128; 2u32];
     cast  r2[1u32][3u32] r2[1u32][6u32] into r14 as [u128; 2u32];
@@ -108,19 +110,111 @@ finalize join_game:
     position end_otherwise_1_3;
     position end_otherwise_0_1;
 
-function play:
+function bet:
     input r0 as u32.private;
-    async play r0 self.caller into r1;
-    output r1 as poker.aleo/play.future;
+    input r1 as u16.private;
+    async bet r0 r1 self.caller into r2;
+    output r2 as poker.aleo/bet.future;
 
-finalize play:
+finalize bet:
     input r0 as u32.public;
-    input r1 as address.public;
-    get games[r0] into r2;
-    is.eq r2.state 2u8 into r3;
-    branch.eq r3 false to end_then_0_4;
+    input r1 as u16.public;
+    input r2 as address.public;
+    get games[r0] into r3;
+    get chips[r0] into r4;
+    is.eq r3.state 4u8 into r5;
+    branch.eq r5 false to end_then_0_4;
+    is.eq r3.player1 r2 into r6;
+    assert.eq r6 true;
+    lte r1 r4.player1 into r7;
+    assert.eq r7 true;
+    add r4.player1_bet r1 into r8;
+    sub r4.player1 r1 into r9;
+    is.eq r1 0u16 into r10;
+    branch.eq r10 false to end_then_1_6;
+    lt r4.player1_bet r4.player2_bet into r11;
+    lt r4.player1_bet r4.player3_bet into r12;
+    or r11 r12 into r13;
+    branch.eq r13 false to end_then_2_8;
+    branch.eq true true to end_otherwise_2_9;
+    position end_then_2_8;
+    position end_otherwise_2_9;
+    and r3.last_bet 1u8 into r14;
+    is.neq r14 0u8 into r15;
+    branch.eq r15 false to end_then_2_10;
+    cast r3.player1 r3.player2 r3.player3 r3.buy_in r3.deck 8u8 r3.dealer_button r3.players_out 0u8 into r16 as Game;
+    set r16 into games[r0];
+    branch.eq true true to end_otherwise_2_11;
+    position end_then_2_10;
+    position end_otherwise_2_11;
+    branch.eq true true to end_otherwise_1_7;
+    position end_then_1_6;
+    position end_otherwise_1_7;
+    gte r8 r4.player2_bet into r17;
+    gte r8 r4.player3_bet into r18;
+    and r17 r18 into r19;
+    branch.eq r19 false to end_then_1_12;
+    cast r9 r4.player2 r4.player3 r8 r4.player2_bet r4.player3_bet into r20 as Chips;
+    is.neq r4.player2 0u16 into r21;
+    branch.eq r21 false to end_then_2_14;
+    cast r3.player1 r3.player2 r3.player3 r3.buy_in r3.deck 6u8 r3.dealer_button r3.players_out 1u8 into r22 as Game;
+    set r20 into chips[r0];
+    set r22 into games[r0];
+    branch.eq true true to end_otherwise_2_15;
+    position end_then_2_14;
+    is.neq r4.player3 0u16 into r23;
+    branch.eq r23 false to end_then_3_16;
+    cast r3.player1 r3.player2 r3.player3 r3.buy_in r3.deck 7u8 r3.dealer_button r3.players_out 1u8 into r24 as Game;
+    set r20 into chips[r0];
+    set r24 into games[r0];
+    branch.eq true true to end_otherwise_3_17;
+    position end_then_3_16;
+    position end_otherwise_3_17;
+    position end_otherwise_2_15;
+    branch.eq true true to end_otherwise_1_13;
+    position end_then_1_12;
+    is.eq r9 0u16 into r25;
+    branch.eq r25 false to end_then_2_18;
+    cast r9 r4.player2 r4.player3 r8 r4.player2_bet r4.player3_bet into r26 as Chips;
+    is.neq r4.player2 0u16 into r27;
+    branch.eq r27 false to end_then_3_20;
+    cast r3.player1 r3.player2 r3.player3 r3.buy_in r3.deck 6u8 r3.dealer_button r3.players_out 1u8 into r28 as Game;
+    set r26 into chips[r0];
+    set r28 into games[r0];
+    branch.eq true true to end_otherwise_3_21;
+    position end_then_3_20;
+    is.neq r4.player3 0u16 into r29;
+    branch.eq r29 false to end_then_4_22;
+    cast r3.player1 r3.player2 r3.player3 r3.buy_in r3.deck 7u8 r3.dealer_button r3.players_out 1u8 into r30 as Game;
+    set r26 into chips[r0];
+    set r30 into games[r0];
+    branch.eq true true to end_otherwise_4_23;
+    position end_then_4_22;
+    cast r3.player1 r3.player2 r3.player3 r3.buy_in r3.deck 8u8 r3.dealer_button r3.players_out 0u8 into r31 as Game;
+    set r26 into chips[r0];
+    set r31 into games[r0];
+    position end_otherwise_4_23;
+    position end_otherwise_3_21;
+    branch.eq true true to end_otherwise_2_19;
+    position end_then_2_18;
+    position end_otherwise_2_19;
+    position end_otherwise_1_13;
     branch.eq true true to end_otherwise_0_5;
     position end_then_0_4;
+    is.eq r3.state 5u8 into r32;
+    branch.eq r32 false to end_then_1_24;
+    is.eq r3.player2 r2 into r33;
+    assert.eq r33 true;
+    branch.eq true true to end_otherwise_1_25;
+    position end_then_1_24;
+    is.eq r3.state 6u8 into r34;
+    branch.eq r34 false to end_then_2_26;
+    is.eq r3.player3 r2 into r35;
+    assert.eq r35 true;
+    branch.eq true true to end_otherwise_2_27;
+    position end_then_2_26;
+    position end_otherwise_2_27;
+    position end_otherwise_1_25;
     position end_otherwise_0_5;
 
 function decrypt_hands_p1:
@@ -151,7 +245,7 @@ finalize decrypt_hands_p1:
     assert.eq r7 true;
     is.eq r6.player1 r3 into r8;
     assert.eq r8 true;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 3u8 r6.dealer_button into r9 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 3u8 r6.dealer_button r6.players_out r6.last_bet into r9 as Game;
     set r2 into cards[r0];
     set r9 into games[r0];
 
@@ -183,7 +277,7 @@ finalize decrypt_hands_p2:
     assert.eq r7 true;
     is.eq r6.player2 r3 into r8;
     assert.eq r8 true;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 4u8 r6.dealer_button into r9 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 4u8 r6.dealer_button r6.players_out r6.last_bet into r9 as Game;
     set r2 into cards[r0];
     set r9 into games[r0];
 
@@ -216,21 +310,21 @@ finalize decrypt_hands_p3:
     is.eq r6.player1 r3 into r8;
     assert.eq r8 true;
     is.eq r6.dealer_button 3u8 into r9;
-    branch.eq r9 false to end_then_0_6;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 4u8 r6.dealer_button into r10 as Game;
+    branch.eq r9 false to end_then_0_28;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 4u8 r6.dealer_button r6.players_out r6.last_bet into r10 as Game;
     set r2 into cards[r0];
     set r10 into games[r0];
-    branch.eq true true to end_otherwise_0_7;
-    position end_then_0_6;
+    branch.eq true true to end_otherwise_0_29;
+    position end_then_0_28;
     is.eq r6.dealer_button 1u8 into r11;
-    branch.eq r11 false to end_then_1_8;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 5u8 r6.dealer_button into r12 as Game;
+    branch.eq r11 false to end_then_1_30;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 5u8 r6.dealer_button r6.players_out r6.last_bet into r12 as Game;
     set r2 into cards[r0];
     set r12 into games[r0];
-    branch.eq true true to end_otherwise_1_9;
-    position end_then_1_8;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 6u8 r6.dealer_button into r13 as Game;
+    branch.eq true true to end_otherwise_1_31;
+    position end_then_1_30;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 6u8 r6.dealer_button r6.players_out r6.last_bet into r13 as Game;
     set r2 into cards[r0];
     set r13 into games[r0];
-    position end_otherwise_1_9;
-    position end_otherwise_0_7;
+    position end_otherwise_1_31;
+    position end_otherwise_0_29;

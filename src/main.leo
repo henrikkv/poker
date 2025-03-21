@@ -25,12 +25,12 @@ program poker.aleo {
         // 4: Waiting for player3 to decrypt hands
 
         // 5: Waiting for player1 to bet
-        // 5: Waiting for player2 to bet
-        // 5: Waiting for player3 to bet
+        // 6: Waiting for player2 to bet
+        // 7: Waiting for player3 to bet
 
-        // Waiting for player1 to decrypt flop
-        // Waiting for player2 to decrypt flop
-        // Waiting for player3 to decrypt flop
+        // 8: Waiting for player1 to decrypt flop
+        // 9: Waiting for player2 to decrypt flop
+        // 10: Waiting for player3 to decrypt flop
 
         // Waiting for player1 to decrypt turn
         // Waiting for player2 to decrypt turn
@@ -44,8 +44,17 @@ program poker.aleo {
         // Waiting for player2 to shuffle
         // Waiting for player3 to shuffle
         state: u8,
+        // bitmaps
         dealer_button: u8,
+        players_out: u8,
+        last_bet: u8,
     }
+    inline player1() -> u8 { return 1u8; }
+    inline player2() -> u8 { return 2u8; }
+    inline player3() -> u8 { return 4u8; }
+    inline is_player1(bitmap: u8) -> bool { return bitmap & 1u8 != 0u8; }
+    inline is_player2(bitmap: u8) -> bool { return bitmap & 2u8 != 0u8; }
+    inline is_player3(bitmap: u8) -> bool { return bitmap & 4u8 != 0u8; }
     struct Chips {
         player1: u16,
         player2: u16,
@@ -74,7 +83,9 @@ program poker.aleo {
             buy_in: 10u64,
             deck: deck,
             state: 0u8,
-            dealer_button: 3u8,
+            dealer_button: 4u8,
+            players_out: 0u8,
+            last_bet: 0u8,
         };
         Mapping::set(games, game_id, game);
     }
@@ -93,7 +104,9 @@ program poker.aleo {
                 buy_in: game.buy_in,
                 deck: new_deck,
                 state: 1u8,
-                dealer_button: 3u8
+                dealer_button: 4u8,
+                players_out: 0u8,
+                last_bet: 0u8,
             };
             Mapping::set(games, game_id, new_game);
         } else if (game.state == 1u8) {
@@ -105,11 +118,13 @@ program poker.aleo {
                 deck: new_deck,
                 state: 2u8,
                 dealer_button: 3u8,
+                players_out: 0u8,
+                last_bet: 0u8,
             };
             let chip: Chips = Chips {
-                player1: 0u16,
-                player2: 0u16,
-                player3: 0u16,
+                player1: 1000u16,
+                player2: 1000u16,
+                player3: 1000u16,
                 player1_bet: 0u16,
                 player2_bet: 0u16,
                 player3_bet: 0u16,
@@ -128,12 +143,137 @@ program poker.aleo {
             Mapping::set(cards, game_id, card);
         } else { return; }
     }
-    async transition play(game_id: u32) -> Future {
-        return finalize_play(game_id, self.caller);
+    async transition bet(game_id: u32, amount: u16) -> Future {
+        return finalize_bet(game_id, amount, self.caller);
     }
-    async function finalize_play(game_id: u32, caller: address) {
+    async function finalize_bet(game_id: u32, amount: u16, caller: address) {
         let game: Game = Mapping::get(games, game_id);
-        if (game.state == 2u8) {
+        let chip: Chips = Mapping::get(chips, game_id);
+        if (game.state == 4u8) {
+            assert(game.player1 == caller);
+            assert(amount <= chip.player1);
+            let new_amount: u16 = chip.player1_bet + amount;
+            let new_remaining: u16 = chip.player1 - amount;
+            //Check
+            if (amount == 0u16) {
+                if (chip.player1_bet < chip.player2_bet || chip.player1_bet < chip.player3_bet) { return; }
+                // Flop
+                if (is_player1(game.last_bet)) {
+                    let new_game: Game = Game {
+                        player1: game.player1,
+                        player2: game.player2,
+                        player3: game.player3,
+                        buy_in: game.buy_in,
+                        deck: game.deck,
+                        state: 8u8,
+                        dealer_button: game.dealer_button,
+                        players_out: game.players_out,
+                        last_bet: 0u8,
+                    };
+                    Mapping::set(games, game_id, new_game);
+                }
+            }
+            if (new_amount >= chip.player2_bet && new_amount >= chip.player3_bet) {
+                let new_chip: Chips = Chips {
+                    player1: new_remaining,
+                    player2: chip.player2,
+                    player3: chip.player3,
+                    player1_bet: new_amount,
+                    player2_bet: chip.player2_bet,
+                    player3_bet: chip.player3_bet,
+                };
+                if (chip.player2 != 0u16) {
+                    let new_game: Game = Game {
+                        player1: game.player1,
+                        player2: game.player2,
+                        player3: game.player3,
+                        buy_in: game.buy_in,
+                        deck: game.deck,
+                        state: 6u8,
+                        dealer_button: game.dealer_button,
+                        players_out: game.players_out,
+                        last_bet: player1(),
+                    };
+                    Mapping::set(chips, game_id, new_chip);
+                    Mapping::set(games, game_id, new_game);
+                    return;
+                } else if (chip.player3 != 0u16) {
+                    let new_game: Game = Game {
+                        player1: game.player1,
+                        player2: game.player2,
+                        player3: game.player3,
+                        buy_in: game.buy_in,
+                        deck: game.deck,
+                        state: 7u8,
+                        dealer_button: game.dealer_button,
+                        players_out: game.players_out,
+                        last_bet: player1(),
+                    };
+                    Mapping::set(chips, game_id, new_chip);
+                    Mapping::set(games, game_id, new_game);
+                    return;
+                }
+            // All-in
+            } else if (new_remaining == 0u16) {
+                let new_chip: Chips = Chips {
+                    player1: new_remaining,
+                    player2: chip.player2,
+                    player3: chip.player3,
+                    player1_bet: new_amount,
+                    player2_bet: chip.player2_bet,
+                    player3_bet: chip.player3_bet,
+                };
+                if (chip.player2 != 0u16) {
+                    let new_game: Game = Game {
+                        player1: game.player1,
+                        player2: game.player2,
+                        player3: game.player3,
+                        buy_in: game.buy_in,
+                        deck: game.deck,
+                        state: 6u8,
+                        dealer_button: game.dealer_button,
+                        players_out: game.players_out,
+                        last_bet: player1(),
+                    };
+                    Mapping::set(chips, game_id, new_chip);
+                    Mapping::set(games, game_id, new_game);
+                    return;
+                } else if (chip.player3 != 0u16) {
+                    let new_game: Game = Game {
+                        player1: game.player1,
+                        player2: game.player2,
+                        player3: game.player3,
+                        buy_in: game.buy_in,
+                        deck: game.deck,
+                        state: 7u8,
+                        dealer_button: game.dealer_button,
+                        players_out: game.players_out,
+                        last_bet: player1(),
+                    };
+                    Mapping::set(chips, game_id, new_chip);
+                    Mapping::set(games, game_id, new_game);
+                    return;
+                } else {
+                    // All players all-in
+                    let new_game: Game = Game {
+                        player1: game.player1,
+                        player2: game.player2,
+                        player3: game.player3,
+                        buy_in: game.buy_in,
+                        deck: game.deck,
+                        state: 8u8,
+                        dealer_button: game.dealer_button,
+                        players_out: game.players_out,
+                        last_bet: 0u8,
+                    };
+                    Mapping::set(chips, game_id, new_chip);
+                    Mapping::set(games, game_id, new_game);
+                }
+            } else {return;}
+        } else if (game.state == 5u8) {
+            assert(game.player2 == caller);
+        } else if (game.state == 6u8) {
+            assert(game.player3 == caller);
         }
     }
     async transition decrypt_hands_p1(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
@@ -161,6 +301,8 @@ program poker.aleo {
             deck: game.deck,
             state: 3u8,
             dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            last_bet: game.last_bet,
         };
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
@@ -190,6 +332,8 @@ program poker.aleo {
             deck: game.deck,
             state: 4u8,
             dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            last_bet: game.last_bet,
         };
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
@@ -220,6 +364,8 @@ program poker.aleo {
                 deck: game.deck,
                 state: 4u8, // player1 starts
                 dealer_button: game.dealer_button,
+                players_out: game.players_out,
+                last_bet: game.last_bet,
             };
             Mapping::set(cards, game_id, new_card);
             Mapping::set(games, game_id, new_game);
@@ -232,6 +378,8 @@ program poker.aleo {
                 deck: game.deck,
                 state: 5u8, // player2 starts
                 dealer_button: game.dealer_button,
+                players_out: game.players_out,
+                last_bet: game.last_bet,
             };
             Mapping::set(cards, game_id, new_card);
             Mapping::set(games, game_id, new_game);
@@ -244,6 +392,8 @@ program poker.aleo {
                 deck: game.deck,
                 state: 6u8, // player3 starts
                 dealer_button: game.dealer_button,
+                players_out: game.players_out,
+                last_bet: game.last_bet,
             };
             Mapping::set(cards, game_id, new_card);
             Mapping::set(games, game_id, new_game);

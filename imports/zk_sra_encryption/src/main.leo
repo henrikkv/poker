@@ -205,6 +205,9 @@ program zk_sra_encryption.aleo {
                  t36, t37, t38, t39, t40, t41, t42, t43, t44, t45,
                  t46, t47, t48, t49, t50, t51]];
     }
+    transition decrypt_card(d: u128, n: u128, card: u128) -> u128 {
+        return exp_by_squaring(card, d, n);
+    }
 
     transition test_encrypt_exp_by_squaring(public m: u128, e: u128, d: u128, n: u128) -> (u128, u128) {
       let c: u128 = exp_by_squaring(m, e, n);

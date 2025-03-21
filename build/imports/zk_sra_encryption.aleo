@@ -446,6 +446,13 @@ function encrypt_deck_per_card:
     cast  r55 r56 into r57 as [[u128; 26u32]; 2u32];
     output r57 as [[u128; 26u32]; 2u32].private;
 
+function decrypt_card:
+    input r0 as u128.private;
+    input r1 as u128.private;
+    input r2 as u128.private;
+    call exp_by_squaring r2 r0 r1 into r3;
+    output r3 as u128.private;
+
 function test_encrypt_exp_by_squaring:
     input r0 as u128.public;
     input r1 as u128.private;

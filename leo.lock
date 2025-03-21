@@ -9,5 +9,5 @@ dependencies = []
 name = "zk_sra_encryption.aleo"
 location = "local"
 path = "/home/henrik/Projects/poker/imports/zk_sra_encryption/"
-checksum = "b786a683e666bb8d2ccb44e8f0dc1e46a2d2db4c7226ca2c0f867b6bd0c39299"
+checksum = "086a4e9608522980f90b0a5c483b6a6ccbf833fc22daf0428504b47c3c285366"
 dependencies = []

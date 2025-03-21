@@ -4,3 +4,10 @@ location = "local"
 path = "/home/henrik/Projects/poker/imports/zk_deck_shuffle/"
 checksum = "a491e3dc8a622c53679fa73b781e8d188dbf6642d652eafbbaa90cfd3c1f6e32"
 dependencies = []
+
+[[package]]
+name = "zk_sra_encryption.aleo"
+location = "local"
+path = "/home/henrik/Projects/poker/imports/zk_sra_encryption/"
+checksum = "b786a683e666bb8d2ccb44e8f0dc1e46a2d2db4c7226ca2c0f867b6bd0c39299"
+dependencies = []

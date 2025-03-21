@@ -9,6 +9,12 @@
       "location": "local",
       "network": null,
       "path": "imports/zk_deck_shuffle/"
+    },
+    {
+      "name": "zk_sra_encryption.aleo",
+      "location": "local",
+      "network": null,
+      "path": "imports/zk_sra_encryption/"
     }
   ]
 }

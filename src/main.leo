@@ -815,4 +815,322 @@ program poker.aleo {
         
         Mapping::set(games, game_id, new_game);
     }
+    async transition decrypt_turn_p1(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+        let new_card: Cards = Cards {
+            player1: card.player1,
+            player2: card.player2,
+            player3: card.player3,
+            flop: card.flop,
+            turn: zk_sra_encryption.aleo/decrypt_card(d, n, card.turn),
+            river: card.river,
+        };
+        return finalize_decrypt_turn_p1(game_id, card, new_card, self.caller);
+    }
+    async function finalize_decrypt_turn_p1(game_id: u32, card: Cards, new_card: Cards, caller: address) {
+        let old_card: Cards = Mapping::get(cards, game_id);
+        assert(card == old_card);
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == 14u8);
+        assert(game.player1 == caller);
+        assert(!is_player1(game.players_out));
+
+        let next_state: u8 = !is_player2(game.players_out) ? 15u8 : 16u8;
+
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            deck: game.deck,
+            state: next_state,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_folded,
+            last_bet: 0u8,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: game.last_raise_size,
+        };
+        
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
+    async transition decrypt_turn_p2(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+        let new_card: Cards = Cards {
+            player1: card.player1,
+            player2: card.player2,
+            player3: card.player3,
+            flop: card.flop,
+            turn: zk_sra_encryption.aleo/decrypt_card(d, n, card.turn),
+            river: card.river,
+        };
+        return finalize_decrypt_turn_p2(game_id, card, new_card, self.caller);
+    }
+    async function finalize_decrypt_turn_p2(game_id: u32, card: Cards, new_card: Cards, caller: address) {
+        let old_card: Cards = Mapping::get(cards, game_id);
+        assert(card == old_card);
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == 15u8);
+        assert(game.player2 == caller);
+        assert(!is_player2(game.players_out));
+
+        let chip: Chips = Mapping::get(chips, game_id);
+        let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded);
+        let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded);
+        let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
+
+        // Skip betting if only one active or all are all-in
+        let should_skip_betting: bool = 
+            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8 || 
+            (chip.player1 == 0u16 && chip.player2 == 0u16 && chip.player3 == 0u16);
+
+        // Always go to P3 if not busted, otherwise determine betting state
+        let new_state: u8 = 
+            !is_player3(game.players_out) ? 16u8 : // P3's turn to decrypt
+                      should_skip_betting ? 20u8 : // Skip to river decrypt
+           is_player1(game.dealer_button) ? 
+                         (!is_p2_inactive ? 18u8 : !is_p3_inactive ? 19u8 : 17u8) :
+           is_player2(game.dealer_button) ? (!is_p3_inactive ? 19u8 : !is_p1_inactive ? 17u8 : 18u8) :
+                                        (!is_p1_inactive ? 17u8 : !is_p2_inactive ? 18u8 : 19u8);
+
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            deck: game.deck,
+            state: new_state,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_folded,
+            last_bet: 0u8,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: game.last_raise_size,
+        };
+        
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
+    async transition decrypt_turn_p3(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+        let new_card: Cards = Cards {
+            player1: card.player1,
+            player2: card.player2,
+            player3: card.player3,
+            flop: card.flop,
+            turn: zk_sra_encryption.aleo/decrypt_card(d, n, card.turn),
+            river: card.river,
+        };
+        return finalize_decrypt_turn_p3(game_id, card, new_card, self.caller);
+    }
+    async function finalize_decrypt_turn_p3(game_id: u32, card: Cards, new_card: Cards, caller: address) {
+        let old_card: Cards = Mapping::get(cards, game_id);
+        assert(card == old_card);
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == 16u8);
+        assert(game.player3 == caller);
+        assert(!is_player3(game.players_out));
+
+        let chip: Chips = Mapping::get(chips, game_id);
+        let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded);
+        let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded);
+        let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
+
+        // Skip betting if only one active or all are all-in
+        let should_skip_betting: bool = 
+            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8 || 
+            (chip.player1 == 0u16 && chip.player2 == 0u16 && chip.player3 == 0u16);
+
+        // Determine first bettor based on dealer button position
+        let next_state: u8 = 
+               should_skip_betting ? 20u8 :
+            is_player1(game.dealer_button) ? (!is_p2_inactive ? 18u8 : !is_p3_inactive ? 19u8 : 17u8) :
+            is_player2(game.dealer_button) ? (!is_p3_inactive ? 19u8 : !is_p1_inactive ? 17u8 : 18u8) :
+                                             (!is_p1_inactive ? 17u8 : !is_p2_inactive ? 18u8 : 19u8);
+
+        // Create new game state
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            deck: game.deck,
+            state: next_state,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_folded,
+            last_bet: 0u8, // Reset last_bet for new betting round
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: 0u16, // Reset at start of new betting round
+        };
+
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
+    async transition decrypt_river_p1(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+        let new_card: Cards = Cards {
+            player1: card.player1,
+            player2: card.player2,
+            player3: card.player3,
+            flop: card.flop,
+            turn: card.turn,
+            river: zk_sra_encryption.aleo/decrypt_card(d, n, card.river),
+        };
+        return finalize_decrypt_river_p1(game_id, card, new_card, self.caller);
+    }
+    async function finalize_decrypt_river_p1(game_id: u32, card: Cards, new_card: Cards, caller: address) {
+        let old_card: Cards = Mapping::get(cards, game_id);
+        assert(card == old_card);
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == 20u8);
+        assert(game.player1 == caller);
+        assert(!is_player1(game.players_out));
+
+        let next_state: u8 = !is_player2(game.players_out) ? 21u8 : 22u8;
+
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            deck: game.deck,
+            state: next_state,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_folded,
+            last_bet: 0u8,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: game.last_raise_size,
+        };
+        
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
+    async transition decrypt_river_p2(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+        let new_card: Cards = Cards {
+            player1: card.player1,
+            player2: card.player2,
+            player3: card.player3,
+            flop: card.flop,
+            turn: card.turn,
+            river: zk_sra_encryption.aleo/decrypt_card(d, n, card.river),
+        };
+        return finalize_decrypt_river_p2(game_id, card, new_card, self.caller);
+    }
+    async function finalize_decrypt_river_p2(game_id: u32, card: Cards, new_card: Cards, caller: address) {
+        let old_card: Cards = Mapping::get(cards, game_id);
+        assert(card == old_card);
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == 21u8);
+        assert(game.player2 == caller);
+        assert(!is_player2(game.players_out));
+
+        let chip: Chips = Mapping::get(chips, game_id);
+        let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded);
+        let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded);
+        let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
+
+        // Skip betting if only one active or all are all-in
+        let should_skip_betting: bool = 
+            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8 || 
+            (chip.player1 == 0u16 && chip.player2 == 0u16 && chip.player3 == 0u16);
+
+        // Always go to P3 if not busted, otherwise determine betting state
+        let new_state: u8 = 
+            !is_player3(game.players_out) ? 22u8 : // P3's turn to decrypt
+                      should_skip_betting ? 26u8 : // Skip to showdown
+           is_player1(game.dealer_button) ? 
+                         (!is_p2_inactive ? 24u8 : !is_p3_inactive ? 25u8 : 23u8) :
+           is_player2(game.dealer_button) ? (!is_p3_inactive ? 25u8 : !is_p1_inactive ? 23u8 : 24u8) :
+                                        (!is_p1_inactive ? 23u8 : !is_p2_inactive ? 24u8 : 25u8);
+
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            deck: game.deck,
+            state: new_state,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_folded,
+            last_bet: 0u8,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: game.last_raise_size,
+        };
+        
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
+    async transition decrypt_river_p3(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+        let new_card: Cards = Cards {
+            player1: card.player1,
+            player2: card.player2,
+            player3: card.player3,
+            flop: card.flop,
+            turn: card.turn,
+            river: zk_sra_encryption.aleo/decrypt_card(d, n, card.river),
+        };
+        return finalize_decrypt_river_p3(game_id, card, new_card, self.caller);
+    }
+    async function finalize_decrypt_river_p3(game_id: u32, card: Cards, new_card: Cards, caller: address) {
+        let old_card: Cards = Mapping::get(cards, game_id);
+        assert(card == old_card);
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == 22u8);
+        assert(game.player3 == caller);
+        assert(!is_player3(game.players_out));
+
+        let chip: Chips = Mapping::get(chips, game_id);
+        let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded);
+        let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded);
+        let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
+
+        // Skip betting if only one active or all are all-in
+        let should_skip_betting: bool = 
+            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8 || 
+            (chip.player1 == 0u16 && chip.player2 == 0u16 && chip.player3 == 0u16);
+
+        // Determine first bettor based on dealer button position
+        let next_state: u8 = 
+               should_skip_betting ? 26u8 :
+            is_player1(game.dealer_button) ? (!is_p2_inactive ? 24u8 : !is_p3_inactive ? 25u8 : 23u8) :
+            is_player2(game.dealer_button) ? (!is_p3_inactive ? 25u8 : !is_p1_inactive ? 23u8 : 24u8) :
+                                         (!is_p1_inactive ? 23u8 : !is_p2_inactive ? 24u8 : 25u8);
+
+        // Create new game state
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            deck: game.deck,
+            state: next_state,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_folded,
+            last_bet: 0u8, // Reset last_bet for new betting round
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: 0u16, // Reset at start of new betting round
+        };
+
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
 }

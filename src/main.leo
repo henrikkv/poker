@@ -950,7 +950,7 @@ program poker.aleo {
                should_skip_betting ? 20u8 :
             is_player1(game.dealer_button) ? (!is_p2_inactive ? 18u8 : !is_p3_inactive ? 19u8 : 17u8) :
             is_player2(game.dealer_button) ? (!is_p3_inactive ? 19u8 : !is_p1_inactive ? 17u8 : 18u8) :
-                                             (!is_p1_inactive ? 17u8 : !is_p2_inactive ? 18u8 : 19u8);
+                                         (!is_p1_inactive ? 17u8 : !is_p2_inactive ? 18u8 : 19u8);
 
         // Create new game state
         let new_game: Game = Game {
@@ -1131,6 +1131,246 @@ program poker.aleo {
         };
 
         Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
+    async transition showdown_p1(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+        let new_card: Cards = Cards {
+            player1: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player1[0u8]), 
+                     zk_sra_encryption.aleo/decrypt_card(d, n, card.player1[1u8])],
+            player2: card.player2,
+            player3: card.player3,
+            flop: card.flop,
+            turn: card.turn,
+            river: card.river,
+        };
+        return finalize_showdown_p1(game_id, card, new_card, self.caller);
+    }
+
+    async function finalize_showdown_p1(game_id: u32, card: Cards, new_card: Cards, caller: address) {
+        let old_card: Cards = Mapping::get(cards, game_id);
+        assert(card == old_card);
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == 26u8);
+        assert(game.player1 == caller);
+
+        let new_state: u8 = !is_player2(game.players_out) ? 27u8 : 28u8;
+
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            deck: game.deck,
+            state: new_state,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_folded,
+            last_bet: game.last_bet,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: game.last_raise_size,
+        };
+        
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
+
+    async transition showdown_p2(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+        let new_card: Cards = Cards {
+            player1: card.player1,
+            player2: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player2[0u8]), 
+                     zk_sra_encryption.aleo/decrypt_card(d, n, card.player2[1u8])],
+            player3: card.player3,
+            flop: card.flop,
+            turn: card.turn,
+            river: card.river,
+        };
+        return finalize_showdown_p2(game_id, card, new_card, self.caller);
+    }
+
+    async function finalize_showdown_p2(game_id: u32, card: Cards, new_card: Cards, caller: address) {
+        let old_card: Cards = Mapping::get(cards, game_id);
+        assert(card == old_card);
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == 27u8);
+        assert(game.player2 == caller);
+
+        // If P3 is out or folded, determine winner here
+        if (is_player3(game.players_out) || is_player3(game.players_folded)) {
+            let p1_high: u128 = !is_player1(game.players_folded) ? 
+                (new_card.player1[0u8] >= new_card.player1[1u8] ? new_card.player1[0u8] : new_card.player1[1u8]) : 
+                0u128;
+            let p2_high: u128 = !is_player2(game.players_folded) ? 
+                (new_card.player2[0u8] >= new_card.player2[1u8] ? new_card.player2[0u8] : new_card.player2[1u8]) : 
+                0u128;
+            
+            let winner: u8 = p1_high >= p2_high ? 1u8 : 2u8;
+
+            let chip: Chips = Mapping::get(chips, game_id);
+            let pot: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet;
+            
+            let new_chip: Chips = Chips {
+                player1: winner == 1u8 ? chip.player1 + pot : chip.player1,
+                player2: winner == 2u8 ? chip.player2 + pot : chip.player2,
+                player3: chip.player3,
+                player1_bet: 0u16,
+                player2_bet: 0u16,
+                player3_bet: 0u16,
+            };
+            
+            let new_players_out: u8 = (new_chip.player1 == 0u16 ? player1() : 0u8) | (new_chip.player2 == 0u16 ? player2() : 0u8) | (new_chip.player3 == 0u16 ? player3() : 0u8);
+            if (new_players_out == 6u8) {
+                // Player 1 wins the game
+                return;
+            } else if (new_players_out == 5u8) {
+                // Player 2 wins the game
+                return;
+            }
+            let new_dealer_button: u8 = 
+                is_player1(game.dealer_button) ? player2() :
+                is_player2(game.dealer_button) ? player3() : player1();
+                
+            let new_remaining_hands: u8 = game.remaining_hands - 1u8;
+            let (new_sb, new_bb): (u16, u16) = 
+                new_remaining_hands == 0u8 ? 
+                    (game.sb * 2u16, game.bb * 2u16) : 
+                    (game.sb, game.bb);
+                    
+            let new_game: Game = Game {
+                player1: game.player1,
+                player2: game.player2,
+                player3: game.player3,
+                buy_in: game.buy_in,
+                deck: game.deck,
+                state: 29u8,
+                dealer_button: new_dealer_button,
+                players_out: new_players_out,
+                players_folded: new_players_out,
+                last_bet: 0u8,
+                sb: new_sb,
+                bb: new_bb,
+                remaining_hands: new_remaining_hands == 0u8 ? 10u8 : new_remaining_hands,
+                hands_played: game.hands_played + 1u8,
+                last_raise_size: 0u16,
+            };
+            
+            Mapping::set(cards, game_id, new_card);
+            Mapping::set(chips, game_id, new_chip);
+            Mapping::set(games, game_id, new_game);
+            return;
+        }
+
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            deck: game.deck,
+            state: 28u8,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_folded,
+            last_bet: game.last_bet,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: game.last_raise_size,
+        };
+        
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
+
+    async transition showdown_p3(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+        let new_card: Cards = Cards {
+            player1: card.player1,
+            player2: card.player2,
+            player3: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player3[0u8]), 
+                     zk_sra_encryption.aleo/decrypt_card(d, n, card.player3[1u8])],
+            flop: card.flop,
+            turn: card.turn,
+            river: card.river,
+        };
+        return finalize_showdown_p3(game_id, card, new_card, self.caller);
+    }
+
+    async function finalize_showdown_p3(game_id: u32, card: Cards, new_card: Cards, caller: address) {
+        let old_card: Cards = Mapping::get(cards, game_id);
+        assert(card == old_card);
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == 28u8);
+        assert(game.player3 == caller);
+        
+        let p1_high: u128 = !is_player1(game.players_folded) ? 
+            (new_card.player1[0u8] >= new_card.player1[1u8] ? new_card.player1[0u8] : new_card.player1[1u8]) : 
+            0u128;
+        let p2_high: u128 = !is_player2(game.players_folded) ? 
+            (new_card.player2[0u8] >= new_card.player2[1u8] ? new_card.player2[0u8] : new_card.player2[1u8]) : 
+            0u128;
+        let p3_high: u128 = !is_player3(game.players_folded) ? 
+            (new_card.player3[0u8] >= new_card.player3[1u8] ? new_card.player3[0u8] : new_card.player3[1u8]) : 
+            0u128;
+        
+        let winner: u8 = (p1_high >= p2_high && p1_high >= p3_high) ? 1u8 :
+                        (p2_high >= p3_high) ? 2u8 : 3u8;
+
+        let chip: Chips = Mapping::get(chips, game_id);
+        let pot: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet;
+        
+        let new_chip: Chips = Chips {
+            player1: winner == 1u8 ? chip.player1 + pot : chip.player1,
+            player2: winner == 2u8 ? chip.player2 + pot : chip.player2,
+            player3: winner == 3u8 ? chip.player3 + pot : chip.player3,
+            player1_bet: 0u16,
+            player2_bet: 0u16,
+            player3_bet: 0u16,
+        };
+        
+        let new_players_out: u8 = (new_chip.player1 == 0u16 ? player1() : 0u8) | (new_chip.player2 == 0u16 ? player2() : 0u8) | (new_chip.player3 == 0u16 ? player3() : 0u8);
+        if (new_players_out == 6u8) {
+            // Player 1 wins the game
+            return;
+        } else if (new_players_out == 5u8) {
+            // Player 2 wins the game
+            return;
+        } else if (new_players_out == 3u8) {
+            // Player 3 wins the game
+            return;
+        }
+
+        let new_dealer_button: u8 = 
+            is_player1(game.dealer_button) ? player2() :
+            is_player2(game.dealer_button) ? player3() : player1();
+            
+        let new_remaining_hands: u8 = game.remaining_hands - 1u8;
+        let (new_sb, new_bb): (u16, u16) = 
+            new_remaining_hands == 0u8 ? 
+                (game.sb * 2u16, game.bb * 2u16) : 
+                (game.sb, game.bb);
+                
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            deck: game.deck,
+            state: 29u8,
+            dealer_button: new_dealer_button,
+            players_out: new_players_out,
+            players_folded: new_players_out,
+            last_bet: 0u8,
+            sb: new_sb,
+            bb: new_bb,
+            remaining_hands: new_remaining_hands == 0u8 ? 10u8 : new_remaining_hands,
+            hands_played: game.hands_played + 1u8,
+            last_raise_size: 0u16,
+        };
+        
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(chips, game_id, new_chip);
         Mapping::set(games, game_id, new_game);
     }
 }

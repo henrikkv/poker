@@ -1,4 +1,4 @@
-# mental_poker_trifecta.aleo
+# zk_deck_operations.aleo
 
 ## Build Guide
 

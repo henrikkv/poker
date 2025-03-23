@@ -1,4 +1,4 @@
-# mental_poker_trifecta.aleo
+# zk_sra_encryption.aleo
 
 ## Build Guide
 

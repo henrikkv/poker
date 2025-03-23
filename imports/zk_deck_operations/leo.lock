@@ -1,0 +1,6 @@
+[[package]]
+name = "zk_sra_encryption.aleo"
+location = "local"
+path = "/Users/otto/code/hacks/trifecta/zkpoker/leo-program/imports/zk_sra_encryption/"
+checksum = "b63a9bb5b0b2d4352ad44d8aa5abde1cd5bba55f4ef1e8c838694b599bd2a5f3"
+dependencies = []

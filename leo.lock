@@ -1,13 +1,20 @@
 [[package]]
 name = "zk_deck_shuffle.aleo"
 location = "local"
-path = "/home/henrik/Projects/poker/imports/zk_deck_shuffle/"
+path = "/Users/otto/code/hacks/trifecta/zkpoker/leo-program/imports/zk_deck_shuffle/"
 checksum = "dd681d06ea284538a3a71886a2ac928e24d69ea38535cfb99ad408cb5538916f"
 dependencies = []
 
 [[package]]
 name = "zk_sra_encryption.aleo"
 location = "local"
-path = "/home/henrik/Projects/poker/imports/zk_sra_encryption/"
-checksum = "086a4e9608522980f90b0a5c483b6a6ccbf833fc22daf0428504b47c3c285366"
+path = "/Users/otto/code/hacks/trifecta/zkpoker/leo-program/imports/zk_sra_encryption/"
+checksum = "b63a9bb5b0b2d4352ad44d8aa5abde1cd5bba55f4ef1e8c838694b599bd2a5f3"
 dependencies = []
+
+[[package]]
+name = "zk_deck_operations.aleo"
+location = "local"
+path = "/Users/otto/code/hacks/trifecta/zkpoker/leo-program/imports/zk_deck_operations/"
+checksum = "48744848f1fa19967cd9fb828538b4c33ebe592573bdba692734b3993f3ac6ab"
+dependencies = ["zk_sra_encryption.aleo"]

@@ -99,9 +99,21 @@ program poker.aleo {
         turn: u128,
         river: u128,
     }
-    async transition create_game(game_id: u32, element1: i8, element2: i8, element3: i8, e: u128, n: u128) -> Future {
+    record Keys {
+        owner: address,
+        e: u128,
+        d: u128,
+        n: u128,
+    }
+    async transition create_game(game_id: u32, element1: i8, element2: i8, element3: i8, e: u128, d: u128, n: u128) -> (Keys, Future) {
         let deck: [[u128; 26]; 2] = zk_deck_shuffle.aleo/full_shuffle(element1, element2, element3, zk_sra_encryption.aleo/encrypt_deck(e, n, get_new_deck()));
-        return finalize_new_game(game_id, deck, self.caller);
+        let keys: Keys = Keys {
+            owner: self.caller,
+            e: e,
+            d: d,
+            n: n,
+        };
+        return (keys, finalize_new_game(game_id, deck, self.caller));
     }
     async function finalize_new_game(game_id: u32, deck: [[u128; 26]; 2], caller: address) {
         let game: Game = Game {
@@ -123,9 +135,15 @@ program poker.aleo {
         };
         Mapping::set(games, game_id, game);
     }
-    async transition join_game(game_id: u32, deck: [[u128; 26]; 2], element1: i8, element2: i8, element3: i8, e: u128, n: u128) -> Future {
+    async transition join_game(game_id: u32, deck: [[u128; 26]; 2], element1: i8, element2: i8, element3: i8, e: u128, d: u128, n: u128) -> (Keys, Future) {
         let new_deck: [[u128; 26]; 2] = zk_deck_shuffle.aleo/full_shuffle(element1, element2, element3, zk_sra_encryption.aleo/encrypt_deck(e, n, deck)); 
-        return finalize_join_game(game_id, deck, new_deck, self.caller);
+        let keys: Keys = Keys {
+            owner: self.caller,
+            e: e,
+            d: d,
+            n: n,
+        };
+        return (keys, finalize_join_game(game_id, deck, new_deck, self.caller));
     }
     async function finalize_join_game(game_id: u32, deck: [[u128; 26]; 2], new_deck: [[u128; 26]; 2], caller: address) {
         let game: Game = Mapping::get(games, game_id);    
@@ -352,16 +370,16 @@ program poker.aleo {
         Mapping::set(chips, game_id, new_chip);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_hands_p1(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_hands_p1(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
-            player2: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player2[0u8]), zk_sra_encryption.aleo/decrypt_card(d, n, card.player2[1u8])],
-            player3: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player3[0u8]), zk_sra_encryption.aleo/decrypt_card(d, n, card.player3[1u8])],
+            player2: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[1u8])],
+            player3: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[1u8])],
             flop: card.flop,
             turn: card.turn,
             river: card.river,
         };
-        return finalize_decrypt_hands_p1(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_hands_p1(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_hands_p1(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -411,16 +429,16 @@ program poker.aleo {
             Mapping::set(games, game_id, new_game);
         }
     }
-    async transition decrypt_hands_p2(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_hands_p2(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
-            player1: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player1[0u8]), zk_sra_encryption.aleo/decrypt_card(d, n, card.player1[1u8])],
+            player1: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[1u8])],
             player2: card.player2,
-            player3: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player3[0u8]), zk_sra_encryption.aleo/decrypt_card(d, n, card.player3[1u8])],
+            player3: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[1u8])],
             flop: card.flop,
             turn: card.turn,
             river: card.river,
         };
-        return finalize_decrypt_hands_p2(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_hands_p2(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_hands_p2(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -459,16 +477,16 @@ program poker.aleo {
         };
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_hands_p3(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_hands_p3(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
-            player1: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player1[0u8]), zk_sra_encryption.aleo/decrypt_card(d, n, card.player1[1u8])],
-            player2: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player2[0u8]), zk_sra_encryption.aleo/decrypt_card(d, n, card.player2[1u8])],
+            player1: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[1u8])],
+            player2: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[1u8])],
             player3: card.player3,
             flop: card.flop,
             turn: card.turn,
             river: card.river,
         };
-        return finalize_decrypt_hands_p3(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_hands_p3(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_hands_p3(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -521,18 +539,18 @@ program poker.aleo {
         };
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_flop_p1(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_flop_p1(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
             player3: card.player3,
-            flop: [zk_sra_encryption.aleo/decrypt_card(d, n, card.flop[0u8]),
-                   zk_sra_encryption.aleo/decrypt_card(d, n, card.flop[1u8]),
-                   zk_sra_encryption.aleo/decrypt_card(d, n, card.flop[2u8])],
+            flop: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.flop[0u8]),
+                   zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.flop[1u8]),
+                   zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.flop[2u8])],
             turn: card.turn,
             river: card.river,
         };
-        return finalize_decrypt_flop_p1(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_flop_p1(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_flop_p1(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -565,18 +583,18 @@ program poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_flop_p2(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_flop_p2(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
             player3: card.player3,
-            flop: [zk_sra_encryption.aleo/decrypt_card(d, n, card.flop[0u8]),
-                   zk_sra_encryption.aleo/decrypt_card(d, n, card.flop[1u8]),
-                   zk_sra_encryption.aleo/decrypt_card(d, n, card.flop[2u8])],
+            flop: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.flop[0u8]),
+                   zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.flop[1u8]),
+                   zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.flop[2u8])],
             turn: card.turn,
             river: card.river,
         };
-        return finalize_decrypt_flop_p2(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_flop_p2(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_flop_p2(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -626,18 +644,18 @@ program poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_flop_p3(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_flop_p3(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
             player3: card.player3,
-            flop: [zk_sra_encryption.aleo/decrypt_card(d, n, card.flop[0u8]),
-                   zk_sra_encryption.aleo/decrypt_card(d, n, card.flop[1u8]),
-                   zk_sra_encryption.aleo/decrypt_card(d, n, card.flop[2u8])],
+            flop: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.flop[0u8]),
+                   zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.flop[1u8]),
+                   zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.flop[2u8])],
             turn: card.turn,
             river: card.river,
         };
-        return finalize_decrypt_flop_p3(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_flop_p3(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_flop_p3(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -815,16 +833,16 @@ program poker.aleo {
         
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_turn_p1(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_turn_p1(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
             player3: card.player3,
             flop: card.flop,
-            turn: zk_sra_encryption.aleo/decrypt_card(d, n, card.turn),
+            turn: zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.turn),
             river: card.river,
         };
-        return finalize_decrypt_turn_p1(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_turn_p1(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_turn_p1(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -857,16 +875,16 @@ program poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_turn_p2(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_turn_p2(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
             player3: card.player3,
             flop: card.flop,
-            turn: zk_sra_encryption.aleo/decrypt_card(d, n, card.turn),
+            turn: zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.turn),
             river: card.river,
         };
-        return finalize_decrypt_turn_p2(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_turn_p2(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_turn_p2(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -916,16 +934,16 @@ program poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_turn_p3(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_turn_p3(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
             player3: card.player3,
             flop: card.flop,
-            turn: zk_sra_encryption.aleo/decrypt_card(d, n, card.turn),
+            turn: zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.turn),
             river: card.river,
         };
-        return finalize_decrypt_turn_p3(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_turn_p3(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_turn_p3(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -974,16 +992,16 @@ program poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_river_p1(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_river_p1(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
             player3: card.player3,
             flop: card.flop,
             turn: card.turn,
-            river: zk_sra_encryption.aleo/decrypt_card(d, n, card.river),
+            river: zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.river),
         };
-        return finalize_decrypt_river_p1(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_river_p1(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_river_p1(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -1016,16 +1034,16 @@ program poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_river_p2(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_river_p2(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
             player3: card.player3,
             flop: card.flop,
             turn: card.turn,
-            river: zk_sra_encryption.aleo/decrypt_card(d, n, card.river),
+            river: zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.river),
         };
-        return finalize_decrypt_river_p2(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_river_p2(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_river_p2(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -1075,16 +1093,16 @@ program poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_river_p3(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition decrypt_river_p3(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
             player3: card.player3,
             flop: card.flop,
             turn: card.turn,
-            river: zk_sra_encryption.aleo/decrypt_card(d, n, card.river),
+            river: zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.river),
         };
-        return finalize_decrypt_river_p3(game_id, card, new_card, self.caller);
+        return (keys, finalize_decrypt_river_p3(game_id, card, new_card, self.caller));
     }
     async function finalize_decrypt_river_p3(game_id: u32, card: Cards, new_card: Cards, caller: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
@@ -1133,17 +1151,17 @@ program poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition showdown_p1(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition showdown_p1(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
-            player1: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player1[0u8]), 
-                     zk_sra_encryption.aleo/decrypt_card(d, n, card.player1[1u8])],
+            player1: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[0u8]), 
+                     zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[1u8])],
             player2: card.player2,
             player3: card.player3,
             flop: card.flop,
             turn: card.turn,
             river: card.river,
         };
-        return finalize_showdown_p1(game_id, card, new_card, self.caller);
+        return (keys, finalize_showdown_p1(game_id, card, new_card, self.caller));
     }
 
     async function finalize_showdown_p1(game_id: u32, card: Cards, new_card: Cards, caller: address) {
@@ -1177,17 +1195,17 @@ program poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
 
-    async transition showdown_p2(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition showdown_p2(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
-            player2: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player2[0u8]), 
-                     zk_sra_encryption.aleo/decrypt_card(d, n, card.player2[1u8])],
+            player2: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[0u8]), 
+                     zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[1u8])],
             player3: card.player3,
             flop: card.flop,
             turn: card.turn,
             river: card.river,
         };
-        return finalize_showdown_p2(game_id, card, new_card, self.caller);
+        return (keys, finalize_showdown_p2(game_id, card, new_card, self.caller));
     }
 
     async function finalize_showdown_p2(game_id: u32, card: Cards, new_card: Cards, caller: address) {
@@ -1284,17 +1302,17 @@ program poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
 
-    async transition showdown_p3(game_id: u32, d: u128, n: u128, card: Cards) -> Future {
+    async transition showdown_p3(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
             player2: card.player2,
-            player3: [zk_sra_encryption.aleo/decrypt_card(d, n, card.player3[0u8]), 
-                     zk_sra_encryption.aleo/decrypt_card(d, n, card.player3[1u8])],
+            player3: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[0u8]), 
+                     zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[1u8])],
             flop: card.flop,
             turn: card.turn,
             river: card.river,
         };
-        return finalize_showdown_p3(game_id, card, new_card, self.caller);
+        return (keys, finalize_showdown_p3(game_id, card, new_card, self.caller));
     }
 
     async function finalize_showdown_p3(game_id: u32, card: Cards, new_card: Cards, caller: address) {

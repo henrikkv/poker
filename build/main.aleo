@@ -35,6 +35,12 @@ struct Cards:
     turn as u128;
     river as u128;
 
+record Keys:
+    owner as address.private;
+    e as u128.private;
+    d as u128.private;
+    n as u128.private;
+
 mapping games:
     key as u32.public;
     value as Game.public;
@@ -54,13 +60,16 @@ function create_game:
     input r3 as i8.private;
     input r4 as u128.private;
     input r5 as u128.private;
-    cast  1u128 2u128 3u128 4u128 5u128 6u128 7u128 8u128 9u128 10u128 11u128 12u128 13u128 14u128 15u128 16u128 17u128 18u128 19u128 20u128 21u128 22u128 23u128 24u128 25u128 26u128 into r6 as [u128; 26u32];
-    cast  27u128 28u128 29u128 30u128 31u128 32u128 33u128 34u128 35u128 36u128 37u128 38u128 39u128 40u128 41u128 42u128 43u128 44u128 45u128 46u128 47u128 48u128 49u128 50u128 51u128 52u128 into r7 as [u128; 26u32];
-    cast  r6 r7 into r8 as [[u128; 26u32]; 2u32];
-    call zk_sra_encryption.aleo/encrypt_deck r4 r5 r8 into r9;
-    call zk_deck_shuffle.aleo/full_shuffle r1 r2 r3 r9 into r10;
-    async create_game r0 r10 self.caller into r11;
-    output r11 as poker.aleo/create_game.future;
+    input r6 as u128.private;
+    cast  1u128 2u128 3u128 4u128 5u128 6u128 7u128 8u128 9u128 10u128 11u128 12u128 13u128 14u128 15u128 16u128 17u128 18u128 19u128 20u128 21u128 22u128 23u128 24u128 25u128 26u128 into r7 as [u128; 26u32];
+    cast  27u128 28u128 29u128 30u128 31u128 32u128 33u128 34u128 35u128 36u128 37u128 38u128 39u128 40u128 41u128 42u128 43u128 44u128 45u128 46u128 47u128 48u128 49u128 50u128 51u128 52u128 into r8 as [u128; 26u32];
+    cast  r7 r8 into r9 as [[u128; 26u32]; 2u32];
+    call zk_sra_encryption.aleo/encrypt_deck r4 r6 r9 into r10;
+    call zk_deck_shuffle.aleo/full_shuffle r1 r2 r3 r10 into r11;
+    cast self.caller r4 r5 r6 into r12 as Keys.record;
+    async create_game r0 r11 self.caller into r13;
+    output r12 as Keys.record;
+    output r13 as poker.aleo/create_game.future;
 
 finalize create_game:
     input r0 as u32.public;
@@ -79,10 +88,13 @@ function join_game:
     input r4 as i8.private;
     input r5 as u128.private;
     input r6 as u128.private;
-    call zk_sra_encryption.aleo/encrypt_deck r5 r6 r1 into r7;
-    call zk_deck_shuffle.aleo/full_shuffle r2 r3 r4 r7 into r8;
-    async join_game r0 r1 r8 self.caller into r9;
-    output r9 as poker.aleo/join_game.future;
+    input r7 as u128.private;
+    call zk_sra_encryption.aleo/encrypt_deck r5 r7 r1 into r8;
+    call zk_deck_shuffle.aleo/full_shuffle r2 r3 r4 r8 into r9;
+    cast self.caller r5 r6 r7 into r10 as Keys.record;
+    async join_game r0 r1 r9 self.caller into r11;
+    output r10 as Keys.record;
+    output r11 as poker.aleo/join_game.future;
 
 finalize join_game:
     input r0 as u32.public;
@@ -488,18 +500,18 @@ finalize bet:
 
 function decrypt_hands_p1:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player2[0u32] into r4;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player2[1u32] into r5;
-    cast  r4 r5 into r6 as [u128; 2u32];
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player3[0u32] into r7;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player3[1u32] into r8;
-    cast  r7 r8 into r9 as [u128; 2u32];
-    cast r3.player1 r6 r9 r3.flop r3.turn r3.river into r10 as Cards;
-    async decrypt_hands_p1 r0 r3 r10 self.caller into r11;
-    output r11 as poker.aleo/decrypt_hands_p1.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player2[0u32] into r3;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player2[1u32] into r4;
+    cast  r3 r4 into r5 as [u128; 2u32];
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player3[0u32] into r6;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player3[1u32] into r7;
+    cast  r6 r7 into r8 as [u128; 2u32];
+    cast r1.player1 r5 r8 r1.flop r1.turn r1.river into r9 as Cards;
+    async decrypt_hands_p1 r0 r1 r9 self.caller into r10;
+    output r2 as Keys.record;
+    output r10 as poker.aleo/decrypt_hands_p1.future;
 
 finalize decrypt_hands_p1:
     input r0 as u32.public;
@@ -529,18 +541,18 @@ finalize decrypt_hands_p1:
 
 function decrypt_hands_p2:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player1[0u32] into r4;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player1[1u32] into r5;
-    cast  r4 r5 into r6 as [u128; 2u32];
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player3[0u32] into r7;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player3[1u32] into r8;
-    cast  r7 r8 into r9 as [u128; 2u32];
-    cast r6 r3.player2 r9 r3.flop r3.turn r3.river into r10 as Cards;
-    async decrypt_hands_p2 r0 r3 r10 self.caller into r11;
-    output r11 as poker.aleo/decrypt_hands_p2.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player1[0u32] into r3;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player1[1u32] into r4;
+    cast  r3 r4 into r5 as [u128; 2u32];
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player3[0u32] into r6;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player3[1u32] into r7;
+    cast  r6 r7 into r8 as [u128; 2u32];
+    cast r5 r1.player2 r8 r1.flop r1.turn r1.river into r9 as Cards;
+    async decrypt_hands_p2 r0 r1 r9 self.caller into r10;
+    output r2 as Keys.record;
+    output r10 as poker.aleo/decrypt_hands_p2.future;
 
 finalize decrypt_hands_p2:
     input r0 as u32.public;
@@ -573,18 +585,18 @@ finalize decrypt_hands_p2:
 
 function decrypt_hands_p3:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player1[0u32] into r4;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player1[1u32] into r5;
-    cast  r4 r5 into r6 as [u128; 2u32];
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player2[0u32] into r7;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player2[1u32] into r8;
-    cast  r7 r8 into r9 as [u128; 2u32];
-    cast r6 r9 r3.player3 r3.flop r3.turn r3.river into r10 as Cards;
-    async decrypt_hands_p3 r0 r3 r10 self.caller into r11;
-    output r11 as poker.aleo/decrypt_hands_p3.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player1[0u32] into r3;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player1[1u32] into r4;
+    cast  r3 r4 into r5 as [u128; 2u32];
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player2[0u32] into r6;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player2[1u32] into r7;
+    cast  r6 r7 into r8 as [u128; 2u32];
+    cast r5 r8 r1.player3 r1.flop r1.turn r1.river into r9 as Cards;
+    async decrypt_hands_p3 r0 r1 r9 self.caller into r10;
+    output r2 as Keys.record;
+    output r10 as poker.aleo/decrypt_hands_p3.future;
 
 finalize decrypt_hands_p3:
     input r0 as u32.public;
@@ -653,16 +665,16 @@ finalize decrypt_hands_p3:
 
 function decrypt_flop_p1:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.flop[0u32] into r4;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.flop[1u32] into r5;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.flop[2u32] into r6;
-    cast  r4 r5 r6 into r7 as [u128; 3u32];
-    cast r3.player1 r3.player2 r3.player3 r7 r3.turn r3.river into r8 as Cards;
-    async decrypt_flop_p1 r0 r3 r8 self.caller into r9;
-    output r9 as poker.aleo/decrypt_flop_p1.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.flop[0u32] into r3;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.flop[1u32] into r4;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.flop[2u32] into r5;
+    cast  r3 r4 r5 into r6 as [u128; 3u32];
+    cast r1.player1 r1.player2 r1.player3 r6 r1.turn r1.river into r7 as Cards;
+    async decrypt_flop_p1 r0 r1 r7 self.caller into r8;
+    output r2 as Keys.record;
+    output r8 as poker.aleo/decrypt_flop_p1.future;
 
 finalize decrypt_flop_p1:
     input r0 as u32.public;
@@ -691,16 +703,16 @@ finalize decrypt_flop_p1:
 
 function decrypt_flop_p2:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.flop[0u32] into r4;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.flop[1u32] into r5;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.flop[2u32] into r6;
-    cast  r4 r5 r6 into r7 as [u128; 3u32];
-    cast r3.player1 r3.player2 r3.player3 r7 r3.turn r3.river into r8 as Cards;
-    async decrypt_flop_p2 r0 r3 r8 self.caller into r9;
-    output r9 as poker.aleo/decrypt_flop_p2.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.flop[0u32] into r3;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.flop[1u32] into r4;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.flop[2u32] into r5;
+    cast  r3 r4 r5 into r6 as [u128; 3u32];
+    cast r1.player1 r1.player2 r1.player3 r6 r1.turn r1.river into r7 as Cards;
+    async decrypt_flop_p2 r0 r1 r7 self.caller into r8;
+    output r2 as Keys.record;
+    output r8 as poker.aleo/decrypt_flop_p2.future;
 
 finalize decrypt_flop_p2:
     input r0 as u32.public;
@@ -776,16 +788,16 @@ finalize decrypt_flop_p2:
 
 function decrypt_flop_p3:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.flop[0u32] into r4;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.flop[1u32] into r5;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.flop[2u32] into r6;
-    cast  r4 r5 r6 into r7 as [u128; 3u32];
-    cast r3.player1 r3.player2 r3.player3 r7 r3.turn r3.river into r8 as Cards;
-    async decrypt_flop_p3 r0 r3 r8 self.caller into r9;
-    output r9 as poker.aleo/decrypt_flop_p3.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.flop[0u32] into r3;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.flop[1u32] into r4;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.flop[2u32] into r5;
+    cast  r3 r4 r5 into r6 as [u128; 3u32];
+    cast r1.player1 r1.player2 r1.player3 r6 r1.turn r1.river into r7 as Cards;
+    async decrypt_flop_p3 r0 r1 r7 self.caller into r8;
+    output r2 as Keys.record;
+    output r8 as poker.aleo/decrypt_flop_p3.future;
 
 finalize decrypt_flop_p3:
     input r0 as u32.public;
@@ -1003,13 +1015,13 @@ finalize fold:
 
 function decrypt_turn_p1:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.turn into r4;
-    cast r3.player1 r3.player2 r3.player3 r3.flop r4 r3.river into r5 as Cards;
-    async decrypt_turn_p1 r0 r3 r5 self.caller into r6;
-    output r6 as poker.aleo/decrypt_turn_p1.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.turn into r3;
+    cast r1.player1 r1.player2 r1.player3 r1.flop r3 r1.river into r4 as Cards;
+    async decrypt_turn_p1 r0 r1 r4 self.caller into r5;
+    output r2 as Keys.record;
+    output r5 as poker.aleo/decrypt_turn_p1.future;
 
 finalize decrypt_turn_p1:
     input r0 as u32.public;
@@ -1038,13 +1050,13 @@ finalize decrypt_turn_p1:
 
 function decrypt_turn_p2:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.turn into r4;
-    cast r3.player1 r3.player2 r3.player3 r3.flop r4 r3.river into r5 as Cards;
-    async decrypt_turn_p2 r0 r3 r5 self.caller into r6;
-    output r6 as poker.aleo/decrypt_turn_p2.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.turn into r3;
+    cast r1.player1 r1.player2 r1.player3 r1.flop r3 r1.river into r4 as Cards;
+    async decrypt_turn_p2 r0 r1 r4 self.caller into r5;
+    output r2 as Keys.record;
+    output r5 as poker.aleo/decrypt_turn_p2.future;
 
 finalize decrypt_turn_p2:
     input r0 as u32.public;
@@ -1120,13 +1132,13 @@ finalize decrypt_turn_p2:
 
 function decrypt_turn_p3:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.turn into r4;
-    cast r3.player1 r3.player2 r3.player3 r3.flop r4 r3.river into r5 as Cards;
-    async decrypt_turn_p3 r0 r3 r5 self.caller into r6;
-    output r6 as poker.aleo/decrypt_turn_p3.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.turn into r3;
+    cast r1.player1 r1.player2 r1.player3 r1.flop r3 r1.river into r4 as Cards;
+    async decrypt_turn_p3 r0 r1 r4 self.caller into r5;
+    output r2 as Keys.record;
+    output r5 as poker.aleo/decrypt_turn_p3.future;
 
 finalize decrypt_turn_p3:
     input r0 as u32.public;
@@ -1198,13 +1210,13 @@ finalize decrypt_turn_p3:
 
 function decrypt_river_p1:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.river into r4;
-    cast r3.player1 r3.player2 r3.player3 r3.flop r3.turn r4 into r5 as Cards;
-    async decrypt_river_p1 r0 r3 r5 self.caller into r6;
-    output r6 as poker.aleo/decrypt_river_p1.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.river into r3;
+    cast r1.player1 r1.player2 r1.player3 r1.flop r1.turn r3 into r4 as Cards;
+    async decrypt_river_p1 r0 r1 r4 self.caller into r5;
+    output r2 as Keys.record;
+    output r5 as poker.aleo/decrypt_river_p1.future;
 
 finalize decrypt_river_p1:
     input r0 as u32.public;
@@ -1233,13 +1245,13 @@ finalize decrypt_river_p1:
 
 function decrypt_river_p2:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.river into r4;
-    cast r3.player1 r3.player2 r3.player3 r3.flop r3.turn r4 into r5 as Cards;
-    async decrypt_river_p2 r0 r3 r5 self.caller into r6;
-    output r6 as poker.aleo/decrypt_river_p2.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.river into r3;
+    cast r1.player1 r1.player2 r1.player3 r1.flop r1.turn r3 into r4 as Cards;
+    async decrypt_river_p2 r0 r1 r4 self.caller into r5;
+    output r2 as Keys.record;
+    output r5 as poker.aleo/decrypt_river_p2.future;
 
 finalize decrypt_river_p2:
     input r0 as u32.public;
@@ -1315,13 +1327,13 @@ finalize decrypt_river_p2:
 
 function decrypt_river_p3:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.river into r4;
-    cast r3.player1 r3.player2 r3.player3 r3.flop r3.turn r4 into r5 as Cards;
-    async decrypt_river_p3 r0 r3 r5 self.caller into r6;
-    output r6 as poker.aleo/decrypt_river_p3.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.river into r3;
+    cast r1.player1 r1.player2 r1.player3 r1.flop r1.turn r3 into r4 as Cards;
+    async decrypt_river_p3 r0 r1 r4 self.caller into r5;
+    output r2 as Keys.record;
+    output r5 as poker.aleo/decrypt_river_p3.future;
 
 finalize decrypt_river_p3:
     input r0 as u32.public;
@@ -1393,15 +1405,15 @@ finalize decrypt_river_p3:
 
 function showdown_p1:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player1[0u32] into r4;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player1[1u32] into r5;
-    cast  r4 r5 into r6 as [u128; 2u32];
-    cast r6 r3.player2 r3.player3 r3.flop r3.turn r3.river into r7 as Cards;
-    async showdown_p1 r0 r3 r7 self.caller into r8;
-    output r8 as poker.aleo/showdown_p1.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player1[0u32] into r3;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player1[1u32] into r4;
+    cast  r3 r4 into r5 as [u128; 2u32];
+    cast r5 r1.player2 r1.player3 r1.flop r1.turn r1.river into r6 as Cards;
+    async showdown_p1 r0 r1 r6 self.caller into r7;
+    output r2 as Keys.record;
+    output r7 as poker.aleo/showdown_p1.future;
 
 finalize showdown_p1:
     input r0 as u32.public;
@@ -1426,15 +1438,15 @@ finalize showdown_p1:
 
 function showdown_p2:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player2[0u32] into r4;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player2[1u32] into r5;
-    cast  r4 r5 into r6 as [u128; 2u32];
-    cast r3.player1 r6 r3.player3 r3.flop r3.turn r3.river into r7 as Cards;
-    async showdown_p2 r0 r3 r7 self.caller into r8;
-    output r8 as poker.aleo/showdown_p2.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player2[0u32] into r3;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player2[1u32] into r4;
+    cast  r3 r4 into r5 as [u128; 2u32];
+    cast r1.player1 r5 r1.player3 r1.flop r1.turn r1.river into r6 as Cards;
+    async showdown_p2 r0 r1 r6 self.caller into r7;
+    output r2 as Keys.record;
+    output r7 as poker.aleo/showdown_p2.future;
 
 finalize showdown_p2:
     input r0 as u32.public;
@@ -1525,15 +1537,15 @@ finalize showdown_p2:
 
 function showdown_p3:
     input r0 as u32.private;
-    input r1 as u128.private;
-    input r2 as u128.private;
-    input r3 as Cards.private;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player3[0u32] into r4;
-    call zk_sra_encryption.aleo/decrypt_card r1 r2 r3.player3[1u32] into r5;
-    cast  r4 r5 into r6 as [u128; 2u32];
-    cast r3.player1 r3.player2 r6 r3.flop r3.turn r3.river into r7 as Cards;
-    async showdown_p3 r0 r3 r7 self.caller into r8;
-    output r8 as poker.aleo/showdown_p3.future;
+    input r1 as Cards.private;
+    input r2 as Keys.record;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player3[0u32] into r3;
+    call zk_sra_encryption.aleo/decrypt_card r2.d r2.n r1.player3[1u32] into r4;
+    cast  r3 r4 into r5 as [u128; 2u32];
+    cast r1.player1 r1.player2 r5 r1.flop r1.turn r1.river into r6 as Cards;
+    async showdown_p3 r0 r1 r6 self.caller into r7;
+    output r2 as Keys.record;
+    output r7 as poker.aleo/showdown_p3.future;
 
 finalize showdown_p3:
     input r0 as u32.public;

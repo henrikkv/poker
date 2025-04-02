@@ -1217,18 +1217,92 @@ program poker.aleo {
 
         // If P3 is out or folded, determine winner here
         if (is_player3(game.players_out) || is_player3(game.players_folded)) {
-            let p1_high: u128 = !is_player1(game.players_folded) ? 
-                (new_card.player1[0u8] >= new_card.player1[1u8] ? new_card.player1[0u8] : new_card.player1[1u8]) : 
-                0u128;
-            let p2_high: u128 = !is_player2(game.players_folded) ? 
-                (new_card.player2[0u8] >= new_card.player2[1u8] ? new_card.player2[0u8] : new_card.player2[1u8]) : 
-                0u128;
             
-            let winner: u8 = p1_high >= p2_high ? 1u8 : 2u8;
+
+            let c1: u8 = card.flop[0u8] as u8;
+            let c2: u8 = card.flop[1u8] as u8;
+            let c3: u8 = card.flop[2u8] as u8;
+            let c4: u8 = card.turn as u8;
+            let c5: u8 = card.river as u8;
+
+            // Sort community cards
+            let temp: u8 = c1 < c2 ? c1 : c2;
+            c1 = temp == c1 ? c2 : c1;
+            c2 = temp;
+
+            temp = c2 < c3 ? c2 : c3;
+            c2 = temp == c2 ? c3 : c2;
+            c3 = temp;
+
+            temp = c3 < c4 ? c3 : c4;
+            c3 = temp == c3 ? c4 : c3;
+            c4 = temp;
+
+            temp = c4 < c5 ? c4 : c5;
+            c4 = temp == c4 ? c5 : c4;
+            c5 = temp;
+
+            // Second pass to ensure sorting
+            temp = c1 < c2 ? c1 : c2;
+            c1 = temp == c1 ? c2 : c1;
+            c2 = temp;
+
+            temp = c2 < c3 ? c2 : c3;
+            c2 = temp == c2 ? c3 : c2;
+            c3 = temp;
+
+            temp = c3 < c4 ? c3 : c4;
+            c3 = temp == c3 ? c4 : c3;
+            c4 = temp;
+
+            temp = c4 < c5 ? c4 : c5;
+            c4 = temp == c4 ? c5 : c4;
+            c5 = temp;
+
+            // Sort with player cards
+            let h1: u8 = new_card.player1[0u8] as u8;
+            let h2: u8 = new_card.player1[1u8] as u8;
+
+            let p1_tmp_c1: u8 = h1 < c1 ? h1 : c1;
+            let p1_tmp_c2: u8 = h1 < c1 ? c1 : h1 < c2 ? h1 : c2;
+            let p1_tmp_c3: u8 = h1 < c2 ? c2 : h1 < c3 ? h1 : c3;
+            let p1_tmp_c4: u8 = h1 < c3 ? c3 : h1 < c4 ? h1 : c4;
+            let p1_tmp_c5: u8 = h1 < c4 ? c4 : h1 < c5 ? h1 : c5;
+            let p1_tmp_c6: u8 = h1 < c5 ? c5 : h1;
+
+            let p1_c1: u8 = h2 < p1_tmp_c1 ? h2 : p1_tmp_c1;
+            let p1_c2: u8 = h2 < p1_tmp_c1 ? p1_tmp_c1 : h2 < p1_tmp_c2 ? h2 : p1_tmp_c2;
+            let p1_c3: u8 = h2 < p1_tmp_c2 ? p1_tmp_c2 : h2 < p1_tmp_c3 ? h2 : p1_tmp_c3;
+            let p1_c4: u8 = h2 < p1_tmp_c3 ? p1_tmp_c3 : h2 < p1_tmp_c4 ? h2 : p1_tmp_c4;
+            let p1_c5: u8 = h2 < p1_tmp_c4 ? p1_tmp_c4 : h2 < p1_tmp_c5 ? h2 : p1_tmp_c5;
+            let p1_c6: u8 = h2 < p1_tmp_c5 ? p1_tmp_c5 : h2 < p1_tmp_c6 ? h2 : p1_tmp_c6;
+            let p1_c7: u8 = h2 < p1_tmp_c6 ? p1_tmp_c6 : h2;
+
+
+
+            // Player 2
+            h1 = new_card.player2[0u8] as u8;
+            h2 = new_card.player2[1u8] as u8;
+
+            let p2_tmp_c1: u8 = h1 < c1 ? h1 : c1;
+            let p2_tmp_c2: u8 = h1 < c1 ? c1 : h1 < c2 ? h1 : c2;
+            let p2_tmp_c3: u8 = h1 < c2 ? c2 : h1 < c3 ? h1 : c3;
+            let p2_tmp_c4: u8 = h1 < c3 ? c3 : h1 < c4 ? h1 : c4;
+            let p2_tmp_c5: u8 = h1 < c4 ? c4 : h1 < c5 ? h1 : c5;
+            let p2_tmp_c6: u8 = h1 < c5 ? c5 : h1;
+
+            let p2_c1: u8 = h2 < p2_tmp_c1 ? h2 : p2_tmp_c1;
+            let p2_c2: u8 = h2 < p2_tmp_c1 ? p2_tmp_c1 : h2 < p2_tmp_c2 ? h2 : p2_tmp_c2;
+            let p2_c3: u8 = h2 < p2_tmp_c2 ? p2_tmp_c2 : h2 < p2_tmp_c3 ? h2 : p2_tmp_c3;
+            let p2_c4: u8 = h2 < p2_tmp_c3 ? p2_tmp_c3 : h2 < p2_tmp_c4 ? h2 : p2_tmp_c4;
+            let p2_c5: u8 = h2 < p2_tmp_c4 ? p2_tmp_c4 : h2 < p2_tmp_c5 ? h2 : p2_tmp_c5;
+            let p2_c6: u8 = h2 < p2_tmp_c5 ? p2_tmp_c5 : h2 < p2_tmp_c6 ? h2 : p2_tmp_c6;
+            let p2_c7: u8 = h2 < p2_tmp_c6 ? p2_tmp_c6 : h2;
 
             let chip: Chips = Mapping::get(chips, game_id);
             let pot: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet;
             
+            let winner: u8 = 1u8;
             let new_chip: Chips = Chips {
                 player1: winner == 1u8 ? chip.player1 + pot : chip.player1,
                 player2: winner == 2u8 ? chip.player2 + pot : chip.player2,

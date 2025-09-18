@@ -2,6 +2,9 @@ import zk_deck_shuffle.aleo;
 import zk_sra_encryption.aleo;
 
 program poker.aleo {
+    @noupgrade
+    async constructor() {}
+
     mapping games: u32 => Game;
     mapping chips: u32 => Chips;
     mapping cards: u32 => Cards;

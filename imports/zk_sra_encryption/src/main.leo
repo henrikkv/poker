@@ -1,4 +1,7 @@
 program zk_sra_encryption.aleo {
+    @noupgrade
+    async constructor() {}
+
     function exp_by_squaring(base: u128, exp: u128, modulus: u128) -> u128 {
         let result: u128 = 1u128;
         let current_base: u128 = base;

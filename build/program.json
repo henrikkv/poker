@@ -1,26 +1,9 @@
 {
-    "program": "mental_poker_trifecta.aleo",
-    "version": "0.1.0",
-    "description": "",
-    "license": "MIT",
-    "dependencies": [
-        {
-            "name": "zk_deck_shuffle.aleo",
-            "location": "local",
-            "network": null,
-            "path": "imports/zk_deck_shuffle/"
-        },
-        {
-            "name": "zk_sra_encryption.aleo",
-            "location": "local",
-            "network": null,
-            "path": "imports/zk_sra_encryption/"
-        },
-        {
-            "name": "zk_deck_operations.aleo",
-            "location": "local",
-            "network": null,
-            "path": "imports/zk_deck_operations/"
-        }
-    ]
+  "program": "poker.aleo",
+  "version": "0.1.0",
+  "description": "",
+  "license": "",
+  "leo": "3.2.0",
+  "dependencies": null,
+  "dev_dependencies": null
 }

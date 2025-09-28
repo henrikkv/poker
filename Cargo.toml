@@ -1,0 +1,21 @@
+[package]
+name = "poker"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "poker_bindings"
+path = "lib.rs"
+
+[features]
+default = ["testnet"]
+mainnet = []
+testnet = []
+canary = []
+interpreter = []
+
+[dependencies]
+leo-bindings = { git = "https://github.com/henrikkv/leo-bindings" }
+leo-bindings-credits = { git = "https://github.com/henrikkv/leo-bindings" }
+rand = "0.8"
+snarkvm = "4.2.1"

@@ -1,0 +1,820 @@
+{
+  "program_name": "poker",
+  "imports": [
+    "zk_deck_shuffle",
+    "zk_sra_encryption"
+  ],
+  "records": [
+    {
+      "name": "Keys",
+      "members": [
+        {
+          "name": "owner",
+          "type": "Address",
+          "mode": "None"
+        },
+        {
+          "name": "e",
+          "type": "u128",
+          "mode": "None"
+        },
+        {
+          "name": "d",
+          "type": "u128",
+          "mode": "None"
+        },
+        {
+          "name": "n",
+          "type": "u128",
+          "mode": "None"
+        }
+      ],
+      "is_record": true
+    }
+  ],
+  "structs": [
+    {
+      "name": "Game",
+      "members": [
+        {
+          "name": "player1",
+          "type": "Address",
+          "mode": "None"
+        },
+        {
+          "name": "player2",
+          "type": "Address",
+          "mode": "None"
+        },
+        {
+          "name": "player3",
+          "type": "Address",
+          "mode": "None"
+        },
+        {
+          "name": "buy_in",
+          "type": "u64",
+          "mode": "None"
+        },
+        {
+          "name": "deck",
+          "type": "[[u128; 26]; 2]",
+          "mode": "None"
+        },
+        {
+          "name": "state",
+          "type": "u8",
+          "mode": "None"
+        },
+        {
+          "name": "dealer_button",
+          "type": "u8",
+          "mode": "None"
+        },
+        {
+          "name": "players_out",
+          "type": "u8",
+          "mode": "None"
+        },
+        {
+          "name": "players_folded",
+          "type": "u8",
+          "mode": "None"
+        },
+        {
+          "name": "last_bet",
+          "type": "u8",
+          "mode": "None"
+        },
+        {
+          "name": "sb",
+          "type": "u16",
+          "mode": "None"
+        },
+        {
+          "name": "bb",
+          "type": "u16",
+          "mode": "None"
+        },
+        {
+          "name": "remaining_hands",
+          "type": "u8",
+          "mode": "None"
+        },
+        {
+          "name": "hands_played",
+          "type": "u8",
+          "mode": "None"
+        },
+        {
+          "name": "last_raise_size",
+          "type": "u16",
+          "mode": "None"
+        }
+      ],
+      "is_record": false
+    },
+    {
+      "name": "Chips",
+      "members": [
+        {
+          "name": "player1",
+          "type": "u16",
+          "mode": "None"
+        },
+        {
+          "name": "player2",
+          "type": "u16",
+          "mode": "None"
+        },
+        {
+          "name": "player3",
+          "type": "u16",
+          "mode": "None"
+        },
+        {
+          "name": "player1_bet",
+          "type": "u16",
+          "mode": "None"
+        },
+        {
+          "name": "player2_bet",
+          "type": "u16",
+          "mode": "None"
+        },
+        {
+          "name": "player3_bet",
+          "type": "u16",
+          "mode": "None"
+        }
+      ],
+      "is_record": false
+    },
+    {
+      "name": "Cards",
+      "members": [
+        {
+          "name": "player1",
+          "type": "[u128; 2]",
+          "mode": "None"
+        },
+        {
+          "name": "player2",
+          "type": "[u128; 2]",
+          "mode": "None"
+        },
+        {
+          "name": "player3",
+          "type": "[u128; 2]",
+          "mode": "None"
+        },
+        {
+          "name": "flop",
+          "type": "[u128; 3]",
+          "mode": "None"
+        },
+        {
+          "name": "turn",
+          "type": "u128",
+          "mode": "None"
+        },
+        {
+          "name": "river",
+          "type": "u128",
+          "mode": "None"
+        }
+      ],
+      "is_record": false
+    }
+  ],
+  "mappings": [
+    {
+      "name": "games",
+      "key_type": "u32",
+      "value_type": "Game"
+    },
+    {
+      "name": "chips",
+      "key_type": "u32",
+      "value_type": "Chips"
+    },
+    {
+      "name": "cards",
+      "key_type": "u32",
+      "value_type": "Cards"
+    }
+  ],
+  "functions": [
+    {
+      "name": "create_game",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "element1",
+          "type": "i8",
+          "mode": "None"
+        },
+        {
+          "name": "element2",
+          "type": "i8",
+          "mode": "None"
+        },
+        {
+          "name": "element3",
+          "type": "i8",
+          "mode": "None"
+        },
+        {
+          "name": "e",
+          "type": "u128",
+          "mode": "None"
+        },
+        {
+          "name": "d",
+          "type": "u128",
+          "mode": "None"
+        },
+        {
+          "name": "n",
+          "type": "u128",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "join_game",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "deck",
+          "type": "[[u128; 26]; 2]",
+          "mode": "None"
+        },
+        {
+          "name": "element1",
+          "type": "i8",
+          "mode": "None"
+        },
+        {
+          "name": "element2",
+          "type": "i8",
+          "mode": "None"
+        },
+        {
+          "name": "element3",
+          "type": "i8",
+          "mode": "None"
+        },
+        {
+          "name": "e",
+          "type": "u128",
+          "mode": "None"
+        },
+        {
+          "name": "d",
+          "type": "u128",
+          "mode": "None"
+        },
+        {
+          "name": "n",
+          "type": "u128",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "bet",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "amount",
+          "type": "u16",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_hands_p1",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_hands_p2",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_hands_p3",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_flop_p1",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_flop_p2",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_flop_p3",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "fold",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_turn_p1",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_turn_p2",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_turn_p3",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_river_p1",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_river_p2",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "decrypt_river_p3",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "showdown_p1",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "showdown_p2",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "showdown_p3",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Cards",
+          "mode": "None"
+        },
+        {
+          "name": "keys",
+          "type": "Keys",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    }
+  ]
+}

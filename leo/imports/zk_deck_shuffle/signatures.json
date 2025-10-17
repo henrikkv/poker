@@ -1,0 +1,41 @@
+{
+  "program_name": "zk_deck_shuffle",
+  "imports": [],
+  "records": [],
+  "structs": [],
+  "mappings": [],
+  "functions": [
+    {
+      "name": "full_shuffle",
+      "inputs": [
+        {
+          "name": "element1",
+          "type": "i8",
+          "mode": "None"
+        },
+        {
+          "name": "element2",
+          "type": "i8",
+          "mode": "None"
+        },
+        {
+          "name": "element3",
+          "type": "i8",
+          "mode": "None"
+        },
+        {
+          "name": "deck",
+          "type": "[[u128; 26]; 2]",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "[[u128; 26]; 2]",
+          "mode": "None"
+        }
+      ],
+      "is_async": false
+    }
+  ]
+}

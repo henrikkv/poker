@@ -1,0 +1,9 @@
+target/
+registry/
+Cargo.lock
+
+build/*
+!build/
+!build/main.aleo
+
+outputs/

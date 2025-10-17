@@ -2,7 +2,4 @@
 *.avm
 *.prover
 *.verifier
-outputs/*
-!outputs/
-!outputs/*.initial.json
 /target

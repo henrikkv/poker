@@ -1,0 +1,33 @@
+[workspace]
+members = [".", "imports/*"]
+
+[workspace.dependencies]
+leo-bindings = { git = "https://github.com/henrikkv/leo-bindings" }
+rand = "0.8"
+snarkvm = "4.2.1"
+
+# BEGIN IMPORTS
+# credits_bindings = { git = "https://github.com/henrikkv/leo-bindings" }
+# END IMPORTS
+
+[package]
+name = "poker_bindings"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "poker_bindings"
+path = "lib.rs"
+
+[dependencies]
+leo-bindings.workspace = true
+rand.workspace = true
+snarkvm.workspace = true
+
+zk_deck_shuffle_bindings = { path = "imports/zk_deck_shuffle/" }
+
+zk_sra_encryption_bindings = { path = "imports/zk_sra_encryption/" }
+
+[build-dependencies]
+leo-bindings-core = { git = "https://github.com/henrikkv/leo-bindings" }
+serde_json = "1"

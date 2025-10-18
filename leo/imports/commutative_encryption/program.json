@@ -1,0 +1,7 @@
+{
+  "program": "commutative_encryption.aleo",
+  "version": "0.1.0",
+  "description": "Elliptic curve commutative encryption for mental poker",
+  "license": "MIT",
+  "dependencies": null
+}

@@ -3,7 +3,7 @@ fn main() {
     let manifest_path = std::path::Path::new(&manifest_dir);
     let src_main_leo = manifest_path.join("src/main.leo");
     let build_main_aleo = manifest_path.join("build/main.aleo");
-    let initial_json = manifest_path.join("outputs/poker.initial.json");
+    let initial_json = manifest_path.join("outputs/commutative_encryption.initial.json");
     let signatures_json = manifest_path.join("signatures.json");
 
     println!("cargo:rerun-if-changed=signatures.json");
@@ -17,14 +17,8 @@ fn main() {
     }
 
     if initial_json.exists() {
-        println!("cargo:rerun-if-changed=outputs/poker.initial.json");
+        println!("cargo:rerun-if-changed=outputs/commutative_encryption.initial.json");
     }
-
-    println!("cargo:rerun-if-changed=imports/zk_deck_shuffle//signatures.json");
-
-    println!("cargo:rerun-if-changed=imports/zk_sra_encryption//signatures.json");
-
-    println!("cargo:rerun-if-changed=./imports/commutative_encryption/signatures.json");
 
     if src_main_leo.exists() {
         let needs_leo_build = !build_main_aleo.exists()

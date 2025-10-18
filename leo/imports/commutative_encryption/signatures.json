@@ -1,0 +1,86 @@
+{
+  "program_name": "commutative_encryption",
+  "imports": [],
+  "records": [],
+  "structs": [],
+  "mappings": [],
+  "functions": [
+    {
+      "name": "encrypt_deck",
+      "inputs": [
+        {
+          "name": "secret",
+          "type": "Scalar",
+          "mode": "None"
+        },
+        {
+          "name": "deck",
+          "type": "[[Group; 26]; 2]",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "[[Group; 26]; 2]",
+          "mode": "None"
+        }
+      ],
+      "is_async": false
+    },
+    {
+      "name": "decrypt_deck",
+      "inputs": [
+        {
+          "name": "secret_inv",
+          "type": "Scalar",
+          "mode": "None"
+        },
+        {
+          "name": "deck",
+          "type": "[[Group; 26]; 2]",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "[[Group; 26]; 2]",
+          "mode": "None"
+        }
+      ],
+      "is_async": false
+    },
+    {
+      "name": "decrypt_card",
+      "inputs": [
+        {
+          "name": "secret_inv",
+          "type": "Scalar",
+          "mode": "None"
+        },
+        {
+          "name": "card",
+          "type": "Group",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Group",
+          "mode": "None"
+        }
+      ],
+      "is_async": false
+    },
+    {
+      "name": "initialize_deck",
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "[[Group; 26]; 2]",
+          "mode": "None"
+        }
+      ],
+      "is_async": false
+    }
+  ]
+}

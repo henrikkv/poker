@@ -3,18 +3,26 @@
   "version": "0.1.0",
   "description": "",
   "license": "MIT",
+  "leo": "3.2.0",
   "dependencies": [
     {
       "name": "zk_deck_shuffle.aleo",
       "location": "local",
-      "network": null,
-      "path": "imports/zk_deck_shuffle/"
+      "path": "imports/zk_deck_shuffle/",
+      "edition": null
     },
     {
       "name": "zk_sra_encryption.aleo",
       "location": "local",
-      "network": null,
-      "path": "imports/zk_sra_encryption/"
+      "path": "imports/zk_sra_encryption/",
+      "edition": null
+    },
+    {
+      "name": "commutative_encryption.aleo",
+      "location": "local",
+      "path": "./imports/commutative_encryption",
+      "edition": null
     }
-  ]
+  ],
+  "dev_dependencies": null
 }

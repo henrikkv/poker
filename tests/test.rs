@@ -4,6 +4,7 @@ use leo_bindings::utils::*;
 use poker_bindings::poker::*;
 use snarkvm::console::network::TestnetV0;
 use snarkvm::prelude::Network;
+use snarkvm::prelude::{Inverse, Scalar, TestRng, Uniform};
 use std::str::FromStr;
 
 const ENDPOINT: &str = "http://localhost:3030";
@@ -31,8 +32,6 @@ fn run_commutative_encryption<N: Network, C: CommutativeEncryptionAleo<N>>(
     commutative_encryption: &C,
     alice: &Account<N>,
 ) {
-    use snarkvm::prelude::{Inverse, Scalar, TestRng, Uniform};
-
     let mut rng = TestRng::default();
 
     let secret_a = Scalar::rand(&mut rng);
@@ -71,7 +70,7 @@ fn run_commutative_encryption<N: Network, C: CommutativeEncryptionAleo<N>>(
 
 #[test]
 fn poker_interpreter() {
-    let alice: Account<TestnetV0> = Account::from_str(PRIVATE_KEY).unwrap();
+    let alice = Account::from_str(PRIVATE_KEY).unwrap();
     let rng = &mut rand::thread_rng();
     let bob = Account::new(rng).unwrap();
     let charlie = Account::new(rng).unwrap();
@@ -85,7 +84,7 @@ fn poker_interpreter() {
 }
 #[test]
 fn poker_testnet() {
-    let alice: Account<TestnetV0> = Account::from_str(PRIVATE_KEY).unwrap();
+    let alice = Account::from_str(PRIVATE_KEY).unwrap();
     let rng = &mut rand::thread_rng();
     let bob = Account::new(rng).unwrap();
     let charlie = Account::new(rng).unwrap();
@@ -107,11 +106,65 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>>(
     credits
         .transfer_public(alice, bob.address(), 1_000_000_000_000)
         .unwrap();
+    credits
+        .transfer_public(alice, charlie.address(), 1_000_000_000_000)
+        .unwrap();
 
-    let (alice_keys, _) = poker.create_game(alice, 1, 1, 2, 3, 5, 29, 91).unwrap();
-    dbg!(alice_keys);
-    /*
-        let deck = [game.cards_p1, game.cards_p2];
-        let (mut bob_keys, _) = poker.join_game(&bob, 1, deck, 4, 5, 6, 7, 31, 91).unwrap();
-    */
+    let mut rng = TestRng::default();
+    let secret_alice = Scalar::rand(&mut rng);
+    let secret_bob = Scalar::rand(&mut rng);
+    let secret_charlie = Scalar::rand(&mut rng);
+
+    let secret_alice_inv = Inverse::inverse(&secret_alice).unwrap();
+    let secret_bob_inv = Inverse::inverse(&secret_bob).unwrap();
+    let secret_charlie_inv = Inverse::inverse(&secret_charlie).unwrap();
+    let (alice_keys, _) = poker
+        .create_game(alice, 1, 1, 2, 3, secret_alice, secret_alice_inv)
+        .unwrap();
+    dbg!(&alice_keys);
+
+    let game = poker.get_games(1).unwrap();
+    let (bob_keys, _) = poker
+        .join_game(bob, 1, game.deck, 4, 5, 6, secret_bob, secret_bob_inv)
+        .unwrap();
+    dbg!(&bob_keys);
+
+    let game = poker.get_games(1).unwrap();
+    let (charlie_keys, _) = poker
+        .join_game(
+            charlie,
+            1,
+            game.deck,
+            7,
+            8,
+            9,
+            secret_charlie,
+            secret_charlie_inv,
+        )
+        .unwrap();
+    dbg!(&charlie_keys);
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+
+    // Decrypt hands phase
+    let cards = poker.get_cards(1).unwrap();
+    dbg!(&cards);
+    let (alice_keys, _) = poker.decrypt_hands_p1(alice, 1, cards, alice_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (bob_keys, _) = poker.decrypt_hands_p2(bob, 1, cards, bob_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (charlie_keys, _) = poker
+        .decrypt_hands_p3(charlie, 1, cards, charlie_keys)
+        .unwrap();
+
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+
+    poker.bet(charlie, 1, 10).unwrap();
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+    let chips = poker.get_chips(1).unwrap();
+    dbg!(&chips);
 }

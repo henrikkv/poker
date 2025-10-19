@@ -1,5 +1,5 @@
 import zk_deck_shuffle.aleo;
-import zk_sra_encryption.aleo;
+import commutative_encryption.aleo;
 
 program poker.aleo {
     @noupgrade
@@ -9,17 +9,12 @@ program poker.aleo {
     mapping chips: u32 => Chips;
     mapping cards: u32 => Cards;
 
-    inline get_new_deck() -> [[u128; 26]; 2] {
-        return [[1u128, 2u128, 3u128, 4u128, 5u128, 6u128, 7u128, 8u128, 9u128, 10u128, 11u128, 12u128, 13u128, 14u128, 15u128, 16u128, 17u128, 18u128, 19u128, 20u128, 21u128, 22u128, 23u128, 24u128, 25u128, 26u128],
-                [27u128, 28u128, 29u128, 30u128, 31u128, 32u128, 33u128, 34u128, 35u128, 36u128, 37u128, 38u128, 39u128, 40u128, 41u128, 42u128, 43u128, 44u128, 45u128, 46u128, 47u128, 48u128, 49u128, 50u128, 51u128, 52u128]];
-    }
-
     struct Game {
         player1: address,
         player2: address,
         player3: address,
         buy_in: u64,
-        deck: [[u128; 26]; 2],
+        deck: [[group; 26]; 2],
         // 0: Waiting for player2 to join
         // 1: Waiting for player3 to join
 
@@ -95,30 +90,32 @@ program poker.aleo {
         player3_bet: u16,
     }
     struct Cards {
-        player1: [u128; 2],
-        player2: [u128; 2],
-        player3: [u128; 2],
-        flop: [u128; 3],
-        turn: u128,
-        river: u128,
+        player1: [group; 2],
+        player2: [group; 2],
+        player3: [group; 2],
+        flop: [group; 3],
+        turn: group,
+        river: group,
     }
     record Keys {
         owner: address,
-        e: u128,
-        d: u128,
-        n: u128,
+        secret: scalar,
+        secret_inv: scalar,
     }
-    async transition create_game(game_id: u32, element1: i8, element2: i8, element3: i8, e: u128, d: u128, n: u128) -> (Keys, Future) {
-        let deck: [[u128; 26]; 2] = zk_deck_shuffle.aleo/full_shuffle(element1, element2, element3, zk_sra_encryption.aleo/encrypt_deck(e, n, get_new_deck()));
+    async transition create_game(game_id: u32, element1: i8, element2: i8, element3: i8, secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+        let deck: [[group; 26]; 2] = commutative_encryption.aleo/initialize_deck();
+        let deck_encrypted: [[group; 26]; 2] = commutative_encryption.aleo/encrypt_deck(secret, deck);
+
+        // Check if decryption key is correct
+        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_encrypted[0][0]), deck[0][0]);
         let keys: Keys = Keys {
             owner: self.caller,
-            e: e,
-            d: d,
-            n: n,
+            secret: secret,
+            secret_inv: secret_inv,
         };
-        return (keys, finalize_new_game(game_id, deck, self.caller));
+        return (keys, finalize_new_game(game_id, deck_encrypted, self.caller));
     }
-    async function finalize_new_game(game_id: u32, deck: [[u128; 26]; 2], caller: address) {
+    async function finalize_new_game(game_id: u32, deck: [[group; 26]; 2], caller: address) {
         let game: Game = Game {
             player1: caller,
             player2: 0u128 as address,
@@ -138,17 +135,19 @@ program poker.aleo {
         };
         Mapping::set(games, game_id, game);
     }
-    async transition join_game(game_id: u32, deck: [[u128; 26]; 2], element1: i8, element2: i8, element3: i8, e: u128, d: u128, n: u128) -> (Keys, Future) {
-        let new_deck: [[u128; 26]; 2] = zk_deck_shuffle.aleo/full_shuffle(element1, element2, element3, zk_sra_encryption.aleo/encrypt_deck(e, n, deck)); 
+    async transition join_game(game_id: u32, deck: [[group; 26]; 2], element1: i8, element2: i8, element3: i8, secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+        let deck_encrypted: [[group; 26]; 2] = commutative_encryption.aleo/encrypt_deck(secret, deck);
+
+        // Check if decryption key is correct
+        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_encrypted[0][0]), deck[0][0]);
         let keys: Keys = Keys {
             owner: self.caller,
-            e: e,
-            d: d,
-            n: n,
+            secret: secret,
+            secret_inv: secret_inv,
         };
-        return (keys, finalize_join_game(game_id, deck, new_deck, self.caller));
+        return (keys, finalize_join_game(game_id, deck, deck_encrypted, self.caller));
     }
-    async function finalize_join_game(game_id: u32, deck: [[u128; 26]; 2], new_deck: [[u128; 26]; 2], caller: address) {
+    async function finalize_join_game(game_id: u32, deck: [[group; 26]; 2], new_deck: [[group; 26]; 2], caller: address) {
         let game: Game = Mapping::get(games, game_id);    
         assert(game.deck == deck);
         
@@ -205,10 +204,10 @@ program poker.aleo {
         let game: Game = Mapping::get(games, game_id);
         let chip: Chips = Mapping::get(chips, game_id);
 
-        let is_valid_state: bool = 
-            (game.state == 4u8 && game.player1 == caller) ||
-            (game.state == 5u8 && game.player2 == caller) ||
-            (game.state == 6u8 && game.player3 == caller) ||
+        let is_valid_state: bool =
+            (game.state == 5u8 && game.player1 == caller) ||
+            (game.state == 6u8 && game.player2 == caller) ||
+            (game.state == 7u8 && game.player3 == caller) ||
             (game.state == 11u8 && game.player1 == caller) ||
             (game.state == 12u8 && game.player2 == caller) ||
             (game.state == 13u8 && game.player3 == caller) ||
@@ -220,9 +219,9 @@ program poker.aleo {
             (game.state == 25u8 && game.player3 == caller);
         assert(is_valid_state);
 
-        let (current_chips, current_bet): (u16, u16) = 
-            (game.state == 4u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? (chip.player1, chip.player1_bet) :
-            (game.state == 5u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? (chip.player2, chip.player2_bet) :
+        let (current_chips, current_bet): (u16, u16) =
+            (game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? (chip.player1, chip.player1_bet) :
+            (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? (chip.player2, chip.player2_bet) :
             (chip.player3, chip.player3_bet);
 
         let highest_bet: u16 = 
@@ -277,10 +276,10 @@ program poker.aleo {
             (chip.player3 == 0u16 && chip.player3_bet < highest_bet);
 
         // Determine if this bet reopens action
-        let new_last_bet: u8 = 
+        let new_last_bet: u8 =
             reopens_action ?
-                ((game.state == 4u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? player1() :
-                 (game.state == 5u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? player2() : 
+                ((game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? player1() :
+                 (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? player2() :
                  player3()) :
                 game.last_bet;
 
@@ -295,23 +294,23 @@ program poker.aleo {
               is_short_allin ||  // Or was a short all-in
               // Or was last to act before short all-in
               (has_short_allin && !reopens_action &&
-               ((game.state == 4u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) && is_player1(game.last_bet)) ||
-               ((game.state == 5u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) && is_player2(game.last_bet)) ||
-               ((game.state == 6u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) && is_player3(game.last_bet)))));
+               ((game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) && is_player1(game.last_bet)) ||
+               ((game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) && is_player2(game.last_bet)) ||
+               ((game.state == 7u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) && is_player3(game.last_bet)))));
 
-        let next_state: u8 = 
-            should_end_betting ? 
-                (game.state <= 7u8) ? (is_player1(game.players_out) ? 8u8 : 7u8) :     // Move to flop decrypt
-                (game.state <= 13u8) ? (is_player2(game.players_out) ? 14u8 : 13u8) :   // Move to turn decrypt
-                (game.state <= 19u8) ? (is_player3(game.players_out) ? 20u8 : 19u8) :   // Move to river decrypt
+        let next_state: u8 =
+            should_end_betting ?
+                (game.state <= 7u8) ? (is_player1(game.players_out) ? 9u8 : 8u8) :     // Move to flop decrypt
+                (game.state <= 13u8) ? (is_player1(game.players_out) ? 15u8 : 14u8) :   // Move to turn decrypt
+                (game.state <= 19u8) ? (is_player1(game.players_out) ? 21u8 : 20u8) :   // Move to river decrypt
                 // For showdown, check who starts based on who's still in
-                is_player1(game.players_folded) ? 
+                is_player1(game.players_folded) ?
                     (is_player2(game.players_folded) ? 28u8 : 27u8) :  // P3 or P2 starts
                 26u8 :                                                  // P1 starts
             // Otherwise move to next active player
-            (game.state == 4u8) ? (is_p2_inactive ? 6u8 : 5u8) :
-            (game.state == 5u8) ? (is_p3_inactive ? 4u8 : 6u8) :
-            (game.state == 6u8) ? (is_p1_inactive ? 5u8 : 4u8) :
+            (game.state == 5u8) ? (is_p2_inactive ? 7u8 : 6u8) :
+            (game.state == 6u8) ? (is_p3_inactive ? 5u8 : 7u8) :
+            (game.state == 7u8) ? (is_p1_inactive ? 6u8 : 5u8) :
             (game.state == 11u8) ? (is_p2_inactive ? 13u8 : 12u8) :
             (game.state == 12u8) ? (is_p3_inactive ? 11u8 : 13u8) :
             (game.state == 13u8) ? (is_p1_inactive ? 12u8 : 11u8) :
@@ -323,27 +322,27 @@ program poker.aleo {
             (game.state == 25u8) ? (is_p1_inactive ? 24u8 : 23u8) : 0u8;
 
         // 8. UPDATE LAST BETTOR
-        new_last_bet = 
+        new_last_bet =
             (new_amount > highest_bet && !is_going_allin) ?
-                ((game.state == 4u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? player1() :
-                 (game.state == 5u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? player2() : 
+                ((game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? player1() :
+                 (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? player2() :
                  player3()) :
                 game.last_bet;
 
         let pot_size: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet + amount;
         let new_chip: Chips = Chips {
             // Update current player's stack and bet
-            player1: (game.state == 4u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? 
+            player1: (game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ?
                 new_remaining : chip.player1,
-            player2: (game.state == 5u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? 
+            player2: (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ?
                 new_remaining : chip.player2,
-            player3: (game.state == 6u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) ? 
+            player3: (game.state == 7u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) ?
                 new_remaining : chip.player3,
-            player1_bet: (game.state == 4u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? 
+            player1_bet: (game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ?
                 new_amount : chip.player1_bet,
-            player2_bet: (game.state == 5u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? 
+            player2_bet: (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ?
                 new_amount : chip.player2_bet,
-            player3_bet: (game.state == 6u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) ? 
+            player3_bet: (game.state == 7u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) ?
                 new_amount : chip.player3_bet,
         };
 
@@ -376,8 +375,14 @@ program poker.aleo {
     async transition decrypt_hands_p1(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
-            player2: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[1u8])],
-            player3: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[1u8])],
+            player2: [
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player2[0u8]),
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player2[1u8])
+            ],
+            player3: [
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player3[0u8]),
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player3[1u8])
+            ],
             flop: card.flop,
             turn: card.turn,
             river: card.river,
@@ -397,7 +402,7 @@ program poker.aleo {
                 player3: game.player3,
                 buy_in: game.buy_in,
                 deck: game.deck,
-                state: 4u8,
+                state: 5u8,
                 dealer_button: game.dealer_button,
                 players_out: game.players_out,
                 players_folded: game.players_folded,
@@ -434,9 +439,15 @@ program poker.aleo {
     }
     async transition decrypt_hands_p2(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
-            player1: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[1u8])],
+            player1: [
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player1[0u8]),
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player1[1u8])
+            ],
             player2: card.player2,
-            player3: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player3[1u8])],
+            player3: [
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player3[0u8]),
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player3[1u8])
+            ],
             flop: card.flop,
             turn: card.turn,
             river: card.river,
@@ -482,8 +493,14 @@ program poker.aleo {
     }
     async transition decrypt_hands_p3(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
-            player1: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player1[1u8])],
-            player2: [zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[0u8]), zk_sra_encryption.aleo/decrypt_card(keys.d, keys.n, card.player2[1u8])],
+            player1: [
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player1[0u8]),
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player1[1u8])
+            ],
+            player2: [
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player2[0u8]),
+                commutative_encryption.aleo/decrypt_card(keys.secret_inv, card.player2[1u8])
+            ],
             player3: card.player3,
             flop: card.flop,
             turn: card.turn,
@@ -542,6 +559,7 @@ program poker.aleo {
         };
         Mapping::set(games, game_id, new_game);
     }
+    /*
     async transition decrypt_flop_p1(game_id: u32, card: Cards, keys: Keys) -> (Keys, Future) {
         let new_card: Cards = Cards {
             player1: card.player1,
@@ -717,8 +735,8 @@ program poker.aleo {
         let chip: Chips = Mapping::get(chips, game_id);
         
         // Validate the fold is from the correct player and in a betting state
-        let is_valid_state: bool = 
-            (game.state >= 4u8 && game.state <= 7u8) ||    // Pre-flop betting
+        let is_valid_state: bool =
+            (game.state >= 5u8 && game.state <= 7u8) ||    // Pre-flop betting
             (game.state >= 11u8 && game.state <= 13u8) ||  // Post-flop betting
             (game.state >= 17u8 && game.state <= 19u8) ||  // Post-turn betting
             (game.state >= 23u8 && game.state <= 25u8);    // Post-river betting
@@ -796,8 +814,8 @@ program poker.aleo {
         // Check if betting round should end
         let should_end_betting: bool = all_matched;
 
-        let base_state: u8 = 
-            (game.state <= 7u8) ? 4u8 :      // Pre-flop states
+        let base_state: u8 =
+            (game.state <= 7u8) ? 5u8 :      // Pre-flop states
             (game.state <= 13u8) ? 11u8 :    // Post-flop states
             (game.state <= 19u8) ? 17u8 :    // Post-turn states
             23u8;                            // Post-river states
@@ -1468,4 +1486,5 @@ program poker.aleo {
         Mapping::set(chips, game_id, new_chip);
         Mapping::set(games, game_id, new_game);
     }
+    */
 }

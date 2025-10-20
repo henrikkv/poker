@@ -72,6 +72,23 @@
       "is_async": false
     },
     {
+      "name": "to_u8",
+      "inputs": [
+        {
+          "name": "g",
+          "type": "Group",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "u8",
+          "mode": "None"
+        }
+      ],
+      "is_async": false
+    },
+    {
       "name": "initialize_deck",
       "inputs": [],
       "outputs": [

@@ -167,4 +167,79 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>>(
     dbg!(&game);
     let chips = poker.get_chips(1).unwrap();
     dbg!(&chips);
+    poker.bet(alice, 1, 5).unwrap();
+    poker.bet(bob, 1, 0).unwrap(); // BB checks, betting ends
+
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+
+    let cards = poker.get_cards(1).unwrap();
+    let (alice_keys, _) = poker.decrypt_flop_p1(alice, 1, cards, alice_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (bob_keys, _) = poker.decrypt_flop_p2(bob, 1, cards, bob_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (charlie_keys, _) = poker
+        .decrypt_flop_p3(charlie, 1, cards, charlie_keys)
+        .unwrap();
+
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+    let revealed = poker.get_revealed_cards(1).unwrap();
+    dbg!(&revealed);
+
+    poker.bet(bob, 1, 0).unwrap();
+    poker.bet(charlie, 1, 0).unwrap();
+    poker.bet(alice, 1, 0).unwrap();
+
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+
+    let cards = poker.get_cards(1).unwrap();
+    let (alice_keys, _) = poker.decrypt_turn_p1(alice, 1, cards, alice_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (bob_keys, _) = poker.decrypt_turn_p2(bob, 1, cards, bob_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (charlie_keys, _) = poker
+        .decrypt_turn_p3(charlie, 1, cards, charlie_keys)
+        .unwrap();
+
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+    let revealed = poker.get_revealed_cards(1).unwrap();
+    dbg!(&revealed);
+
+    poker.bet(bob, 1, 0).unwrap();
+    poker.bet(charlie, 1, 0).unwrap();
+    poker.bet(alice, 1, 0).unwrap();
+
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+
+    let cards = poker.get_cards(1).unwrap();
+    let (alice_keys, _) = poker.decrypt_river_p1(alice, 1, cards, alice_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (bob_keys, _) = poker.decrypt_river_p2(bob, 1, cards, bob_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (charlie_keys, _) = poker
+        .decrypt_river_p3(charlie, 1, cards, charlie_keys)
+        .unwrap();
+
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+    let revealed = poker.get_revealed_cards(1).unwrap();
+    dbg!(&revealed);
+
+    poker.bet(bob, 1, 0).unwrap();
+    poker.bet(charlie, 1, 0).unwrap();
+    poker.bet(alice, 1, 0).unwrap();
+
+    let game = poker.get_games(1).unwrap();
+    dbg!(&game);
+    dbg!("Ready for showdown");
 }

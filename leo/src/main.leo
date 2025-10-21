@@ -4,6 +4,7 @@ import commutative_encryption.aleo;
 program poker.aleo {
 
     mapping games: u32 => Game;
+    mapping decks: u32 => [[group; 26]; 2];
     mapping chips: u32 => Chips;
     mapping cards: u32 => Cards;
     mapping revealed_cards: u32 => RevealedCards;
@@ -13,7 +14,6 @@ program poker.aleo {
         player2: address,
         player3: address,
         buy_in: u64,
-        deck: [[group; 26]; 2],
         // 0: Waiting for player2 to join
         // 1: Waiting for player3 to join
 
@@ -126,9 +126,8 @@ program poker.aleo {
         let game: Game = Game {
             player1: caller,
             player2: 0u128 as address,
-            player3: 0u128 as address, 
+            player3: 0u128 as address,
             buy_in: 10u64,
-            deck: deck,
             state: 0u8,
             dealer_button: player1(),
             players_out: 0u8,
@@ -141,6 +140,7 @@ program poker.aleo {
             last_raise_size: 0u16,
         };
         Mapping::set(games, game_id, game);
+        Mapping::set(decks, game_id, deck);
     }
     async transition join_game(game_id: u32, deck: [[group; 26]; 2], element1: i8, element2: i8, element3: i8, secret: scalar, secret_inv: scalar) -> (Keys, Future) {
         let deck_encrypted: [[group; 26]; 2] = commutative_encryption.aleo/encrypt_deck(secret, deck);
@@ -155,9 +155,10 @@ program poker.aleo {
         return (keys, finalize_join_game(game_id, deck, deck_encrypted, self.caller));
     }
     async function finalize_join_game(game_id: u32, deck: [[group; 26]; 2], new_deck: [[group; 26]; 2], caller: address) {
-        let game: Game = Mapping::get(games, game_id);    
-        assert(game.deck == deck);
-        
+        let game: Game = Mapping::get(games, game_id);
+        let current_deck: [[group; 26]; 2] = Mapping::get(decks, game_id);
+        assert(current_deck == deck);
+
         // Determine if this is player2 or player3 joining
         let player2_joining: bool = game.state == 0u8;
         assert(game.state == 0u8 || game.state == 1u8);
@@ -167,7 +168,6 @@ program poker.aleo {
             player2: player2_joining ? caller : game.player2,
             player3: !player2_joining ? caller : 0u128 as address,
             buy_in: game.buy_in,
-            deck: new_deck,
             state: player2_joining ? 1u8 : 2u8,
             dealer_button: game.dealer_button,
             players_out: 0u8,
@@ -179,8 +179,9 @@ program poker.aleo {
             hands_played: 0u8,
             last_raise_size: 0u16,
         };
-        
+
         Mapping::set(games, game_id, new_game);
+        Mapping::set(decks, game_id, new_deck);
         
         if (!player2_joining) {
             let chip: Chips = Chips {
@@ -193,12 +194,12 @@ program poker.aleo {
             };
             
             let card: Cards = Cards {
-                player1: [new_deck[1u8][1u8], new_deck[1u8][4u8]],
-                player2: [new_deck[1u8][2u8], new_deck[1u8][5u8]],
-                player3: [new_deck[1u8][3u8], new_deck[1u8][6u8]],
-                flop: [new_deck[1u8][7u8], new_deck[1u8][8u8], new_deck[1u8][9u8]],
-                turn: new_deck[1u8][10u8],
-                river: new_deck[1u8][11u8],
+                player1: [new_deck[0u8][0u8], new_deck[0u8][3u8]],
+                player2: [new_deck[0u8][1u8], new_deck[0u8][4u8]],
+                player3: [new_deck[0u8][2u8], new_deck[0u8][5u8]],
+                flop: [new_deck[0u8][7u8], new_deck[0u8][8u8], new_deck[0u8][9u8]],
+                turn: new_deck[0u8][11u8],
+                river: new_deck[0u8][13u8],
             };
 
             let revealed: RevealedCards = RevealedCards {
@@ -382,7 +383,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -427,7 +427,6 @@ program poker.aleo {
                 player2: game.player2,
                 player3: game.player3,
                 buy_in: game.buy_in,
-                deck: game.deck,
                 state: 5u8,
                 dealer_button: game.dealer_button,
                 players_out: game.players_out,
@@ -447,7 +446,6 @@ program poker.aleo {
                 player2: game.player2,
                 player3: game.player3,
                 buy_in: game.buy_in,
-                deck: game.deck,
                 state: 3u8,
                 dealer_button: game.dealer_button,
                 players_out: game.players_out,
@@ -503,7 +501,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: new_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -571,7 +568,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: new_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -613,7 +609,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -674,7 +669,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: new_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -760,7 +754,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -832,7 +825,6 @@ program poker.aleo {
                 player2: game.player2,
                 player3: game.player3,
                 buy_in: game.buy_in,
-                deck: game.deck,
                 state: next_shuffle_state, // Use helper to find first non-out player
                 dealer_button: game.dealer_button,
                 players_out: game.players_out,
@@ -889,7 +881,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -930,7 +921,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -989,7 +979,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: new_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -1068,7 +1057,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -1110,7 +1098,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -1169,7 +1156,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: new_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -1248,7 +1234,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -1308,7 +1293,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: new_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -1485,7 +1469,6 @@ program poker.aleo {
                 player2: game.player2,
                 player3: game.player3,
                 buy_in: game.buy_in,
-                deck: game.deck,
                 state: 29u8,
                 dealer_button: new_dealer_button,
                 players_out: new_players_out,
@@ -1509,7 +1492,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: 28u8,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -1623,7 +1605,6 @@ program poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            deck: game.deck,
             state: 29u8,
             dealer_button: new_dealer_button,
             players_out: new_players_out,

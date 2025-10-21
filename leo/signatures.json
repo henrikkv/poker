@@ -1,8 +1,8 @@
 {
   "program_name": "poker",
   "imports": [
-    "commutative_encryption",
-    "zk_deck_shuffle"
+    "zk_deck_shuffle",
+    "commutative_encryption"
   ],
   "records": [
     {
@@ -49,11 +49,6 @@
         {
           "name": "buy_in",
           "type": "u64",
-          "mode": "None"
-        },
-        {
-          "name": "deck",
-          "type": "[[Group; 26]; 2]",
           "mode": "None"
         },
         {
@@ -223,6 +218,11 @@
       "name": "games",
       "key_type": "u32",
       "value_type": "Game"
+    },
+    {
+      "name": "decks",
+      "key_type": "u32",
+      "value_type": "[[Group; 26]; 2]"
     },
     {
       "name": "chips",

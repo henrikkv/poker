@@ -12,7 +12,6 @@ struct Game:
     player2 as address;
     player3 as address;
     buy_in as u64;
-    deck as [[group; 26u32]; 2u32];
     state as u8;
     dealer_button as u8;
     players_out as u8;
@@ -52,6 +51,10 @@ mapping games:
     key as u32.public;
     value as Game.public;
 
+mapping decks:
+    key as u32.public;
+    value as [[group; 26u32]; 2u32].public;
+
 mapping chips:
     key as u32.public;
     value as Chips.public;
@@ -84,8 +87,9 @@ finalize create_game:
     input r0 as u32.public;
     input r1 as [[group; 26u32]; 2u32].public;
     input r2 as address.public;
-    cast r2 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc 10u64 r1 0u8 1u8 0u8 0u8 0u8 5u16 10u16 10u8 0u8 0u16 into r3 as Game;
+    cast r2 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc 10u64 0u8 1u8 0u8 0u8 0u8 5u16 10u16 10u8 0u8 0u16 into r3 as Game;
     set r3 into games[r0];
+    set r1 into decks[r0];
 
 function join_game:
     input r0 as u32.private;
@@ -109,37 +113,39 @@ finalize join_game:
     input r2 as [[group; 26u32]; 2u32].public;
     input r3 as address.public;
     get games[r0] into r4;
-    is.eq r4.deck r1 into r5;
-    assert.eq r5 true;
-    is.eq r4.state 0u8 into r6;
+    get decks[r0] into r5;
+    is.eq r5 r1 into r6;
+    assert.eq r6 true;
     is.eq r4.state 0u8 into r7;
-    is.eq r4.state 1u8 into r8;
-    or r7 r8 into r9;
-    assert.eq r9 true;
-    ternary r6 r3 r4.player2 into r10;
-    not r6 into r11;
-    ternary r11 r3 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc into r12;
-    ternary r6 1u8 2u8 into r13;
-    cast r4.player1 r10 r12 r4.buy_in r2 r13 r4.dealer_button 0u8 0u8 0u8 r4.sb r4.bb r4.remaining_hands 0u8 0u16 into r14 as Game;
-    set r14 into games[r0];
-    not r6 into r15;
-    branch.eq r15 false to end_then_0_0;
-    sub 1000u16 r4.sb into r16;
-    sub 1000u16 r4.bb into r17;
-    cast r16 r17 1000u16 r4.sb r4.bb 0u16 into r18 as Chips;
-    cast r2[1u32][1u32] r2[1u32][4u32] into r19 as [group; 2u32];
-    cast r2[1u32][2u32] r2[1u32][5u32] into r20 as [group; 2u32];
-    cast r2[1u32][3u32] r2[1u32][6u32] into r21 as [group; 2u32];
-    cast r2[1u32][7u32] r2[1u32][8u32] r2[1u32][9u32] into r22 as [group; 3u32];
-    cast r19 r20 r21 r22 r2[1u32][10u32] r2[1u32][11u32] into r23 as Cards;
-    cast 255u8 255u8 into r24 as [u8; 2u32];
+    is.eq r4.state 0u8 into r8;
+    is.eq r4.state 1u8 into r9;
+    or r8 r9 into r10;
+    assert.eq r10 true;
+    ternary r7 r3 r4.player2 into r11;
+    not r7 into r12;
+    ternary r12 r3 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc into r13;
+    ternary r7 1u8 2u8 into r14;
+    cast r4.player1 r11 r13 r4.buy_in r14 r4.dealer_button 0u8 0u8 0u8 r4.sb r4.bb r4.remaining_hands 0u8 0u16 into r15 as Game;
+    set r15 into games[r0];
+    set r2 into decks[r0];
+    not r7 into r16;
+    branch.eq r16 false to end_then_0_0;
+    sub 1000u16 r4.sb into r17;
+    sub 1000u16 r4.bb into r18;
+    cast r17 r18 1000u16 r4.sb r4.bb 0u16 into r19 as Chips;
+    cast r2[0u32][0u32] r2[0u32][3u32] into r20 as [group; 2u32];
+    cast r2[0u32][1u32] r2[0u32][4u32] into r21 as [group; 2u32];
+    cast r2[0u32][2u32] r2[0u32][5u32] into r22 as [group; 2u32];
+    cast r2[0u32][7u32] r2[0u32][8u32] r2[0u32][9u32] into r23 as [group; 3u32];
+    cast r20 r21 r22 r23 r2[0u32][11u32] r2[0u32][13u32] into r24 as Cards;
     cast 255u8 255u8 into r25 as [u8; 2u32];
     cast 255u8 255u8 into r26 as [u8; 2u32];
-    cast 255u8 255u8 255u8 into r27 as [u8; 3u32];
-    cast r24 r25 r26 r27 255u8 255u8 into r28 as RevealedCards;
-    set r18 into chips[r0];
-    set r23 into cards[r0];
-    set r28 into revealed_cards[r0];
+    cast 255u8 255u8 into r27 as [u8; 2u32];
+    cast 255u8 255u8 255u8 into r28 as [u8; 3u32];
+    cast r25 r26 r27 r28 255u8 255u8 into r29 as RevealedCards;
+    set r19 into chips[r0];
+    set r24 into cards[r0];
+    set r29 into revealed_cards[r0];
     branch.eq true true to end_otherwise_0_1;
     position end_then_0_0;
     position end_otherwise_0_1;
@@ -515,7 +521,7 @@ finalize bet:
     cast r317 r325 r333 r341 r349 r357 into r358 as Chips;
     sub r100 r75 into r359;
     ternary r99 r359 r3.last_raise_size into r360;
-    cast r3.player1 r3.player2 r3.player3 r3.buy_in r3.deck r286 r3.dealer_button r3.players_out r3.players_folded r306 r3.sb r3.bb r3.remaining_hands r3.hands_played r360 into r361 as Game;
+    cast r3.player1 r3.player2 r3.player3 r3.buy_in r286 r3.dealer_button r3.players_out r3.players_folded r306 r3.sb r3.bb r3.remaining_hands r3.hands_played r360 into r361 as Game;
     set r358 into chips[r0];
     set r361 into games[r0];
 
@@ -551,12 +557,12 @@ finalize decrypt_hands_p1:
     and r6.players_out 2u8 into r9;
     is.neq r9 0u8 into r10;
     branch.eq r10 false to end_then_0_2;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 5u8 r6.dealer_button r6.players_out r6.players_folded r6.last_bet r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r11 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in 5u8 r6.dealer_button r6.players_out r6.players_folded r6.last_bet r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r11 as Game;
     set r2 into cards[r0];
     set r11 into games[r0];
     branch.eq true true to end_otherwise_0_3;
     position end_then_0_2;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck 3u8 r6.dealer_button r6.players_out r6.players_folded r6.last_bet r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r12 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in 3u8 r6.dealer_button r6.players_out r6.players_folded r6.last_bet r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r12 as Game;
     set r2 into cards[r0];
     set r12 into games[r0];
     position end_otherwise_0_3;
@@ -603,7 +609,7 @@ finalize decrypt_hands_p2:
     is.neq r17 0u8 into r18;
     ternary r18 2u8 1u8 into r19;
     ternary r16 r19 r6.last_bet into r20;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck r14 r6.dealer_button r6.players_out r6.players_folded r20 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r21 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r14 r6.dealer_button r6.players_out r6.players_folded r20 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r21 as Game;
     set r21 into games[r0];
 
 function decrypt_hands_p3:
@@ -684,7 +690,7 @@ finalize decrypt_hands_p3:
     ternary r44 r47 r53 into r54;
     ternary r39 r42 r54 into r55;
     ternary r34 r37 r55 into r56;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck r32 r6.dealer_button r6.players_out r6.players_folded r56 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r57 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r32 r6.dealer_button r6.players_out r6.players_folded r56 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r57 as Game;
     set r57 into games[r0];
 
 function decrypt_flop_p1:
@@ -722,7 +728,7 @@ finalize decrypt_flop_p1:
     is.neq r12 0u8 into r13;
     not r13 into r14;
     ternary r14 9u8 10u8 into r15;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck r15 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r16 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r15 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r16 as Game;
     set r2 into cards[r0];
     set r16 into games[r0];
 
@@ -808,7 +814,7 @@ finalize decrypt_flop_p2:
     ternary r44 r48 r59 into r60;
     ternary r39 14u8 r60 into r61;
     ternary r42 10u8 r61 into r62;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck r62 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r63 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r62 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r63 as Game;
     set r2 into cards[r0];
     set r63 into games[r0];
 
@@ -916,7 +922,7 @@ finalize decrypt_flop_p3:
     ternary r74 4u8 r76 into r77;
     ternary r69 r73 r77 into r78;
     ternary r63 r67 r78 into r79;
-    cast r7.player1 r7.player2 r7.player3 r7.buy_in r7.deck r61 r7.dealer_button r7.players_out r7.players_folded r79 r7.sb r7.bb r7.remaining_hands r7.hands_played 0u16 into r80 as Game;
+    cast r7.player1 r7.player2 r7.player3 r7.buy_in r61 r7.dealer_button r7.players_out r7.players_folded r79 r7.sb r7.bb r7.remaining_hands r7.hands_played 0u16 into r80 as Game;
     set r2 into cards[r0];
     set r80 into games[r0];
 
@@ -995,7 +1001,7 @@ finalize fold:
     not r62 into r63;
     ternary r63 30u8 31u8 into r64;
     ternary r60 29u8 r64 into r65;
-    cast r2.player1 r2.player2 r2.player3 r2.buy_in r2.deck r65 r2.dealer_button r2.players_out r26 0u8 r2.sb r2.bb r2.remaining_hands r2.hands_played 0u16 into r66 as Game;
+    cast r2.player1 r2.player2 r2.player3 r2.buy_in r65 r2.dealer_button r2.players_out r26 0u8 r2.sb r2.bb r2.remaining_hands r2.hands_played 0u16 into r66 as Game;
     set r57 into chips[r0];
     set r66 into games[r0];
     branch.eq true true to end_otherwise_0_5;
@@ -1063,7 +1069,7 @@ finalize fold:
     ternary r86 r110 r125 into r126;
     ternary r86 0u8 r2.last_bet into r127;
     ternary r86 0u16 r2.last_raise_size into r128;
-    cast r2.player1 r2.player2 r2.player3 r2.buy_in r2.deck r126 r2.dealer_button r2.players_out r26 r127 r2.sb r2.bb r2.remaining_hands r2.hands_played r128 into r129 as Game;
+    cast r2.player1 r2.player2 r2.player3 r2.buy_in r126 r2.dealer_button r2.players_out r26 r127 r2.sb r2.bb r2.remaining_hands r2.hands_played r128 into r129 as Game;
     set r129 into games[r0];
 
 function decrypt_turn_p1:
@@ -1098,7 +1104,7 @@ finalize decrypt_turn_p1:
     is.neq r12 0u8 into r13;
     not r13 into r14;
     ternary r14 15u8 16u8 into r15;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck r15 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r16 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r15 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r16 as Game;
     set r2 into cards[r0];
     set r16 into games[r0];
 
@@ -1181,7 +1187,7 @@ finalize decrypt_turn_p2:
     ternary r44 r48 r59 into r60;
     ternary r39 20u8 r60 into r61;
     ternary r42 16u8 r61 into r62;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck r62 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r63 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r62 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r63 as Game;
     set r2 into cards[r0];
     set r63 into games[r0];
 
@@ -1283,7 +1289,7 @@ finalize decrypt_turn_p3:
     ternary r74 4u8 r76 into r77;
     ternary r69 r73 r77 into r78;
     ternary r63 r67 r78 into r79;
-    cast r7.player1 r7.player2 r7.player3 r7.buy_in r7.deck r61 r7.dealer_button r7.players_out r7.players_folded r79 r7.sb r7.bb r7.remaining_hands r7.hands_played 0u16 into r80 as Game;
+    cast r7.player1 r7.player2 r7.player3 r7.buy_in r61 r7.dealer_button r7.players_out r7.players_folded r79 r7.sb r7.bb r7.remaining_hands r7.hands_played 0u16 into r80 as Game;
     set r2 into cards[r0];
     set r80 into games[r0];
 
@@ -1319,7 +1325,7 @@ finalize decrypt_river_p1:
     is.neq r12 0u8 into r13;
     not r13 into r14;
     ternary r14 21u8 22u8 into r15;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck r15 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r16 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r15 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r16 as Game;
     set r2 into cards[r0];
     set r16 into games[r0];
 
@@ -1402,7 +1408,7 @@ finalize decrypt_river_p2:
     ternary r44 r48 r59 into r60;
     ternary r39 26u8 r60 into r61;
     ternary r42 22u8 r61 into r62;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.deck r62 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r63 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r62 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r6.last_raise_size into r63 as Game;
     set r2 into cards[r0];
     set r63 into games[r0];
 
@@ -1504,7 +1510,7 @@ finalize decrypt_river_p3:
     ternary r74 4u8 r76 into r77;
     ternary r69 r73 r77 into r78;
     ternary r63 r67 r78 into r79;
-    cast r7.player1 r7.player2 r7.player3 r7.buy_in r7.deck r61 r7.dealer_button r7.players_out r7.players_folded r79 r7.sb r7.bb r7.remaining_hands r7.hands_played 0u16 into r80 as Game;
+    cast r7.player1 r7.player2 r7.player3 r7.buy_in r61 r7.dealer_button r7.players_out r7.players_folded r79 r7.sb r7.bb r7.remaining_hands r7.hands_played 0u16 into r80 as Game;
     set r2 into cards[r0];
     set r80 into games[r0];
 
@@ -1545,7 +1551,7 @@ finalize showdown_p1:
     is.neq r12 0u8 into r13;
     not r13 into r14;
     ternary r14 27u8 28u8 into r15;
-    cast r7.player1 r7.player2 r7.player3 r7.buy_in r7.deck r15 r7.dealer_button r7.players_out r7.players_folded r7.last_bet r7.sb r7.bb r7.remaining_hands r7.hands_played r7.last_raise_size into r16 as Game;
+    cast r7.player1 r7.player2 r7.player3 r7.buy_in r15 r7.dealer_button r7.players_out r7.players_folded r7.last_bet r7.sb r7.bb r7.remaining_hands r7.hands_played r7.last_raise_size into r16 as Game;
     set r2 into cards[r0];
     set r16 into games[r0];
 
@@ -1635,14 +1641,14 @@ finalize showdown_p2:
     is.eq r44 0u8 into r50;
     ternary r50 10u8 r44 into r51;
     add r8.hands_played 1u8 into r52;
-    cast r8.player1 r8.player2 r8.player3 r8.buy_in r8.deck 29u8 r43 r35 r35 0u8 r48 r49 r51 r52 0u16 into r53 as Game;
+    cast r8.player1 r8.player2 r8.player3 r8.buy_in 29u8 r43 r35 r35 0u8 r48 r49 r51 r52 0u16 into r53 as Game;
     set r2 into cards[r0];
     set r27 into chips[r0];
     set r53 into games[r0];
     branch.eq true true to end_otherwise_0_7;
     position end_then_0_6;
     position end_otherwise_0_7;
-    cast r8.player1 r8.player2 r8.player3 r8.buy_in r8.deck 28u8 r8.dealer_button r8.players_out r8.players_folded r8.last_bet r8.sb r8.bb r8.remaining_hands r8.hands_played r8.last_raise_size into r54 as Game;
+    cast r8.player1 r8.player2 r8.player3 r8.buy_in 28u8 r8.dealer_button r8.players_out r8.players_folded r8.last_bet r8.sb r8.bb r8.remaining_hands r8.hands_played r8.last_raise_size into r54 as Game;
     set r2 into cards[r0];
     set r54 into games[r0];
 
@@ -1762,7 +1768,7 @@ finalize showdown_p3:
     is.eq r68 0u8 into r74;
     ternary r74 10u8 r68 into r75;
     add r9.hands_played 1u8 into r76;
-    cast r9.player1 r9.player2 r9.player3 r9.buy_in r9.deck 29u8 r67 r58 r58 0u8 r72 r73 r75 r76 0u16 into r77 as Game;
+    cast r9.player1 r9.player2 r9.player3 r9.buy_in 29u8 r67 r58 r58 0u8 r72 r73 r75 r76 0u16 into r77 as Game;
     set r2 into cards[r0];
     set r50 into chips[r0];
     set r77 into games[r0];

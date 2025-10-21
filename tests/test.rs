@@ -123,18 +123,18 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>>(
         .unwrap();
     dbg!(&alice_keys);
 
-    let game = poker.get_games(1).unwrap();
+    let deck = poker.get_decks(1).unwrap();
     let (bob_keys, _) = poker
-        .join_game(bob, 1, game.deck, 4, 5, 6, secret_bob, secret_bob_inv)
+        .join_game(bob, 1, deck, 4, 5, 6, secret_bob, secret_bob_inv)
         .unwrap();
     dbg!(&bob_keys);
 
-    let game = poker.get_games(1).unwrap();
+    let deck = poker.get_decks(1).unwrap();
     let (charlie_keys, _) = poker
         .join_game(
             charlie,
             1,
-            game.deck,
+            deck,
             7,
             8,
             9,
@@ -240,6 +240,8 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>>(
     poker.bet(alice, 1, 0).unwrap();
 
     let game = poker.get_games(1).unwrap();
+    let revealed_cards = poker.get_revealed_cards(1).unwrap();
     dbg!(&game);
+    dbg!(&revealed_cards);
     dbg!("Ready for showdown");
 }

@@ -98,6 +98,23 @@
         }
       ],
       "is_async": false
+    },
+    {
+      "name": "verify_permutation",
+      "inputs": [
+        {
+          "name": "deck_a",
+          "type": "[[Group; 26]; 2]",
+          "mode": "None"
+        },
+        {
+          "name": "deck_b",
+          "type": "[[Group; 26]; 2]",
+          "mode": "None"
+        }
+      ],
+      "outputs": [],
+      "is_async": false
     }
   ]
 }

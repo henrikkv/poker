@@ -24,10 +24,6 @@ leo-bindings.workspace = true
 rand.workspace = true
 snarkvm.workspace = true
 
-zk_deck_shuffle_bindings = { path = "imports/zk_deck_shuffle/" }
-
-zk_sra_encryption_bindings = { path = "imports/zk_sra_encryption/" }
-
 commutative_encryption_bindings = { path = "./imports/commutative_encryption" }
 
 [build-dependencies]

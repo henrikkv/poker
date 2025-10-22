@@ -1,4 +1,3 @@
-import zk_deck_shuffle.aleo;
 import commutative_encryption.aleo;
 
 program poker.aleo {
@@ -109,12 +108,15 @@ program poker.aleo {
         secret: scalar,
         secret_inv: scalar,
     }
-    async transition create_game(game_id: u32, element1: i8, element2: i8, element3: i8, secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+    async transition create_game(game_id: u32, shuffled_deck: [[group; 26]; 2], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
         let deck: [[group; 26]; 2] = commutative_encryption.aleo/initialize_deck();
-        let deck_encrypted: [[group; 26]; 2] = commutative_encryption.aleo/encrypt_deck(secret, deck);
+
+        commutative_encryption.aleo/verify_permutation(deck, shuffled_deck);
+
+        let deck_encrypted: [[group; 26]; 2] = commutative_encryption.aleo/encrypt_deck(secret, shuffled_deck);
 
         // Check if decryption key is correct
-        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_encrypted[0][0]), deck[0][0]);
+        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_encrypted[0][0]), shuffled_deck[0][0]);
         let keys: Keys = Keys {
             owner: self.caller,
             secret: secret,
@@ -142,11 +144,14 @@ program poker.aleo {
         Mapping::set(games, game_id, game);
         Mapping::set(decks, game_id, deck);
     }
-    async transition join_game(game_id: u32, deck: [[group; 26]; 2], element1: i8, element2: i8, element3: i8, secret: scalar, secret_inv: scalar) -> (Keys, Future) {
-        let deck_encrypted: [[group; 26]; 2] = commutative_encryption.aleo/encrypt_deck(secret, deck);
+    async transition join_game(game_id: u32, deck: [[group; 26]; 2], shuffled_deck: [[group; 26]; 2], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+
+        commutative_encryption.aleo/verify_permutation(deck, shuffled_deck);
+
+        let deck_encrypted: [[group; 26]; 2] = commutative_encryption.aleo/encrypt_deck(secret, shuffled_deck);
 
         // Check if decryption key is correct
-        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_encrypted[0][0]), deck[0][0]);
+        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_encrypted[0][0]), shuffled_deck[0][0]);
         let keys: Keys = Keys {
             owner: self.caller,
             secret: secret,

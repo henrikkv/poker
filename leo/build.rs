@@ -20,10 +20,6 @@ fn main() {
         println!("cargo:rerun-if-changed=outputs/poker.initial.json");
     }
 
-    println!("cargo:rerun-if-changed=imports/zk_deck_shuffle//signatures.json");
-
-    println!("cargo:rerun-if-changed=imports/zk_sra_encryption//signatures.json");
-
     println!("cargo:rerun-if-changed=./imports/commutative_encryption/signatures.json");
 
     if src_main_leo.exists() {

@@ -2081,8 +2081,6 @@ dependencies = [
  "rand 0.8.5",
  "serde_json",
  "snarkvm",
- "zk_deck_shuffle_bindings",
- "zk_sra_encryption_bindings",
 ]
 
 [[package]]
@@ -4730,22 +4728,4 @@ dependencies = [
  "proc-macro2",
  "quote 1.0.41",
  "syn 2.0.107",
-]
-
-[[package]]
-name = "zk_deck_shuffle_bindings"
-version = "0.1.0"
-dependencies = [
- "leo-bindings",
- "leo-bindings-core",
- "serde_json",
-]
-
-[[package]]
-name = "zk_sra_encryption_bindings"
-version = "0.1.0"
-dependencies = [
- "leo-bindings",
- "leo-bindings-core",
- "serde_json",
 ]

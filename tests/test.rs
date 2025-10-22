@@ -2,13 +2,25 @@ use commutative_encryption_bindings::commutative_encryption::*;
 use credits_bindings::credits::*;
 use leo_bindings::utils::*;
 use poker_bindings::poker::*;
+use rand::seq::SliceRandom;
 use snarkvm::console::network::TestnetV0;
-use snarkvm::prelude::Network;
+use snarkvm::prelude::{Group, Network};
 use snarkvm::prelude::{Inverse, Scalar, TestRng, Uniform};
 use std::str::FromStr;
 
 const ENDPOINT: &str = "http://localhost:3030";
 const PRIVATE_KEY: &str = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
+
+fn shuffle_deck<N: Network>(deck: [[Group<N>; 26]; 2]) -> [[Group<N>; 26]; 2] {
+    let mut rng = rand::thread_rng();
+
+    let mut cards: Vec<Group<N>> = deck[0].iter().chain(deck[1].iter()).copied().collect();
+    cards.shuffle(&mut rng);
+    let first_half: [Group<N>; 26] = cards[0..26].try_into().unwrap();
+    let second_half: [Group<N>; 26] = cards[26..52].try_into().unwrap();
+
+    [first_half, second_half]
+}
 
 #[test]
 fn commutative_encryption_interpreter() {
@@ -77,6 +89,7 @@ fn poker_interpreter() {
     gameplay(
         &PokerInterpreter::new(&alice, ENDPOINT).unwrap(),
         &CreditsInterpreter::new(&alice, ENDPOINT).unwrap(),
+        &CommutativeEncryptionInterpreter::new(&alice, ENDPOINT).unwrap(),
         &alice,
         &bob,
         &charlie,
@@ -91,14 +104,16 @@ fn poker_testnet() {
     gameplay(
         &PokerTestnet::new(&alice, ENDPOINT).unwrap(),
         &CreditsTestnet::new(&alice, ENDPOINT).unwrap(),
+        &CommutativeEncryptionTestnet::new(&alice, ENDPOINT).unwrap(),
         &alice,
         &bob,
         &charlie,
     );
 }
-fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>>(
+fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryptionAleo<N>>(
     poker: &P,
     credits: &C,
+    commutative_encryption: &E,
     alice: &Account<N>,
     bob: &Account<N>,
     charlie: &Account<N>,
@@ -118,26 +133,36 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>>(
     let secret_alice_inv = Inverse::inverse(&secret_alice).unwrap();
     let secret_bob_inv = Inverse::inverse(&secret_bob).unwrap();
     let secret_charlie_inv = Inverse::inverse(&secret_charlie).unwrap();
+
+    let initial_deck = commutative_encryption.initialize_deck(alice).unwrap();
+    let alice_shuffled_deck = shuffle_deck(initial_deck);
+
     let (alice_keys, _) = poker
-        .create_game(alice, 1, 1, 2, 3, secret_alice, secret_alice_inv)
+        .create_game(
+            alice,
+            1,
+            alice_shuffled_deck,
+            secret_alice,
+            secret_alice_inv,
+        )
         .unwrap();
     dbg!(&alice_keys);
 
     let deck = poker.get_decks(1).unwrap();
+    let bob_shuffled_deck = shuffle_deck(deck);
     let (bob_keys, _) = poker
-        .join_game(bob, 1, deck, 4, 5, 6, secret_bob, secret_bob_inv)
+        .join_game(bob, 1, deck, bob_shuffled_deck, secret_bob, secret_bob_inv)
         .unwrap();
     dbg!(&bob_keys);
 
     let deck = poker.get_decks(1).unwrap();
+    let charlie_shuffled_deck = shuffle_deck(deck);
     let (charlie_keys, _) = poker
         .join_game(
             charlie,
             1,
             deck,
-            7,
-            8,
-            9,
+            charlie_shuffled_deck,
             secret_charlie,
             secret_charlie_inv,
         )
@@ -168,7 +193,7 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>>(
     let chips = poker.get_chips(1).unwrap();
     dbg!(&chips);
     poker.bet(alice, 1, 5).unwrap();
-    poker.bet(bob, 1, 0).unwrap(); // BB checks, betting ends
+    poker.bet(bob, 1, 0).unwrap();
 
     let game = poker.get_games(1).unwrap();
     dbg!(&game);

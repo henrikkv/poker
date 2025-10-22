@@ -1,4 +1,3 @@
-import zk_deck_shuffle.aleo;
 import commutative_encryption.aleo;
 program poker.aleo;
 
@@ -69,19 +68,18 @@ mapping revealed_cards:
 
 function create_game:
     input r0 as u32.private;
-    input r1 as i8.private;
-    input r2 as i8.private;
-    input r3 as i8.private;
-    input r4 as scalar.private;
-    input r5 as scalar.private;
-    call commutative_encryption.aleo/initialize_deck into r6;
-    call commutative_encryption.aleo/encrypt_deck r4 r6 into r7;
-    call commutative_encryption.aleo/decrypt_card r5 r7[0u32][0u32] into r8;
-    assert.eq r8 r6[0u32][0u32];
-    cast self.caller r4 r5 into r9 as Keys.record;
-    async create_game r0 r7 self.caller into r10;
-    output r9 as Keys.record;
-    output r10 as poker.aleo/create_game.future;
+    input r1 as [[group; 26u32]; 2u32].private;
+    input r2 as scalar.private;
+    input r3 as scalar.private;
+    call commutative_encryption.aleo/initialize_deck into r4;
+    call commutative_encryption.aleo/verify_permutation r4 r1;
+    call commutative_encryption.aleo/encrypt_deck r2 r1 into r5;
+    call commutative_encryption.aleo/decrypt_card r3 r5[0u32][0u32] into r6;
+    assert.eq r6 r1[0u32][0u32];
+    cast self.caller r2 r3 into r7 as Keys.record;
+    async create_game r0 r5 self.caller into r8;
+    output r7 as Keys.record;
+    output r8 as poker.aleo/create_game.future;
 
 finalize create_game:
     input r0 as u32.public;
@@ -94,18 +92,17 @@ finalize create_game:
 function join_game:
     input r0 as u32.private;
     input r1 as [[group; 26u32]; 2u32].private;
-    input r2 as i8.private;
-    input r3 as i8.private;
-    input r4 as i8.private;
-    input r5 as scalar.private;
-    input r6 as scalar.private;
-    call commutative_encryption.aleo/encrypt_deck r5 r1 into r7;
-    call commutative_encryption.aleo/decrypt_card r6 r7[0u32][0u32] into r8;
-    assert.eq r8 r1[0u32][0u32];
-    cast self.caller r5 r6 into r9 as Keys.record;
-    async join_game r0 r1 r7 self.caller into r10;
-    output r9 as Keys.record;
-    output r10 as poker.aleo/join_game.future;
+    input r2 as [[group; 26u32]; 2u32].private;
+    input r3 as scalar.private;
+    input r4 as scalar.private;
+    call commutative_encryption.aleo/verify_permutation r1 r2;
+    call commutative_encryption.aleo/encrypt_deck r3 r2 into r5;
+    call commutative_encryption.aleo/decrypt_card r4 r5[0u32][0u32] into r6;
+    assert.eq r6 r2[0u32][0u32];
+    cast self.caller r3 r4 into r7 as Keys.record;
+    async join_game r0 r1 r5 self.caller into r8;
+    output r7 as Keys.record;
+    output r8 as poker.aleo/join_game.future;
 
 finalize join_game:
     input r0 as u32.public;

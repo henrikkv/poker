@@ -1,7 +1,6 @@
 {
   "program_name": "poker",
   "imports": [
-    "zk_deck_shuffle",
     "commutative_encryption"
   ],
   "records": [
@@ -250,18 +249,8 @@
           "mode": "None"
         },
         {
-          "name": "element1",
-          "type": "i8",
-          "mode": "None"
-        },
-        {
-          "name": "element2",
-          "type": "i8",
-          "mode": "None"
-        },
-        {
-          "name": "element3",
-          "type": "i8",
+          "name": "shuffled_deck",
+          "type": "[[Group; 26]; 2]",
           "mode": "None"
         },
         {
@@ -301,18 +290,8 @@
           "mode": "None"
         },
         {
-          "name": "element1",
-          "type": "i8",
-          "mode": "None"
-        },
-        {
-          "name": "element2",
-          "type": "i8",
-          "mode": "None"
-        },
-        {
-          "name": "element3",
-          "type": "i8",
+          "name": "shuffled_deck",
+          "type": "[[Group; 26]; 2]",
           "mode": "None"
         },
         {

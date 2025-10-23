@@ -11,3 +11,4 @@ commutative_encryption_bindings = { path = "./leo/imports/commutative_encryption
 
 rand = "0.8"
 snarkvm = "4.2.1"
+colored = "3.0.0"

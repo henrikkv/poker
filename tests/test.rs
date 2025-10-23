@@ -1,6 +1,7 @@
 use commutative_encryption_bindings::commutative_encryption::*;
 use credits_bindings::credits::*;
 use leo_bindings::utils::*;
+use poker::cards::CardDisplay;
 use poker_bindings::poker::*;
 use rand::seq::SliceRandom;
 use snarkvm::console::network::TestnetV0;
@@ -168,12 +169,9 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryp
         )
         .unwrap();
     dbg!(&charlie_keys);
-    let game = poker.get_games(1).unwrap();
-    dbg!(&game);
 
     // Decrypt hands phase
     let cards = poker.get_cards(1).unwrap();
-    dbg!(&cards);
     let (alice_keys, _) = poker.decrypt_hands_p1(alice, 1, cards, alice_keys).unwrap();
 
     let cards = poker.get_cards(1).unwrap();
@@ -184,19 +182,9 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryp
         .decrypt_hands_p3(charlie, 1, cards, charlie_keys)
         .unwrap();
 
-    let game = poker.get_games(1).unwrap();
-    dbg!(&game);
-
     poker.bet(charlie, 1, 10).unwrap();
-    let game = poker.get_games(1).unwrap();
-    dbg!(&game);
-    let chips = poker.get_chips(1).unwrap();
-    dbg!(&chips);
     poker.bet(alice, 1, 5).unwrap();
     poker.bet(bob, 1, 0).unwrap();
-
-    let game = poker.get_games(1).unwrap();
-    dbg!(&game);
 
     let cards = poker.get_cards(1).unwrap();
     let (alice_keys, _) = poker.decrypt_flop_p1(alice, 1, cards, alice_keys).unwrap();
@@ -209,17 +197,12 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryp
         .decrypt_flop_p3(charlie, 1, cards, charlie_keys)
         .unwrap();
 
-    let game = poker.get_games(1).unwrap();
-    dbg!(&game);
     let revealed = poker.get_revealed_cards(1).unwrap();
-    dbg!(&revealed);
+    println!("{}", &revealed.display_cards());
 
     poker.bet(bob, 1, 0).unwrap();
     poker.bet(charlie, 1, 0).unwrap();
     poker.bet(alice, 1, 0).unwrap();
-
-    let game = poker.get_games(1).unwrap();
-    dbg!(&game);
 
     let cards = poker.get_cards(1).unwrap();
     let (alice_keys, _) = poker.decrypt_turn_p1(alice, 1, cards, alice_keys).unwrap();
@@ -232,17 +215,12 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryp
         .decrypt_turn_p3(charlie, 1, cards, charlie_keys)
         .unwrap();
 
-    let game = poker.get_games(1).unwrap();
-    dbg!(&game);
     let revealed = poker.get_revealed_cards(1).unwrap();
-    dbg!(&revealed);
+    println!("{}", &revealed.display_cards());
 
     poker.bet(bob, 1, 0).unwrap();
     poker.bet(charlie, 1, 0).unwrap();
     poker.bet(alice, 1, 0).unwrap();
-
-    let game = poker.get_games(1).unwrap();
-    dbg!(&game);
 
     let cards = poker.get_cards(1).unwrap();
     let (alice_keys, _) = poker.decrypt_river_p1(alice, 1, cards, alice_keys).unwrap();
@@ -255,18 +233,29 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryp
         .decrypt_river_p3(charlie, 1, cards, charlie_keys)
         .unwrap();
 
-    let game = poker.get_games(1).unwrap();
-    dbg!(&game);
     let revealed = poker.get_revealed_cards(1).unwrap();
-    dbg!(&revealed);
+    println!("{}", &revealed.display_cards());
 
     poker.bet(bob, 1, 0).unwrap();
     poker.bet(charlie, 1, 0).unwrap();
     poker.bet(alice, 1, 0).unwrap();
 
+    let revealed = poker.get_revealed_cards(1).unwrap();
+    println!("{}", &revealed.display_cards());
+
+    let cards = poker.get_cards(1).unwrap();
+    let (_alice_keys, _) = poker.showdown_p1(alice, 1, cards, alice_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (_bob_keys, _) = poker.showdown_p2(bob, 1, cards, bob_keys).unwrap();
+
+    let cards = poker.get_cards(1).unwrap();
+    let (_charlie_keys, _) = poker.showdown_p3(charlie, 1, cards, charlie_keys).unwrap();
+
     let game = poker.get_games(1).unwrap();
-    let revealed_cards = poker.get_revealed_cards(1).unwrap();
     dbg!(&game);
-    dbg!(&revealed_cards);
-    dbg!("Ready for showdown");
+    let chips = poker.get_chips(1).unwrap();
+    dbg!(&chips);
+    let revealed = poker.get_revealed_cards(1).unwrap();
+    println!("{}", &revealed.display_cards());
 }

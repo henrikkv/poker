@@ -252,6 +252,8 @@ fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryp
     let cards = poker.get_cards(1).unwrap();
     let (_charlie_keys, _) = poker.showdown_p3(charlie, 1, cards, charlie_keys).unwrap();
 
+    poker.compare_hands(alice, 1).unwrap();
+
     let game = poker.get_games(1).unwrap();
     dbg!(&game);
     let chips = poker.get_chips(1).unwrap();

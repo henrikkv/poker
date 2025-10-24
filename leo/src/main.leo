@@ -46,13 +46,15 @@ program poker.aleo {
     const p2_showdown: u8 = 27u8;
     const p3_showdown: u8 = 28u8;
 
-    const p1_new_shuffle: u8 = 29u8;
-    const p2_new_shuffle: u8 = 30u8;
-    const p2_shuffle: u8 = 31u8;
-    const p3_shuffle: u8 = 32u8;
+    const compare: u8 = 29u8;
 
-    const p1_claim: u8 = 33u8;
-    const p2_claim: u8 = 34u8;
+    const p1_new_shuffle: u8 = 30u8;
+    const p2_new_shuffle: u8 = 31u8;
+    const p2_shuffle: u8 = 32u8;
+    const p3_shuffle: u8 = 33u8;
+
+    const p1_claim: u8 = 34u8;
+    const p2_claim: u8 = 35u8;
     const p3_claim: u8 = 35u8;
     
     struct Game {
@@ -107,6 +109,8 @@ program poker.aleo {
         // 33: Waiting for Player1 to claim prize
         // 34: Waiting for Player2 to claim prize
         // 35: Waiting for Player3 to claim prize
+
+        // 36: Compare hands and determine winner
 
         state: u8,
         // bitmaps
@@ -1340,7 +1344,13 @@ program poker.aleo {
         };
         Mapping::set(revealed_cards, game_id, new_revealed);
 
-        let new_state: u8 = !is_player2(game.players_out) ? 27u8 : 28u8;
+        let p2_active: bool = !is_player2(game.players_out) && !is_player2(game.players_folded);
+        let p3_active: bool = !is_player3(game.players_out) && !is_player3(game.players_folded);
+
+        let new_state: u8 =
+            p2_active ? p2_showdown :
+            p3_active ? p3_showdown :
+            compare;
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -1404,149 +1414,16 @@ program poker.aleo {
         };
         Mapping::set(revealed_cards, game_id, new_revealed);
 
-        // If P3 is out or folded, determine winner here
-        if (is_player3(game.players_out) || is_player3(game.players_folded)) {
+        let p3_active: bool = !is_player3(game.players_out) && !is_player3(game.players_folded);
 
-            let c1: u8 = revealed.flop[0u8];
-            let c2: u8 = revealed.flop[1u8];
-            let c3: u8 = revealed.flop[2u8];
-            let c4: u8 = revealed.turn;
-            let c5: u8 = revealed.river;
-
-            // Sort community cards
-            let temp: u8 = c1 < c2 ? c1 : c2;
-            c1 = temp == c1 ? c2 : c1;
-            c2 = temp;
-
-            temp = c2 < c3 ? c2 : c3;
-            c2 = temp == c2 ? c3 : c2;
-            c3 = temp;
-
-            temp = c3 < c4 ? c3 : c4;
-            c3 = temp == c3 ? c4 : c3;
-            c4 = temp;
-
-            temp = c4 < c5 ? c4 : c5;
-            c4 = temp == c4 ? c5 : c4;
-            c5 = temp;
-
-            // Second pass to ensure sorting
-            temp = c1 < c2 ? c1 : c2;
-            c1 = temp == c1 ? c2 : c1;
-            c2 = temp;
-
-            temp = c2 < c3 ? c2 : c3;
-            c2 = temp == c2 ? c3 : c2;
-            c3 = temp;
-
-            temp = c3 < c4 ? c3 : c4;
-            c3 = temp == c3 ? c4 : c3;
-            c4 = temp;
-
-            temp = c4 < c5 ? c4 : c5;
-            c4 = temp == c4 ? c5 : c4;
-            c5 = temp;
-
-            // Sort with player cards
-            let h1: u8 = p1_cards[0u8];
-            let h2: u8 = p1_cards[1u8];
-
-            let p1_tmp_c1: u8 = h1 < c1 ? h1 : c1;
-            let p1_tmp_c2: u8 = h1 < c1 ? c1 : h1 < c2 ? h1 : c2;
-            let p1_tmp_c3: u8 = h1 < c2 ? c2 : h1 < c3 ? h1 : c3;
-            let p1_tmp_c4: u8 = h1 < c3 ? c3 : h1 < c4 ? h1 : c4;
-            let p1_tmp_c5: u8 = h1 < c4 ? c4 : h1 < c5 ? h1 : c5;
-            let p1_tmp_c6: u8 = h1 < c5 ? c5 : h1;
-
-            let p1_c1: u8 = h2 < p1_tmp_c1 ? h2 : p1_tmp_c1;
-            let p1_c2: u8 = h2 < p1_tmp_c1 ? p1_tmp_c1 : h2 < p1_tmp_c2 ? h2 : p1_tmp_c2;
-            let p1_c3: u8 = h2 < p1_tmp_c2 ? p1_tmp_c2 : h2 < p1_tmp_c3 ? h2 : p1_tmp_c3;
-            let p1_c4: u8 = h2 < p1_tmp_c3 ? p1_tmp_c3 : h2 < p1_tmp_c4 ? h2 : p1_tmp_c4;
-            let p1_c5: u8 = h2 < p1_tmp_c4 ? p1_tmp_c4 : h2 < p1_tmp_c5 ? h2 : p1_tmp_c5;
-            let p1_c6: u8 = h2 < p1_tmp_c5 ? p1_tmp_c5 : h2 < p1_tmp_c6 ? h2 : p1_tmp_c6;
-            let p1_c7: u8 = h2 < p1_tmp_c6 ? p1_tmp_c6 : h2;
-
-
-
-            // Player 2
-            h1 = p2_cards[0u8];
-            h2 = p2_cards[1u8];
-
-            let p2_tmp_c1: u8 = h1 < c1 ? h1 : c1;
-            let p2_tmp_c2: u8 = h1 < c1 ? c1 : h1 < c2 ? h1 : c2;
-            let p2_tmp_c3: u8 = h1 < c2 ? c2 : h1 < c3 ? h1 : c3;
-            let p2_tmp_c4: u8 = h1 < c3 ? c3 : h1 < c4 ? h1 : c4;
-            let p2_tmp_c5: u8 = h1 < c4 ? c4 : h1 < c5 ? h1 : c5;
-            let p2_tmp_c6: u8 = h1 < c5 ? c5 : h1;
-
-            let p2_c1: u8 = h2 < p2_tmp_c1 ? h2 : p2_tmp_c1;
-            let p2_c2: u8 = h2 < p2_tmp_c1 ? p2_tmp_c1 : h2 < p2_tmp_c2 ? h2 : p2_tmp_c2;
-            let p2_c3: u8 = h2 < p2_tmp_c2 ? p2_tmp_c2 : h2 < p2_tmp_c3 ? h2 : p2_tmp_c3;
-            let p2_c4: u8 = h2 < p2_tmp_c3 ? p2_tmp_c3 : h2 < p2_tmp_c4 ? h2 : p2_tmp_c4;
-            let p2_c5: u8 = h2 < p2_tmp_c4 ? p2_tmp_c4 : h2 < p2_tmp_c5 ? h2 : p2_tmp_c5;
-            let p2_c6: u8 = h2 < p2_tmp_c5 ? p2_tmp_c5 : h2 < p2_tmp_c6 ? h2 : p2_tmp_c6;
-            let p2_c7: u8 = h2 < p2_tmp_c6 ? p2_tmp_c6 : h2;
-
-            let chip: Chips = Mapping::get(chips, game_id);
-            let pot: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet;
-            
-            let winner: u8 = 1u8;
-            let new_chip: Chips = Chips {
-                player1: winner == 1u8 ? chip.player1 + pot : chip.player1,
-                player2: winner == 2u8 ? chip.player2 + pot : chip.player2,
-                player3: chip.player3,
-                player1_bet: 0u16,
-                player2_bet: 0u16,
-                player3_bet: 0u16,
-            };
-            
-            let new_players_out: u8 = (new_chip.player1 == 0u16 ? player1() : 0u8) | (new_chip.player2 == 0u16 ? player2() : 0u8) | (new_chip.player3 == 0u16 ? player3() : 0u8);
-            if (new_players_out == 6u8) {
-                // Player 1 wins the game
-                return;
-            } else if (new_players_out == 5u8) {
-                // Player 2 wins the game
-                return;
-            }
-            let new_dealer_button: u8 = 
-                is_player1(game.dealer_button) ? player2() :
-                is_player2(game.dealer_button) ? player3() : player1();
-                
-            let new_remaining_hands: u8 = game.remaining_hands - 1u8;
-            let (new_sb, new_bb): (u16, u16) = 
-                new_remaining_hands == 0u8 ? 
-                    (game.sb * 2u16, game.bb * 2u16) : 
-                    (game.sb, game.bb);
-                    
-            let new_game: Game = Game {
-                player1: game.player1,
-                player2: game.player2,
-                player3: game.player3,
-                buy_in: game.buy_in,
-                state: 29u8,
-                dealer_button: new_dealer_button,
-                players_out: new_players_out,
-                players_folded: new_players_out,
-                last_bet: 0u8,
-                sb: new_sb,
-                bb: new_bb,
-                remaining_hands: new_remaining_hands == 0u8 ? 10u8 : new_remaining_hands,
-                hands_played: game.hands_played + 1u8,
-                last_raise_size: 0u16,
-            };
-            
-            Mapping::set(cards, game_id, new_card);
-            Mapping::set(chips, game_id, new_chip);
-            Mapping::set(games, game_id, new_game);
-            return;
-        }
+        let new_state: u8 = p3_active ? p3_showdown : compare;
 
         let new_game: Game = Game {
             player1: game.player1,
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            state: 28u8,
+            state: new_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
             players_folded: game.players_folded,
@@ -1557,7 +1434,7 @@ program poker.aleo {
             hands_played: game.hands_played,
             last_raise_size: game.last_raise_size,
         };
-        
+
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
@@ -1607,20 +1484,161 @@ program poker.aleo {
         };
         Mapping::set(revealed_cards, game_id, new_revealed);
 
-        let p1_high: u8 = !is_player1(game.players_folded) ?
-            (p1_cards[0u8] >= p1_cards[1u8] ? p1_cards[0u8] : p1_cards[1u8]) :
-            0u8;
-        let p2_high: u8 = !is_player2(game.players_folded) ?
-            (p2_cards[0u8] >= p2_cards[1u8] ? p2_cards[0u8] : p2_cards[1u8]) :
-            0u8;
-        let p3_high: u8 = !is_player3(game.players_folded) ?
-            (p3_cards[0u8] >= p3_cards[1u8] ? p3_cards[0u8] : p3_cards[1u8]) :
-            0u8;
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            state: compare,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_folded,
+            last_bet: game.last_bet,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: game.last_raise_size,
+        };
 
-        let winner: u8 = (p1_high >= p2_high && p1_high >= p3_high) ? 1u8 :
-                        (p2_high >= p3_high) ? 2u8 : 3u8;
+        Mapping::set(cards, game_id, new_card);
+        Mapping::set(games, game_id, new_game);
+    }
 
+    async transition compare_hands(game_id: u32) -> Future {
+        return finalize_compare_hands(game_id, self.signer);
+    }
+    async function finalize_compare_hands(game_id: u32, signer: address) {
+        let game: Game = Mapping::get(games, game_id);
+        assert(game.state == compare);
+
+        let is_valid_signer: bool =
+            (is_player1(game.dealer_button) && game.player1 == signer) ||
+            (is_player2(game.dealer_button) && game.player2 == signer) ||
+            (is_player3(game.dealer_button) && game.player3 == signer);
+        assert(is_valid_signer);
+
+        let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
         let chip: Chips = Mapping::get(chips, game_id);
+
+        let p1_active: bool = !is_player1(game.players_out) && !is_player1(game.players_folded);
+        let p2_active: bool = !is_player2(game.players_out) && !is_player2(game.players_folded);
+        let p3_active: bool = !is_player3(game.players_out) && !is_player3(game.players_folded);
+
+        let cc1_0: u8 = revealed.flop[0u8];
+        let cc2_0: u8 = revealed.flop[1u8];
+        let cc3_0: u8 = revealed.flop[2u8];
+        let cc4_0: u8 = revealed.turn;
+        let cc5_0: u8 = revealed.river;
+
+        // First pass
+        let cc1_1: u8 = cc1_0 < cc2_0 ? cc1_0 : cc2_0;
+        let cc2_1: u8 = cc1_0 < cc2_0 ? cc2_0 : cc1_0;
+        let cc3_1: u8 = cc3_0;
+        let cc4_1: u8 = cc4_0;
+        let cc5_1: u8 = cc5_0;
+
+        let cc1_2: u8 = cc1_1;
+        let cc2_2: u8 = cc2_1 < cc3_1 ? cc2_1 : cc3_1;
+        let cc3_2: u8 = cc2_1 < cc3_1 ? cc3_1 : cc2_1;
+        let cc4_2: u8 = cc4_1;
+        let cc5_2: u8 = cc5_1;
+
+        let cc1_3: u8 = cc1_2;
+        let cc2_3: u8 = cc2_2;
+        let cc3_3: u8 = cc3_2 < cc4_2 ? cc3_2 : cc4_2;
+        let cc4_3: u8 = cc3_2 < cc4_2 ? cc4_2 : cc3_2;
+        let cc5_3: u8 = cc5_2;
+
+        let cc1_4: u8 = cc1_3;
+        let cc2_4: u8 = cc2_3;
+        let cc3_4: u8 = cc3_3;
+        let cc4_4: u8 = cc4_3 < cc5_3 ? cc4_3 : cc5_3;
+        let cc5_4: u8 = cc4_3 < cc5_3 ? cc5_3 : cc4_3;
+
+        // Second pass
+        let cc1_5: u8 = cc1_4 < cc2_4 ? cc1_4 : cc2_4;
+        let cc2_5: u8 = cc1_4 < cc2_4 ? cc2_4 : cc1_4;
+        let cc3_5: u8 = cc3_4;
+        let cc4_5: u8 = cc4_4;
+        let cc5_5: u8 = cc5_4;
+
+        let cc1_6: u8 = cc1_5;
+        let cc2_6: u8 = cc2_5 < cc3_5 ? cc2_5 : cc3_5;
+        let cc3_6: u8 = cc2_5 < cc3_5 ? cc3_5 : cc2_5;
+        let cc4_6: u8 = cc4_5;
+        let cc5_6: u8 = cc5_5;
+
+        let cc1_7: u8 = cc1_6;
+        let cc2_7: u8 = cc2_6;
+        let cc3_7: u8 = cc3_6 < cc4_6 ? cc3_6 : cc4_6;
+        let cc4_7: u8 = cc3_6 < cc4_6 ? cc4_6 : cc3_6;
+        let cc5_7: u8 = cc5_6;
+
+        let c1: u8 = cc1_7;
+        let c2: u8 = cc2_7;
+        let c3: u8 = cc3_7;
+        let c4: u8 = cc4_7 < cc5_7 ? cc4_7 : cc5_7;
+        let c5: u8 = cc4_7 < cc5_7 ? cc5_7 : cc4_7;
+
+        let p1_h1: u8 = p1_active ? revealed.player1[0u8] : 0u8;
+        let p1_h2: u8 = p1_active ? revealed.player1[1u8] : 0u8;
+
+        let p1_tmp_c1: u8 = p1_h1 < c1 ? p1_h1 : c1;
+        let p1_tmp_c2: u8 = p1_h1 < c1 ? c1 : p1_h1 < c2 ? p1_h1 : c2;
+        let p1_tmp_c3: u8 = p1_h1 < c2 ? c2 : p1_h1 < c3 ? p1_h1 : c3;
+        let p1_tmp_c4: u8 = p1_h1 < c3 ? c3 : p1_h1 < c4 ? p1_h1 : c4;
+        let p1_tmp_c5: u8 = p1_h1 < c4 ? c4 : p1_h1 < c5 ? p1_h1 : c5;
+        let p1_tmp_c6: u8 = p1_h1 < c5 ? c5 : p1_h1;
+
+        let p1_c1: u8 = p1_h2 < p1_tmp_c1 ? p1_h2 : p1_tmp_c1;
+        let p1_c2: u8 = p1_h2 < p1_tmp_c1 ? p1_tmp_c1 : p1_h2 < p1_tmp_c2 ? p1_h2 : p1_tmp_c2;
+        let p1_c3: u8 = p1_h2 < p1_tmp_c2 ? p1_tmp_c2 : p1_h2 < p1_tmp_c3 ? p1_h2 : p1_tmp_c3;
+        let p1_c4: u8 = p1_h2 < p1_tmp_c3 ? p1_tmp_c3 : p1_h2 < p1_tmp_c4 ? p1_h2 : p1_tmp_c4;
+        let p1_c5: u8 = p1_h2 < p1_tmp_c4 ? p1_tmp_c4 : p1_h2 < p1_tmp_c5 ? p1_h2 : p1_tmp_c5;
+        let p1_c6: u8 = p1_h2 < p1_tmp_c5 ? p1_tmp_c5 : p1_h2 < p1_tmp_c6 ? p1_h2 : p1_tmp_c6;
+        let p1_c7: u8 = p1_h2 < p1_tmp_c6 ? p1_tmp_c6 : p1_h2;
+
+        let p2_h1: u8 = p2_active ? revealed.player2[0u8] : 0u8;
+        let p2_h2: u8 = p2_active ? revealed.player2[1u8] : 0u8;
+
+        let p2_tmp_c1: u8 = p2_h1 < c1 ? p2_h1 : c1;
+        let p2_tmp_c2: u8 = p2_h1 < c1 ? c1 : p2_h1 < c2 ? p2_h1 : c2;
+        let p2_tmp_c3: u8 = p2_h1 < c2 ? c2 : p2_h1 < c3 ? p2_h1 : c3;
+        let p2_tmp_c4: u8 = p2_h1 < c3 ? c3 : p2_h1 < c4 ? p2_h1 : c4;
+        let p2_tmp_c5: u8 = p2_h1 < c4 ? c4 : p2_h1 < c5 ? p2_h1 : c5;
+        let p2_tmp_c6: u8 = p2_h1 < c5 ? c5 : p2_h1;
+
+        let p2_c1: u8 = p2_h2 < p2_tmp_c1 ? p2_h2 : p2_tmp_c1;
+        let p2_c2: u8 = p2_h2 < p2_tmp_c1 ? p2_tmp_c1 : p2_h2 < p2_tmp_c2 ? p2_h2 : p2_tmp_c2;
+        let p2_c3: u8 = p2_h2 < p2_tmp_c2 ? p2_tmp_c2 : p2_h2 < p2_tmp_c3 ? p2_h2 : p2_tmp_c3;
+        let p2_c4: u8 = p2_h2 < p2_tmp_c3 ? p2_tmp_c3 : p2_h2 < p2_tmp_c4 ? p2_h2 : p2_tmp_c4;
+        let p2_c5: u8 = p2_h2 < p2_tmp_c4 ? p2_tmp_c4 : p2_h2 < p2_tmp_c5 ? p2_h2 : p2_tmp_c5;
+        let p2_c6: u8 = p2_h2 < p2_tmp_c5 ? p2_tmp_c5 : p2_h2 < p2_tmp_c6 ? p2_h2 : p2_tmp_c6;
+        let p2_c7: u8 = p2_h2 < p2_tmp_c6 ? p2_tmp_c6 : p2_h2;
+
+        let p3_h1: u8 = p3_active ? revealed.player3[0u8] : 0u8;
+        let p3_h2: u8 = p3_active ? revealed.player3[1u8] : 0u8;
+
+        let p3_tmp_c1: u8 = p3_h1 < c1 ? p3_h1 : c1;
+        let p3_tmp_c2: u8 = p3_h1 < c1 ? c1 : p3_h1 < c2 ? p3_h1 : c2;
+        let p3_tmp_c3: u8 = p3_h1 < c2 ? c2 : p3_h1 < c3 ? p3_h1 : c3;
+        let p3_tmp_c4: u8 = p3_h1 < c3 ? c3 : p3_h1 < c4 ? p3_h1 : c4;
+        let p3_tmp_c5: u8 = p3_h1 < c4 ? c4 : p3_h1 < c5 ? p3_h1 : c5;
+        let p3_tmp_c6: u8 = p3_h1 < c5 ? c5 : p3_h1;
+
+        let p3_c1: u8 = p3_h2 < p3_tmp_c1 ? p3_h2 : p3_tmp_c1;
+        let p3_c2: u8 = p3_h2 < p3_tmp_c1 ? p3_tmp_c1 : p3_h2 < p3_tmp_c2 ? p3_h2 : p3_tmp_c2;
+        let p3_c3: u8 = p3_h2 < p3_tmp_c2 ? p3_tmp_c2 : p3_h2 < p3_tmp_c3 ? p3_h2 : p3_tmp_c3;
+        let p3_c4: u8 = p3_h2 < p3_tmp_c3 ? p3_tmp_c3 : p3_h2 < p3_tmp_c4 ? p3_h2 : p3_tmp_c4;
+        let p3_c5: u8 = p3_h2 < p3_tmp_c4 ? p3_tmp_c4 : p3_h2 < p3_tmp_c5 ? p3_h2 : p3_tmp_c5;
+        let p3_c6: u8 = p3_h2 < p3_tmp_c5 ? p3_tmp_c5 : p3_h2 < p3_tmp_c6 ? p3_h2 : p3_tmp_c6;
+        let p3_c7: u8 = p3_h2 < p3_tmp_c6 ? p3_tmp_c6 : p3_h2;
+
+        let winner: u8 =
+            (p1_c7 >= p2_c7 && p1_c7 >= p3_c7) ? 1u8 :
+            (p2_c7 >= p3_c7) ? 2u8 : 3u8;
+
         let pot: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet;
         
         let new_chip: Chips = Chips {
@@ -1631,35 +1649,46 @@ program poker.aleo {
             player2_bet: 0u16,
             player3_bet: 0u16,
         };
-        
-        let new_players_out: u8 = (new_chip.player1 == 0u16 ? player1() : 0u8) | (new_chip.player2 == 0u16 ? player2() : 0u8) | (new_chip.player3 == 0u16 ? player3() : 0u8);
+
+        let new_players_out: u8 = (new_chip.player1 == 0u16 ? player1() : 0u8) |
+                                  (new_chip.player2 == 0u16 ? player2() : 0u8) |
+                                  (new_chip.player3 == 0u16 ? player3() : 0u8);
+
         if (new_players_out == 6u8) {
             // Player 1 wins the game
+            Mapping::set(chips, game_id, new_chip);
             return;
         } else if (new_players_out == 5u8) {
             // Player 2 wins the game
+            Mapping::set(chips, game_id, new_chip);
             return;
         } else if (new_players_out == 3u8) {
             // Player 3 wins the game
+            Mapping::set(chips, game_id, new_chip);
             return;
         }
 
-        let new_dealer_button: u8 = 
+        let new_dealer_button: u8 =
             is_player1(game.dealer_button) ? player2() :
             is_player2(game.dealer_button) ? player3() : player1();
-            
+
         let new_remaining_hands: u8 = game.remaining_hands - 1u8;
-        let (new_sb, new_bb): (u16, u16) = 
-            new_remaining_hands == 0u8 ? 
-                (game.sb * 2u16, game.bb * 2u16) : 
+        let (new_sb, new_bb): (u16, u16) =
+            new_remaining_hands == 0u8 ?
+                (game.sb * 2u16, game.bb * 2u16) :
                 (game.sb, game.bb);
-                
+
+        let next_state: u8 =
+            !is_player1(new_players_out) ? p1_new_shuffle :
+            !is_player2(new_players_out) ? p2_new_shuffle :
+            p2_shuffle;
+
         let new_game: Game = Game {
             player1: game.player1,
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
-            state: 29u8,
+            state: next_state,
             dealer_button: new_dealer_button,
             players_out: new_players_out,
             players_folded: new_players_out,
@@ -1670,11 +1699,11 @@ program poker.aleo {
             hands_played: game.hands_played + 1u8,
             last_raise_size: 0u16,
         };
-        
-        Mapping::set(cards, game_id, new_card);
+
         Mapping::set(chips, game_id, new_chip);
         Mapping::set(games, game_id, new_game);
     }
+
     @noupgrade
     async constructor() {}
 }

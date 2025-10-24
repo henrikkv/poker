@@ -820,6 +820,23 @@
         }
       ],
       "is_async": true
+    },
+    {
+      "name": "compare_hands",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
     }
   ]
 }

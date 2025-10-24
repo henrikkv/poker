@@ -46,7 +46,9 @@ pub trait CardDisplay {
     fn display_cards(&self) -> String;
 }
 
-impl<N: snarkvm::prelude::Network> CardDisplay for poker_bindings::poker::RevealedCards<N> {
+impl<N: snarkvm::prelude::Network> CardDisplay
+    for mental_poker_bindings::mental_poker::RevealedCards<N>
+{
     fn display_cards(&self) -> String {
         format!(
             "Community: [{}, {}, {}, {}, {}]\nPlayer 1:  [{}, {}]\nPlayer 2:  [{}, {}]\nPlayer 3:  [{}, {}]",

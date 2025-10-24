@@ -11,12 +11,12 @@ snarkvm = "4.2.1"
 # END IMPORTS
 
 [package]
-name = "poker_bindings"
+name = "mental_poker_bindings"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "poker_bindings"
+name = "mental_poker_bindings"
 path = "lib.rs"
 
 [dependencies]

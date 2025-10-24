@@ -1,5 +1,5 @@
 import commutative_encryption.aleo;
-program poker.aleo;
+program mental_poker.aleo;
 
 record Keys:
     owner as address.private;
@@ -79,7 +79,7 @@ function create_game:
     cast self.caller r2 r3 into r7 as Keys.record;
     async create_game r0 r5 self.caller into r8;
     output r7 as Keys.record;
-    output r8 as poker.aleo/create_game.future;
+    output r8 as mental_poker.aleo/create_game.future;
 
 finalize create_game:
     input r0 as u32.public;
@@ -102,7 +102,7 @@ function join_game:
     cast self.caller r3 r4 into r7 as Keys.record;
     async join_game r0 r1 r5 self.caller into r8;
     output r7 as Keys.record;
-    output r8 as poker.aleo/join_game.future;
+    output r8 as mental_poker.aleo/join_game.future;
 
 finalize join_game:
     input r0 as u32.public;
@@ -151,7 +151,7 @@ function bet:
     input r0 as u32.private;
     input r1 as u16.private;
     async bet r0 r1 self.caller into r2;
-    output r2 as poker.aleo/bet.future;
+    output r2 as mental_poker.aleo/bet.future;
 
 finalize bet:
     input r0 as u32.public;
@@ -536,7 +536,7 @@ function decrypt_hands_p1:
     async decrypt_hands_p1 r0 r1 r9 self.caller into r10;
     cast r2.owner r2.secret r2.secret_inv into r11 as Keys.record;
     output r11 as Keys.record;
-    output r10 as poker.aleo/decrypt_hands_p1.future;
+    output r10 as mental_poker.aleo/decrypt_hands_p1.future;
 
 finalize decrypt_hands_p1:
     input r0 as u32.public;
@@ -578,7 +578,7 @@ function decrypt_hands_p2:
     async decrypt_hands_p2 r0 r1 r9 self.caller into r10;
     cast r2.owner r2.secret r2.secret_inv into r11 as Keys.record;
     output r11 as Keys.record;
-    output r10 as poker.aleo/decrypt_hands_p2.future;
+    output r10 as mental_poker.aleo/decrypt_hands_p2.future;
 
 finalize decrypt_hands_p2:
     input r0 as u32.public;
@@ -623,7 +623,7 @@ function decrypt_hands_p3:
     async decrypt_hands_p3 r0 r1 r9 self.caller into r10;
     cast r2.owner r2.secret r2.secret_inv into r11 as Keys.record;
     output r11 as Keys.record;
-    output r10 as poker.aleo/decrypt_hands_p3.future;
+    output r10 as mental_poker.aleo/decrypt_hands_p3.future;
 
 finalize decrypt_hands_p3:
     input r0 as u32.public;
@@ -702,7 +702,7 @@ function decrypt_flop_p1:
     async decrypt_flop_p1 r0 r1 r7 self.caller into r8;
     cast r2.owner r2.secret r2.secret_inv into r9 as Keys.record;
     output r9 as Keys.record;
-    output r8 as poker.aleo/decrypt_flop_p1.future;
+    output r8 as mental_poker.aleo/decrypt_flop_p1.future;
 
 finalize decrypt_flop_p1:
     input r0 as u32.public;
@@ -741,7 +741,7 @@ function decrypt_flop_p2:
     async decrypt_flop_p2 r0 r1 r7 self.caller into r8;
     cast r2.owner r2.secret r2.secret_inv into r9 as Keys.record;
     output r9 as Keys.record;
-    output r8 as poker.aleo/decrypt_flop_p2.future;
+    output r8 as mental_poker.aleo/decrypt_flop_p2.future;
 
 finalize decrypt_flop_p2:
     input r0 as u32.public;
@@ -831,7 +831,7 @@ function decrypt_flop_p3:
     async decrypt_flop_p3 r0 r1 r7 self.caller r11 into r12;
     cast r2.owner r2.secret r2.secret_inv into r13 as Keys.record;
     output r13 as Keys.record;
-    output r12 as poker.aleo/decrypt_flop_p3.future;
+    output r12 as mental_poker.aleo/decrypt_flop_p3.future;
 
 finalize decrypt_flop_p3:
     input r0 as u32.public;
@@ -926,7 +926,7 @@ finalize decrypt_flop_p3:
 function fold:
     input r0 as u32.private;
     async fold r0 self.caller into r1;
-    output r1 as poker.aleo/fold.future;
+    output r1 as mental_poker.aleo/fold.future;
 
 finalize fold:
     input r0 as u32.public;
@@ -1078,7 +1078,7 @@ function decrypt_turn_p1:
     async decrypt_turn_p1 r0 r1 r4 self.caller into r5;
     cast r2.owner r2.secret r2.secret_inv into r6 as Keys.record;
     output r6 as Keys.record;
-    output r5 as poker.aleo/decrypt_turn_p1.future;
+    output r5 as mental_poker.aleo/decrypt_turn_p1.future;
 
 finalize decrypt_turn_p1:
     input r0 as u32.public;
@@ -1114,7 +1114,7 @@ function decrypt_turn_p2:
     async decrypt_turn_p2 r0 r1 r4 self.caller into r5;
     cast r2.owner r2.secret r2.secret_inv into r6 as Keys.record;
     output r6 as Keys.record;
-    output r5 as poker.aleo/decrypt_turn_p2.future;
+    output r5 as mental_poker.aleo/decrypt_turn_p2.future;
 
 finalize decrypt_turn_p2:
     input r0 as u32.public;
@@ -1198,7 +1198,7 @@ function decrypt_turn_p3:
     async decrypt_turn_p3 r0 r1 r4 self.caller r5 into r6;
     cast r2.owner r2.secret r2.secret_inv into r7 as Keys.record;
     output r7 as Keys.record;
-    output r6 as poker.aleo/decrypt_turn_p3.future;
+    output r6 as mental_poker.aleo/decrypt_turn_p3.future;
 
 finalize decrypt_turn_p3:
     input r0 as u32.public;
@@ -1299,7 +1299,7 @@ function decrypt_river_p1:
     async decrypt_river_p1 r0 r1 r4 self.caller into r5;
     cast r2.owner r2.secret r2.secret_inv into r6 as Keys.record;
     output r6 as Keys.record;
-    output r5 as poker.aleo/decrypt_river_p1.future;
+    output r5 as mental_poker.aleo/decrypt_river_p1.future;
 
 finalize decrypt_river_p1:
     input r0 as u32.public;
@@ -1335,7 +1335,7 @@ function decrypt_river_p2:
     async decrypt_river_p2 r0 r1 r4 self.caller into r5;
     cast r2.owner r2.secret r2.secret_inv into r6 as Keys.record;
     output r6 as Keys.record;
-    output r5 as poker.aleo/decrypt_river_p2.future;
+    output r5 as mental_poker.aleo/decrypt_river_p2.future;
 
 finalize decrypt_river_p2:
     input r0 as u32.public;
@@ -1419,7 +1419,7 @@ function decrypt_river_p3:
     async decrypt_river_p3 r0 r1 r4 self.caller r5 into r6;
     cast r2.owner r2.secret r2.secret_inv into r7 as Keys.record;
     output r7 as Keys.record;
-    output r6 as poker.aleo/decrypt_river_p3.future;
+    output r6 as mental_poker.aleo/decrypt_river_p3.future;
 
 finalize decrypt_river_p3:
     input r0 as u32.public;
@@ -1525,7 +1525,7 @@ function showdown_p1:
     async showdown_p1 r0 r1 r6 self.caller r9 into r10;
     cast r2.owner r2.secret r2.secret_inv into r11 as Keys.record;
     output r11 as Keys.record;
-    output r10 as poker.aleo/showdown_p1.future;
+    output r10 as mental_poker.aleo/showdown_p1.future;
 
 finalize showdown_p1:
     input r0 as u32.public;
@@ -1581,7 +1581,7 @@ function showdown_p2:
     async showdown_p2 r0 r1 r6 self.caller r9 r12 into r13;
     cast r2.owner r2.secret r2.secret_inv into r14 as Keys.record;
     output r14 as Keys.record;
-    output r13 as poker.aleo/showdown_p2.future;
+    output r13 as mental_poker.aleo/showdown_p2.future;
 
 finalize showdown_p2:
     input r0 as u32.public;
@@ -1633,7 +1633,7 @@ function showdown_p3:
     async showdown_p3 r0 r1 r6 self.caller r9 r12 r15 into r16;
     cast r2.owner r2.secret r2.secret_inv into r17 as Keys.record;
     output r17 as Keys.record;
-    output r16 as poker.aleo/showdown_p3.future;
+    output r16 as mental_poker.aleo/showdown_p3.future;
 
 finalize showdown_p3:
     input r0 as u32.public;
@@ -1661,7 +1661,7 @@ finalize showdown_p3:
 function compare_hands:
     input r0 as u32.private;
     async compare_hands r0 self.signer into r1;
-    output r1 as poker.aleo/compare_hands.future;
+    output r1 as mental_poker.aleo/compare_hands.future;
 
 finalize compare_hands:
     input r0 as u32.public;

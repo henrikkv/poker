@@ -1,5 +1,5 @@
 {
-  "program_name": "poker",
+  "program_name": "mental_poker",
   "imports": [
     "commutative_encryption"
   ],

@@ -1,6 +1,6 @@
 import commutative_encryption.aleo;
 
-program poker.aleo {
+program mental_poker.aleo {
 
     mapping games: u32 => Game;
     mapping decks: u32 => [[group; 26]; 2];

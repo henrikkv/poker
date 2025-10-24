@@ -1,8 +1,8 @@
 use commutative_encryption_bindings::commutative_encryption::*;
 use credits_bindings::credits::*;
 use leo_bindings::utils::*;
+use mental_poker_bindings::mental_poker::*;
 use poker::cards::CardDisplay;
-use poker_bindings::poker::*;
 use rand::seq::SliceRandom;
 use snarkvm::console::network::TestnetV0;
 use snarkvm::prelude::{Group, Network};
@@ -88,7 +88,7 @@ fn poker_interpreter() {
     let bob = Account::new(rng).unwrap();
     let charlie = Account::new(rng).unwrap();
     gameplay(
-        &PokerInterpreter::new(&alice, ENDPOINT).unwrap(),
+        &MentalPokerInterpreter::new(&alice, ENDPOINT).unwrap(),
         &CreditsInterpreter::new(&alice, ENDPOINT).unwrap(),
         &CommutativeEncryptionInterpreter::new(&alice, ENDPOINT).unwrap(),
         &alice,
@@ -103,7 +103,7 @@ fn poker_testnet() {
     let bob = Account::new(rng).unwrap();
     let charlie = Account::new(rng).unwrap();
     gameplay(
-        &PokerTestnet::new(&alice, ENDPOINT).unwrap(),
+        &MentalPokerTestnet::new(&alice, ENDPOINT).unwrap(),
         &CreditsTestnet::new(&alice, ENDPOINT).unwrap(),
         &CommutativeEncryptionTestnet::new(&alice, ENDPOINT).unwrap(),
         &alice,
@@ -111,7 +111,12 @@ fn poker_testnet() {
         &charlie,
     );
 }
-fn gameplay<N: Network, P: PokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryptionAleo<N>>(
+fn gameplay<
+    N: Network,
+    P: MentalPokerAleo<N>,
+    C: CreditsAleo<N>,
+    E: CommutativeEncryptionAleo<N>,
+>(
     poker: &P,
     credits: &C,
     commutative_encryption: &E,

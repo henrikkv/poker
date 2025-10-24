@@ -8,6 +8,53 @@ program poker.aleo {
     mapping cards: u32 => Cards;
     mapping revealed_cards: u32 => RevealedCards;
 
+    const p2_join: u8 = 0u8;
+    const p3_join: u8 = 1u8;
+    const p1_dec_hand: u8 = 2u8;
+    const p2_dec_hand: u8 = 3u8;
+    const p3_dec_hand: u8 = 4u8;
+
+    const p1_bet_pre: u8 = 5u8;
+    const p2_bet_pre: u8 = 6u8;
+    const p3_bet_pre: u8 = 7u8;
+
+    const p1_dec_flop: u8 = 8u8;
+    const p2_dec_flop: u8 = 9u8;
+    const p3_dec_flop: u8 = 10u8;
+
+    const p1_bet_flop: u8 = 11u8;
+    const p2_bet_flop: u8 = 12u8;
+    const p3_bet_flop: u8 = 13u8;
+
+    const p1_dec_turn: u8 = 14u8;
+    const p2_dec_turn: u8 = 15u8;
+    const p3_dec_turn: u8 = 16u8;
+
+    const p1_bet_turn: u8 = 17u8;
+    const p2_bet_turn: u8 = 18u8;
+    const p3_bet_turn: u8 = 19u8;
+
+    const p1_dec_river: u8 = 20u8;
+    const p2_dec_river: u8 = 21u8;
+    const p3_dec_river: u8 = 22u8;
+
+    const p1_bet_river: u8 = 23u8;
+    const p2_bet_river: u8 = 24u8;
+    const p3_bet_river: u8 = 25u8;
+
+    const p1_showdown: u8 = 26u8;
+    const p2_showdown: u8 = 27u8;
+    const p3_showdown: u8 = 28u8;
+
+    const p1_new_shuffle: u8 = 29u8;
+    const p2_new_shuffle: u8 = 30u8;
+    const p2_shuffle: u8 = 31u8;
+    const p3_shuffle: u8 = 32u8;
+
+    const p1_claim: u8 = 33u8;
+    const p2_claim: u8 = 34u8;
+    const p3_claim: u8 = 35u8;
+    
     struct Game {
         player1: address,
         player2: address,
@@ -165,15 +212,15 @@ program poker.aleo {
         assert(current_deck == deck);
 
         // Determine if this is player2 or player3 joining
-        let player2_joining: bool = game.state == 0u8;
-        assert(game.state == 0u8 || game.state == 1u8);
-        
+        let player2_joining: bool = game.state == p2_join;
+        assert(game.state == p2_join || game.state == p3_join);
+
         let new_game: Game = Game {
             player1: game.player1,
             player2: player2_joining ? caller : game.player2,
             player3: !player2_joining ? caller : 0u128 as address,
             buy_in: game.buy_in,
-            state: player2_joining ? 1u8 : 2u8,
+            state: player2_joining ? p3_join : p1_dec_hand,
             dealer_button: game.dealer_button,
             players_out: 0u8,
             players_folded: 0u8,
@@ -229,24 +276,26 @@ program poker.aleo {
         let chip: Chips = Mapping::get(chips, game_id);
 
         let is_valid_state: bool =
-            (game.state == 5u8 && game.player1 == caller) ||
-            (game.state == 6u8 && game.player2 == caller) ||
-            (game.state == 7u8 && game.player3 == caller) ||
-            (game.state == 11u8 && game.player1 == caller) ||
-            (game.state == 12u8 && game.player2 == caller) ||
-            (game.state == 13u8 && game.player3 == caller) ||
-            (game.state == 17u8 && game.player1 == caller) ||
-            (game.state == 18u8 && game.player2 == caller) ||
-            (game.state == 19u8 && game.player3 == caller) ||
-            (game.state == 23u8 && game.player1 == caller) ||
-            (game.state == 24u8 && game.player2 == caller) ||
-            (game.state == 25u8 && game.player3 == caller);
+            (game.state == p1_bet_pre && game.player1 == caller) ||
+            (game.state == p2_bet_pre && game.player2 == caller) ||
+            (game.state == p3_bet_pre && game.player3 == caller) ||
+            (game.state == p1_bet_flop && game.player1 == caller) ||
+            (game.state == p2_bet_flop && game.player2 == caller) ||
+            (game.state == p3_bet_flop && game.player3 == caller) ||
+            (game.state == p1_bet_turn && game.player1 == caller) ||
+            (game.state == p2_bet_turn && game.player2 == caller) ||
+            (game.state == p3_bet_turn && game.player3 == caller) ||
+            (game.state == p1_bet_river && game.player1 == caller) ||
+            (game.state == p2_bet_river && game.player2 == caller) ||
+            (game.state == p3_bet_river && game.player3 == caller);
         assert(is_valid_state);
 
         let (current_chips, current_bet): (u16, u16) =
-            (game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? (chip.player1, chip.player1_bet) :
-            (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? (chip.player2, chip.player2_bet) :
-            (chip.player3, chip.player3_bet);
+            (game.state == p1_bet_pre || game.state == p1_bet_flop || game.state == p1_bet_turn || game.state == p1_bet_river) ?
+                (chip.player1, chip.player1_bet) :
+                (game.state == p2_bet_pre || game.state == p2_bet_flop || game.state == p2_bet_turn || game.state == p2_bet_river) ?
+                    (chip.player2, chip.player2_bet) :
+                    (chip.player3, chip.player3_bet);
 
         let highest_bet: u16 = 
             (chip.player1_bet >= chip.player2_bet && chip.player1_bet >= chip.player3_bet) ? chip.player1_bet :
@@ -302,22 +351,22 @@ program poker.aleo {
         // Determine if this bet reopens action
         let new_last_bet: u8 =
             reopens_action ?
-                ((game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? player1() :
-                 (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? player2() :
+                ((game.state == p1_bet_pre || game.state == p1_bet_flop || game.state == p1_bet_turn || game.state == p1_bet_river) ? player1() :
+                 (game.state == p2_bet_pre || game.state == p2_bet_flop || game.state == p2_bet_turn || game.state == p2_bet_river) ? player2() :
                  player3()) :
                 game.last_bet;
 
-        let is_current_last_bet: bool = 
-            ((game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) && is_player1(game.last_bet)) ||
-            ((game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) && is_player2(game.last_bet)) ||
-            ((game.state == 7u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) && is_player3(game.last_bet));
+        let is_current_last_bet: bool =
+            ((game.state == p1_bet_pre || game.state == p1_bet_flop || game.state == p1_bet_turn || game.state == p1_bet_river) && is_player1(game.last_bet)) ||
+            ((game.state == p2_bet_pre || game.state == p2_bet_flop || game.state == p2_bet_turn || game.state == p2_bet_river) && is_player2(game.last_bet)) ||
+            ((game.state == p3_bet_pre || game.state == p3_bet_flop || game.state == p3_bet_turn || game.state == p3_bet_river) && is_player3(game.last_bet));
 
-        let p1_matched: bool = is_p1_inactive || 
-            ((game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? new_amount == highest_bet : chip.player1_bet == highest_bet);
-        let p2_matched: bool = is_p2_inactive || 
-            ((game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? new_amount == highest_bet : chip.player2_bet == highest_bet);
-        let p3_matched: bool = is_p3_inactive || 
-            ((game.state == 7u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) ? new_amount == highest_bet : chip.player3_bet == highest_bet);
+        let p1_matched: bool = is_p1_inactive ||
+            ((game.state == p1_bet_pre || game.state == p1_bet_flop || game.state == p1_bet_turn || game.state == p1_bet_river) ? new_amount == highest_bet : chip.player1_bet == highest_bet);
+        let p2_matched: bool = is_p2_inactive ||
+            ((game.state == p2_bet_pre || game.state == p2_bet_flop || game.state == p2_bet_turn || game.state == p2_bet_river) ? new_amount == highest_bet : chip.player2_bet == highest_bet);
+        let p3_matched: bool = is_p3_inactive ||
+            ((game.state == p3_bet_pre || game.state == p3_bet_flop || game.state == p3_bet_turn || game.state == p3_bet_river) ? new_amount == highest_bet : chip.player3_bet == highest_bet);
 
         let should_end_betting: bool = 
             post_action_active_count <= 1u8 || // Everyone all-in/folded
@@ -332,49 +381,49 @@ program poker.aleo {
 
         let next_state: u8 =
             should_end_betting ?
-                (game.state <= 7u8) ? (is_player1(game.players_out) ? 9u8 : 8u8) :     // Move to flop decrypt
-                (game.state <= 13u8) ? (is_player1(game.players_out) ? 15u8 : 14u8) :   // Move to turn decrypt
-                (game.state <= 19u8) ? (is_player1(game.players_out) ? 21u8 : 20u8) :   // Move to river decrypt
+                (game.state <= p3_bet_pre) ? (is_player1(game.players_out) ? p2_dec_flop : p1_dec_flop) :     // Move to flop decrypt
+                (game.state <= p3_bet_flop) ? (is_player1(game.players_out) ? p2_dec_turn : p1_dec_turn) :   // Move to turn decrypt
+                (game.state <= p3_bet_turn) ? (is_player1(game.players_out) ? p2_dec_river : p1_dec_river) :   // Move to river decrypt
                 // For showdown, check who starts based on who's still in
                 is_player1(game.players_folded) ?
-                    (is_player2(game.players_folded) ? 28u8 : 27u8) :  // P3 or P2 starts
-                26u8 :                                                  // P1 starts
+                    (is_player2(game.players_folded) ? p3_showdown : p2_showdown) :  // P3 or P2 starts
+                p1_showdown :                                                  // P1 starts
             // Otherwise move to next active player
-            (game.state == 5u8) ? (is_p2_inactive ? 7u8 : 6u8) :
-            (game.state == 6u8) ? (is_p3_inactive ? 5u8 : 7u8) :
-            (game.state == 7u8) ? (is_p1_inactive ? 6u8 : 5u8) :
-            (game.state == 11u8) ? (is_p2_inactive ? 13u8 : 12u8) :
-            (game.state == 12u8) ? (is_p3_inactive ? 11u8 : 13u8) :
-            (game.state == 13u8) ? (is_p1_inactive ? 12u8 : 11u8) :
-            (game.state == 17u8) ? (is_p2_inactive ? 19u8 : 18u8) :
-            (game.state == 18u8) ? (is_p3_inactive ? 17u8 : 19u8) :
-            (game.state == 19u8) ? (is_p1_inactive ? 18u8 : 17u8) :
-            (game.state == 23u8) ? (is_p2_inactive ? 25u8 : 24u8) :
-            (game.state == 24u8) ? (is_p3_inactive ? 23u8 : 25u8) :
-            (game.state == 25u8) ? (is_p1_inactive ? 24u8 : 23u8) : 0u8;
+            (game.state == p1_bet_pre) ? (is_p2_inactive ? p3_bet_pre : p2_bet_pre) :
+            (game.state == p2_bet_pre) ? (is_p3_inactive ? p1_bet_pre : p3_bet_pre) :
+            (game.state == p3_bet_pre) ? (is_p1_inactive ? p2_bet_pre : p1_bet_pre) :
+            (game.state == p1_bet_flop) ? (is_p2_inactive ? p3_bet_flop : p2_bet_flop) :
+            (game.state == p2_bet_flop) ? (is_p3_inactive ? p1_bet_flop : p3_bet_flop) :
+            (game.state == p3_bet_flop) ? (is_p1_inactive ? p2_bet_flop : p1_bet_flop) :
+            (game.state == p1_bet_turn) ? (is_p2_inactive ? p3_bet_turn : p2_bet_turn) :
+            (game.state == p2_bet_turn) ? (is_p3_inactive ? p1_bet_turn : p3_bet_turn) :
+            (game.state == p3_bet_turn) ? (is_p1_inactive ? p2_bet_turn : p1_bet_turn) :
+            (game.state == p1_bet_river) ? (is_p2_inactive ? p3_bet_river : p2_bet_river) :
+            (game.state == p2_bet_river) ? (is_p3_inactive ? p1_bet_river : p3_bet_river) :
+            (game.state == p3_bet_river) ? (is_p1_inactive ? p2_bet_river : p1_bet_river) : 0u8;
 
         // 8. UPDATE LAST BETTOR
         new_last_bet =
             (new_amount > highest_bet && !is_going_allin) ?
-                ((game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ? player1() :
-                 (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ? player2() :
+                ((game.state == p1_bet_pre || game.state == p1_bet_flop || game.state == p1_bet_turn || game.state == p1_bet_river) ? player1() :
+                 (game.state == p2_bet_pre || game.state == p2_bet_flop || game.state == p2_bet_turn || game.state == p2_bet_river) ? player2() :
                  player3()) :
                 game.last_bet;
 
         let pot_size: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet + amount;
         let new_chip: Chips = Chips {
             // Update current player's stack and bet
-            player1: (game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ?
+            player1: (game.state == p1_bet_pre || game.state == p1_bet_flop || game.state == p1_bet_turn || game.state == p1_bet_river) ?
                 new_remaining : chip.player1,
-            player2: (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ?
+            player2: (game.state == p2_bet_pre || game.state == p2_bet_flop || game.state == p2_bet_turn || game.state == p2_bet_river) ?
                 new_remaining : chip.player2,
-            player3: (game.state == 7u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) ?
+            player3: (game.state == p3_bet_pre || game.state == p3_bet_flop || game.state == p3_bet_turn || game.state == p3_bet_river) ?
                 new_remaining : chip.player3,
-            player1_bet: (game.state == 5u8 || game.state == 11u8 || game.state == 17u8 || game.state == 23u8) ?
+            player1_bet: (game.state == p1_bet_pre || game.state == p1_bet_flop || game.state == p1_bet_turn || game.state == p1_bet_river) ?
                 new_amount : chip.player1_bet,
-            player2_bet: (game.state == 6u8 || game.state == 12u8 || game.state == 18u8 || game.state == 24u8) ?
+            player2_bet: (game.state == p2_bet_pre || game.state == p2_bet_flop || game.state == p2_bet_turn || game.state == p2_bet_river) ?
                 new_amount : chip.player2_bet,
-            player3_bet: (game.state == 7u8 || game.state == 13u8 || game.state == 19u8 || game.state == 25u8) ?
+            player3_bet: (game.state == p3_bet_pre || game.state == p3_bet_flop || game.state == p3_bet_turn || game.state == p3_bet_river) ?
                 new_amount : chip.player3_bet,
         };
 
@@ -424,7 +473,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 2u8);
+        assert(game.state == p1_dec_hand);
         assert(game.player1 == caller);
         if (is_player2(game.players_out)) {
             let new_game: Game = Game {
@@ -432,7 +481,7 @@ program poker.aleo {
                 player2: game.player2,
                 player3: game.player3,
                 buy_in: game.buy_in,
-                state: 5u8,
+                state: p1_bet_pre,
                 dealer_button: game.dealer_button,
                 players_out: game.players_out,
                 players_folded: game.players_folded,
@@ -451,7 +500,7 @@ program poker.aleo {
                 player2: game.player2,
                 player3: game.player3,
                 buy_in: game.buy_in,
-                state: 3u8,
+                state: p2_dec_hand,
                 dealer_button: game.dealer_button,
                 players_out: game.players_out,
                 players_folded: game.players_folded,
@@ -487,15 +536,15 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 3u8);
+        assert(game.state == p2_dec_hand);
         assert(game.player2 == caller);
 
         // Set the cards mapping once
         Mapping::set(cards, game_id, new_card);
 
         // Calculate state and last_bet using ternary operators
-        let new_state: u8 = is_player3(game.players_out) ? 
-            (is_player2(game.dealer_button) ? 5u8 : 6u8) : 4u8;
+        let new_state: u8 = is_player3(game.players_out) ?
+            (is_player2(game.dealer_button) ? p1_bet_pre : p2_bet_pre) : p3_dec_hand;
 
         let new_last_bet: u8 = is_player3(game.players_out) ? 
             (is_player2(game.dealer_button) ? player2() : player1()) : game.last_bet;
@@ -540,22 +589,22 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 4u8);
+        assert(game.state == p3_dec_hand);
         assert(game.player3 == caller);
 
         // Set the cards mapping once
         Mapping::set(cards, game_id, new_card);
 
         // Calculate state and last_bet using nested ternary operators
-        let new_state: u8 = 
-            is_player1(game.players_out) ? 
-                (is_player2(game.dealer_button) ? 7u8 : 6u8) :
-            is_player2(game.players_out) ? 
-                (is_player1(game.dealer_button) ? 7u8 : 5u8) :
-            is_player3(game.players_out) ? 
-                (is_player2(game.dealer_button) ? 5u8 : 6u8) :
-            is_player1(game.dealer_button) ? 7u8 :
-            is_player2(game.dealer_button) ? 5u8 : 6u8;
+        let new_state: u8 =
+            is_player1(game.players_out) ?
+                (is_player2(game.dealer_button) ? p3_bet_pre : p2_bet_pre) :
+            is_player2(game.players_out) ?
+                (is_player1(game.dealer_button) ? p3_bet_pre : p1_bet_pre) :
+            is_player3(game.players_out) ?
+                (is_player2(game.dealer_button) ? p1_bet_pre : p2_bet_pre) :
+            is_player1(game.dealer_button) ? p3_bet_pre :
+            is_player2(game.dealer_button) ? p1_bet_pre : p2_bet_pre;
 
         let new_last_bet: u8 = 
             is_player1(game.players_folded) ? 
@@ -603,11 +652,11 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 8u8);
+        assert(game.state == p1_dec_flop);
         assert(game.player1 == caller);
         assert(!is_player1(game.players_out));
 
-        let next_state: u8 = !is_player2(game.players_out) ? 9u8 : 10u8;
+        let next_state: u8 = !is_player2(game.players_out) ? p2_dec_flop : p3_dec_flop;
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -646,7 +695,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 9u8);
+        assert(game.state == p2_dec_flop);
         assert(game.player2 == caller);
         assert(!is_player2(game.players_out));
 
@@ -661,13 +710,13 @@ program poker.aleo {
             (chip.player1 == 0u16 && chip.player2 == 0u16 && chip.player3 == 0u16);
 
         // Always go to P3 if not busted, otherwise determine betting state
-        let new_state: u8 = 
-            !is_player3(game.players_out) ? 10u8 : // P3's turn to decrypt
-                      should_skip_betting ? 14u8 : // Skip to turn decrypt
-           is_player1(game.dealer_button) ? 
-                         (!is_p2_inactive ? 12u8 : !is_p3_inactive ? 13u8 : 11u8) :
-           is_player2(game.dealer_button) ? (!is_p3_inactive ? 13u8 : !is_p1_inactive ? 11u8 : 12u8) :
-                                            (!is_p1_inactive ? 11u8 : !is_p2_inactive ? 12u8 : 13u8);
+        let new_state: u8 =
+            !is_player3(game.players_out) ? p3_dec_flop :
+                      should_skip_betting ? p1_dec_turn :
+           is_player1(game.dealer_button) ?
+                         (!is_p2_inactive ? p2_bet_flop : !is_p3_inactive ? p3_bet_flop : p1_bet_flop) :
+           is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_flop : !is_p1_inactive ? p1_bet_flop : p2_bet_flop) :
+                                            (!is_p1_inactive ? p1_bet_flop : !is_p2_inactive ? p2_bet_flop : p3_bet_flop);
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -713,7 +762,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 10u8);
+        assert(game.state == p3_dec_flop);
         assert(game.player3 == caller);
         assert(!is_player3(game.players_out));
 
@@ -741,10 +790,10 @@ program poker.aleo {
         // Determine first bettor based on dealer button position
         // First active player after dealer button gets to bet first
         let next_state: u8 =
-                       should_skip_betting ? 14u8 :
-            is_player1(game.dealer_button) ? (!is_p2_inactive ? 12u8 : !is_p3_inactive ? 13u8 : 11u8) :
-            is_player2(game.dealer_button) ? (!is_p3_inactive ? 13u8 : !is_p1_inactive ? 11u8 : 12u8) :
-                                             (!is_p1_inactive ? 11u8 : !is_p2_inactive ? 12u8 : 13u8);
+                       should_skip_betting ? p1_dec_turn :
+            is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_flop : !is_p3_inactive ? p3_bet_flop : p1_bet_flop) :
+            is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_flop : !is_p1_inactive ? p1_bet_flop : p2_bet_flop) :
+                                             (!is_p1_inactive ? p1_bet_flop : !is_p2_inactive ? p2_bet_flop : p3_bet_flop);
 
         let new_last_bet: u8 = 
             is_player1(game.dealer_button) ? 
@@ -784,10 +833,10 @@ program poker.aleo {
         
         // Validate the fold is from the correct player and in a betting state
         let is_valid_state: bool =
-            (game.state >= 5u8 && game.state <= 7u8) ||    // Pre-flop betting
-            (game.state >= 11u8 && game.state <= 13u8) ||  // Post-flop betting
-            (game.state >= 17u8 && game.state <= 19u8) ||  // Post-turn betting
-            (game.state >= 23u8 && game.state <= 25u8);    // Post-river betting
+            (game.state >= p1_bet_pre && game.state <= p3_bet_pre) ||
+            (game.state >= p1_bet_flop && game.state <= p3_bet_flop) ||
+            (game.state >= p1_bet_turn && game.state <= p3_bet_turn) ||
+            (game.state >= p1_bet_river && game.state <= p3_bet_river);
         assert(is_valid_state);
         
         // Determine which player is folding and validate
@@ -820,17 +869,17 @@ program poker.aleo {
                 player3_bet: 0u16,
             };
             
-            let next_shuffle_state: u8 = 
-                !is_player1(game.players_out) ? 29u8 :  // P1 starts if not out
-                !is_player2(game.players_out) ? 30u8 :  // Otherwise P2 if not out
-                31u8;                                   // Otherwise P3 starts
+            let next_shuffle_state: u8 =
+                !is_player1(game.players_out) ? p1_new_shuffle :
+                !is_player2(game.players_out) ? p2_new_shuffle :
+                p2_shuffle;
             
             let new_game: Game = Game {
                 player1: game.player1,
                 player2: game.player2,
                 player3: game.player3,
                 buy_in: game.buy_in,
-                state: next_shuffle_state, // Use helper to find first non-out player
+                state: next_shuffle_state,
                 dealer_button: game.dealer_button,
                 players_out: game.players_out,
                 players_folded: new_players_folded,
@@ -862,18 +911,18 @@ program poker.aleo {
         let should_end_betting: bool = all_matched;
 
         let base_state: u8 =
-            (game.state <= 7u8) ? 5u8 :      // Pre-flop states
-            (game.state <= 13u8) ? 11u8 :    // Post-flop states
-            (game.state <= 19u8) ? 17u8 :    // Post-turn states
-            23u8;                            // Post-river states
+            (game.state <= p3_bet_pre) ? p1_bet_pre :
+            (game.state <= p3_bet_flop) ? p1_bet_flop :
+            (game.state <= p3_bet_turn) ? p1_bet_turn :
+            p1_bet_river;
 
         // If betting round ends, move to next phase
-        let next_state: u8 = 
-            should_end_betting ? 
-                (game.state <= 7u8)  ? (is_player1(game.players_out) ? 9u8  : 8u8)  :     // Move to flop decrypt
-                (game.state <= 13u8) ? (is_player1(game.players_out) ? 15u8 : 14u8) :   // Move to turn decrypt
-                (game.state <= 19u8) ? (is_player1(game.players_out) ? 21u8 : 20u8) :   // Move to river decrypt
-                                        is_player1(game.players_out) ? 27u8 : 26u8  : // Move to showdown
+        let next_state: u8 =
+            should_end_betting ?
+                (game.state <= p3_bet_pre)  ? (is_player1(game.players_out) ? p2_dec_flop  : p1_dec_flop)  :
+                (game.state <= p3_bet_flop) ? (is_player1(game.players_out) ? p2_dec_turn : p1_dec_turn) :
+                (game.state <= p3_bet_turn) ? (is_player1(game.players_out) ? p2_dec_river : p1_dec_river) :
+                                        is_player1(game.players_out) ? p2_showdown : p1_showdown  :
                 (is_player1_folding) ? // Find next active player to the left
                     (is_player2(new_players_folded) ? base_state + 2u8 : base_state + 1u8) :  // P1 folded -> P2 or P3
                 (is_player2_folding) ? 
@@ -915,11 +964,11 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 14u8);
+        assert(game.state == p1_dec_turn);
         assert(game.player1 == caller);
         assert(!is_player1(game.players_out));
 
-        let next_state: u8 = !is_player2(game.players_out) ? 15u8 : 16u8;
+        let next_state: u8 = !is_player2(game.players_out) ? p2_dec_turn : p3_dec_turn;
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -956,7 +1005,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 15u8);
+        assert(game.state == p2_dec_turn);
         assert(game.player2 == caller);
         assert(!is_player2(game.players_out));
 
@@ -971,13 +1020,13 @@ program poker.aleo {
             (chip.player1 == 0u16 && chip.player2 == 0u16 && chip.player3 == 0u16);
 
         // Always go to P3 if not busted, otherwise determine betting state
-        let new_state: u8 = 
-            !is_player3(game.players_out) ? 16u8 : // P3's turn to decrypt
-                      should_skip_betting ? 20u8 : // Skip to river decrypt
-           is_player1(game.dealer_button) ? 
-                         (!is_p2_inactive ? 18u8 : !is_p3_inactive ? 19u8 : 17u8) :
-           is_player2(game.dealer_button) ? (!is_p3_inactive ? 19u8 : !is_p1_inactive ? 17u8 : 18u8) :
-                                        (!is_p1_inactive ? 17u8 : !is_p2_inactive ? 18u8 : 19u8);
+        let new_state: u8 =
+            !is_player3(game.players_out) ? p3_dec_turn :
+                      should_skip_betting ? p1_dec_river :
+           is_player1(game.dealer_button) ?
+                         (!is_p2_inactive ? p2_bet_turn : !is_p3_inactive ? p3_bet_turn : p1_bet_turn) :
+           is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn : !is_p1_inactive ? p1_bet_turn : p2_bet_turn) :
+                                        (!is_p1_inactive ? p1_bet_turn : !is_p2_inactive ? p2_bet_turn : p3_bet_turn);
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -1017,7 +1066,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 16u8);
+        assert(game.state == p3_dec_turn);
         assert(game.player3 == caller);
         assert(!is_player3(game.players_out));
 
@@ -1044,10 +1093,10 @@ program poker.aleo {
 
         // Determine first bettor based on dealer button position
         let next_state: u8 =
-               should_skip_betting ? 20u8 :
-            is_player1(game.dealer_button) ? (!is_p2_inactive ? 18u8 : !is_p3_inactive ? 19u8 : 17u8) :
-            is_player2(game.dealer_button) ? (!is_p3_inactive ? 19u8 : !is_p1_inactive ? 17u8 : 18u8) :
-                                         (!is_p1_inactive ? 17u8 : !is_p2_inactive ? 18u8 : 19u8);
+               should_skip_betting ? p1_dec_river :
+            is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_turn : !is_p3_inactive ? p3_bet_turn : p1_bet_turn) :
+            is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn : !is_p1_inactive ? p1_bet_turn : p2_bet_turn) :
+                                         (!is_p1_inactive ? p1_bet_turn : !is_p2_inactive ? p2_bet_turn : p3_bet_turn);
 
         let new_last_bet: u8 = 
             is_player1(game.dealer_button) ? 
@@ -1092,11 +1141,11 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 20u8);
+        assert(game.state == p1_dec_river);
         assert(game.player1 == caller);
         assert(!is_player1(game.players_out));
 
-        let next_state: u8 = !is_player2(game.players_out) ? 21u8 : 22u8;
+        let next_state: u8 = !is_player2(game.players_out) ? p2_dec_river : p3_dec_river;
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -1133,7 +1182,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 21u8);
+        assert(game.state == p2_dec_river);
         assert(game.player2 == caller);
         assert(!is_player2(game.players_out));
 
@@ -1148,13 +1197,13 @@ program poker.aleo {
             (chip.player1 == 0u16 && chip.player2 == 0u16 && chip.player3 == 0u16);
 
         // Always go to P3 if not busted, otherwise determine betting state
-        let new_state: u8 = 
-            !is_player3(game.players_out) ? 22u8 : // P3's turn to decrypt
-                      should_skip_betting ? 26u8 : // Skip to showdown
-           is_player1(game.dealer_button) ? 
-                         (!is_p2_inactive ? 24u8 : !is_p3_inactive ? 25u8 : 23u8) :
-           is_player2(game.dealer_button) ? (!is_p3_inactive ? 25u8 : !is_p1_inactive ? 23u8 : 24u8) :
-                                        (!is_p1_inactive ? 23u8 : !is_p2_inactive ? 24u8 : 25u8);
+        let new_state: u8 =
+            !is_player3(game.players_out) ? p3_dec_river :
+                      should_skip_betting ? p1_showdown :
+           is_player1(game.dealer_button) ?
+                         (!is_p2_inactive ? p2_bet_river : !is_p3_inactive ? p3_bet_river : p1_bet_river) :
+           is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river : !is_p1_inactive ? p1_bet_river : p2_bet_river) :
+                                        (!is_p1_inactive ? p1_bet_river : !is_p2_inactive ? p2_bet_river : p3_bet_river);
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -1194,7 +1243,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 22u8);
+        assert(game.state == p3_dec_river);
         assert(game.player3 == caller);
         assert(!is_player3(game.players_out));
 
@@ -1221,10 +1270,10 @@ program poker.aleo {
 
         // Determine first bettor based on dealer button position
         let next_state: u8 =
-               should_skip_betting ? 26u8 :
-            is_player1(game.dealer_button) ? (!is_p2_inactive ? 24u8 : !is_p3_inactive ? 25u8 : 23u8) :
-            is_player2(game.dealer_button) ? (!is_p3_inactive ? 25u8 : !is_p1_inactive ? 23u8 : 24u8) :
-                                         (!is_p1_inactive ? 23u8 : !is_p2_inactive ? 24u8 : 25u8);
+               should_skip_betting ? p1_showdown :
+            is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_river : !is_p3_inactive ? p3_bet_river : p1_bet_river) :
+            is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river : !is_p1_inactive ? p1_bet_river : p2_bet_river) :
+                                             (!is_p1_inactive ? p1_bet_river : !is_p2_inactive ? p2_bet_river : p3_bet_river);
 
         let new_last_bet: u8 = 
             is_player1(game.dealer_button) ? 
@@ -1277,7 +1326,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 26u8);
+        assert(game.state == p1_showdown);
         assert(game.player1 == caller);
 
         let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
@@ -1341,7 +1390,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 27u8);
+        assert(game.state == p2_showdown);
         assert(game.player2 == caller);
 
         let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
@@ -1544,7 +1593,7 @@ program poker.aleo {
         let old_card: Cards = Mapping::get(cards, game_id);
         assert(card == old_card);
         let game: Game = Mapping::get(games, game_id);
-        assert(game.state == 28u8);
+        assert(game.state == p3_showdown);
         assert(game.player3 == caller);
 
         let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);

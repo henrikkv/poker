@@ -1,4 +1,6 @@
 use colored::*;
+use mental_poker_bindings::mental_poker::RevealedCards;
+use snarkvm::prelude::*;
 
 /// Formats a card index (0-51) as a string with suit emoji and value.
 /// - Suits: ♠️ (0-12), ♣️ (13-25), ❤️ (26-38), ♦️ (39-51)
@@ -46,9 +48,7 @@ pub trait CardDisplay {
     fn display_cards(&self) -> String;
 }
 
-impl<N: snarkvm::prelude::Network> CardDisplay
-    for mental_poker_bindings::mental_poker::RevealedCards<N>
-{
+impl<N: Network> CardDisplay for RevealedCards<N> {
     fn display_cards(&self) -> String {
         format!(
             "Community: [{}, {}, {}, {}, {}]\nPlayer 1:  [{}, {}]\nPlayer 2:  [{}, {}]\nPlayer 3:  [{}, {}]",

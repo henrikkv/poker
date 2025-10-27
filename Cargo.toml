@@ -10,5 +10,5 @@ mental_poker_bindings = { path = "./leo" }
 commutative_encryption_bindings = { path = "./leo/imports/commutative_encryption" }
 
 rand = "0.8"
-snarkvm = "4.2.1"
+snarkvm = { git = "http://github.com/ProvableHQ/snarkVM.git", rev = "eb44d39" }
 colored = "3.0.0"

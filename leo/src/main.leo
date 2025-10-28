@@ -575,8 +575,7 @@ program mental_poker.aleo {
         let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
 
         let should_skip_betting: bool =
-            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8 ||
-            (chip.player1 == 0u16 && chip.player2 == 0u16 && chip.player3 == 0u16);
+            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8;
 
         let next_state: u8 =
             is_p1 ? (!is_player2(game.players_out) ? p2_dec_flop : p3_dec_flop) :
@@ -645,10 +644,9 @@ program mental_poker.aleo {
             (is_player1_folding ? player1() : 
              is_player2_folding ? player2() : player3());
         
-        let active_count: u8 = 3u8 - 
-            (is_player1(new_players_folded) ? 1u8 : 0u8) - 
-            (is_player2(new_players_folded) ? 1u8 : 0u8) - 
-            (is_player3(new_players_folded) ? 1u8 : 0u8);
+        let active_count: u8 = (!is_player1(new_players_folded) as u8) + 
+                               (!is_player2(new_players_folded) as u8) + 
+                               (!is_player3(new_players_folded) as u8);
         
         if (active_count == 1u8) {
             let pot_size: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet;
@@ -792,8 +790,7 @@ program mental_poker.aleo {
         let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
 
         let should_skip_betting: bool =
-            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8 ||
-            (chip.player1 == 0u16 && chip.player2 == 0u16 && chip.player3 == 0u16);
+            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8;
 
         let next_state: u8 =
             is_p1_turn ? (!is_player2(game.players_out) ? p2_dec_turn : p3_dec_turn) :
@@ -1231,16 +1228,8 @@ program mental_poker.aleo {
                                   (new_chip.player2 == 0u16 ? player2() : 0u8) |
                                   (new_chip.player3 == 0u16 ? player3() : 0u8);
 
-        if (new_players_out == 6u8) {
-            // Player 1 wins the game
-            Mapping::set(chips, game_id, new_chip);
-            return;
-        } else if (new_players_out == 5u8) {
-            // Player 2 wins the game
-            Mapping::set(chips, game_id, new_chip);
-            return;
-        } else if (new_players_out == 3u8) {
-            // Player 3 wins the game
+        let game_over: bool = new_players_out == 6u8 || new_players_out == 5u8 || new_players_out == 3u8;
+        if (game_over) {
             Mapping::set(chips, game_id, new_chip);
             return;
         }

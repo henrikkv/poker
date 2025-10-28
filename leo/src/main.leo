@@ -67,11 +67,6 @@ program mental_poker.aleo {
     const HAND_QUADS: u32 =          8 * 2 ** 28u32;
     const HAND_STRAIGHT_FLUSH: u32 = 9 * 2 ** 28u32;
 
-    const POW_4: u32 = 2 ** 4u32;
-    const POW_8: u32 = 2 ** 8u32;
-    const POW_12: u32 = 2 ** 12u32;
-    const POW_16: u32 = 2 ** 16u32;
-
     struct Game {
         player1: address,
         player2: address,
@@ -1256,7 +1251,7 @@ program mental_poker.aleo {
 
         let new_remaining_hands: u8 = game.remaining_hands - 1u8;
 
-        let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb * 2u16, game.bb * 2u16) :
+        let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
                                                                         (game.sb, game.bb);
 
         let next_state: u8 = !is_player1(new_players_out) ? p1_new_shuffle :
@@ -1522,29 +1517,29 @@ program mental_poker.aleo {
                                pair_45 ? r3 :
                                          r5;
 
-        let hand_value: u32 = has_sf ? HAND_STRAIGHT_FLUSH | sf_high as u32 :
-                              has_quads ? HAND_QUADS | quad_rank as u32 * POW_4 | quad_kicker as u32 :
-                              has_fh ? HAND_FULL_HOUSE | trip_rank as u32 * POW_4 | pair_rank as u32 :
-                              has_flush ? HAND_FLUSH | flush_r1 as u32 * POW_16 |
-                                                       flush_r2 as u32 * POW_12 |
-                                                       flush_r3 as u32 * POW_8 |
-                                                       flush_r4 as u32 * POW_4 |
+        let hand_value: u32 = has_sf ? HAND_STRAIGHT_FLUSH | sf_high_card as u32 :
+                              has_quads ? HAND_QUADS | (quad_rank as u32 << 4u8) | quad_kicker as u32 :
+                              has_fh ? HAND_FULL_HOUSE | (trip_rank as u32 << 4u8) | pair_rank as u32 :
+                              has_flush ? HAND_FLUSH | (flush_r1 as u32 << 16u8) |
+                                                       (flush_r2 as u32 << 12u8) |
+                                                       (flush_r3 as u32 << 8u8) |
+                                                       (flush_r4 as u32 << 4u8) |
                                                        flush_r5 as u32 :
                               has_straight ? HAND_STRAIGHT | straight_high as u32 :
-                              trips_only ? HAND_TRIPS | trip_rank as u32 * POW_8 |
-                                                        trips_kicker1 as u32 * POW_4 |
+                              trips_only ? HAND_TRIPS | (trip_rank as u32 << 8u8) |
+                                                        (trips_kicker1 as u32 << 4u8) |
                                                         trips_kicker2 as u32 :
-                              has_two_pair ? HAND_TWO_PAIR | pair_rank as u32 * POW_8 |
-                                                             second_pair_rank as u32 * POW_4 |
+                              has_two_pair ? HAND_TWO_PAIR | (pair_rank as u32 << 8u8) |
+                                                             (second_pair_rank as u32 << 4u8) |
                                                              two_pair_kicker as u32 :
-                              pair_only ? HAND_PAIR | pair_rank as u32 * POW_12 |
-                                                      pair_kicker1 as u32 * POW_8 |
-                                                      pair_kicker2 as u32 * POW_4 |
+                              pair_only ? HAND_PAIR | (pair_rank as u32 << 12u8) |
+                                                      (pair_kicker1 as u32 << 8u8) |
+                                                      (pair_kicker2 as u32 << 4u8) |
                                                       pair_kicker3 as u32 :
-                              HAND_HIGH_CARD | r7 as u32 * POW_16 |
-                                               r6 as u32 * POW_12 |
-                                               r5 as u32 * POW_8 |
-                                               r4 as u32 * POW_4 |
+                              HAND_HIGH_CARD | (r7 as u32 << 16u8) |
+                                               (r6 as u32 << 12u8) |
+                                               (r5 as u32 << 8u8) |
+                                               (r4 as u32 << 4u8) |
                                                r3 as u32;
 
         return hand_value;

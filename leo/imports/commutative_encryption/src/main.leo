@@ -1,33 +1,17 @@
 program commutative_encryption.aleo {
 
-    transition encrypt_deck(secret: scalar, deck: [[group; 26]; 2]) -> [[group; 26]; 2] {
-        let encrypted_first_half: [group; 26] = deck[0u8];
-        let encrypted_second_half: [group; 26] = deck[1u8];
-
-        for i: u8 in 0u8..26u8 {
-            encrypted_first_half[i] = deck[0u8][i] * secret;
+    transition encrypt_deck(secret: scalar, deck: [group; 52]) -> [group; 52] {
+        for i: u8 in 0u8..52u8 {
+            deck[i] = deck[i] * secret;
         }
-
-        for i: u8 in 0u8..26u8 {
-            encrypted_second_half[i] = deck[1u8][i] * secret;
-        }
-
-        return [encrypted_first_half, encrypted_second_half];
+        return deck;
     }
 
-    transition decrypt_deck(secret_inv: scalar, deck: [[group; 26]; 2]) -> [[group; 26]; 2] {
-        let decrypted_first_half: [group; 26] = deck[0u8];
-        let decrypted_second_half: [group; 26] = deck[1u8];
-
-        for i: u8 in 0u8..26u8 {
-            decrypted_first_half[i] = deck[0u8][i] * secret_inv;
+    transition decrypt_deck(secret_inv: scalar, deck: [group; 52]) -> [group; 52] {
+        for i: u8 in 0u8..52u8 {
+            deck[i] = deck[i] * secret_inv;
         }
-
-        for i: u8 in 0u8..26u8 {
-            decrypted_second_half[i] = deck[1u8][i] * secret_inv;
-        }
-
-        return [decrypted_first_half, decrypted_second_half];
+        return deck;
     }
 
     transition decrypt_card(secret_inv: scalar, card: group) -> group {
@@ -89,38 +73,24 @@ program commutative_encryption.aleo {
                g == Poseidon2::hash_to_group(51u8) ? 51u8 : 255u8;
     }
 
-    transition initialize_deck() -> [[group; 26]; 2] {
-        let first_half: [group; 26] = [0group; 26];
-        let second_half: [group; 26] = [0group; 26];
-
-        for i: u8 in 0u8..26u8 {
-            first_half[i] = Poseidon2::hash_to_group(i);
+    transition initialize_deck() -> [group; 52] {
+        let deck: [group; 52] = [0group; 52];
+        for i: u8 in 0u8..52u8 {
+            deck[i] = Poseidon2::hash_to_group(i);
         }
-
-        for i: u8 in 0u8..26u8 {
-            second_half[i] = Poseidon2::hash_to_group(i + 26u8);
-        }
-
-        return [first_half, second_half];
+        return deck;
     }
 
-    transition verify_permutation(deck_a: [[group; 26]; 2], deck_b: [[group; 26]; 2]) {
+    transition verify_permutation(deck_a: [group; 52], deck_b: [group; 52]) {
         let product_a: field = 1field;
-        for i: u8 in 0u8..26u8 {
-            product_a *= deck_a[0u8][i] as field;
-        }
-        for i: u8 in 0u8..26u8 {
-            product_a *= deck_a[1u8][i] as field;
+        for i: u8 in 0u8..52u8 {
+            product_a *= deck_a[i] as field;
         }
 
         let product_b: field = 1field;
-        for i: u8 in 0u8..26u8 {
-            product_b *= deck_b[0u8][i] as field;
+        for i: u8 in 0u8..52u8 {
+            product_b *= deck_b[i] as field;
         }
-        for i: u8 in 0u8..26u8 {
-            product_b *= deck_b[1u8][i] as field;
-        }
-
         assert_eq(product_a, product_b);
     }
 

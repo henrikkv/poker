@@ -52,7 +52,7 @@ mapping games:
 
 mapping decks:
     key as u32.public;
-    value as [[group; 26u32]; 2u32].public;
+    value as [group; 52u32].public;
 
 mapping chips:
     key as u32.public;
@@ -68,14 +68,14 @@ mapping revealed_cards:
 
 function create_game:
     input r0 as u32.private;
-    input r1 as [[group; 26u32]; 2u32].private;
+    input r1 as [group; 52u32].private;
     input r2 as scalar.private;
     input r3 as scalar.private;
     call commutative_encryption.aleo/initialize_deck into r4;
     call commutative_encryption.aleo/verify_permutation r4 r1;
     call commutative_encryption.aleo/encrypt_deck r2 r1 into r5;
-    call commutative_encryption.aleo/decrypt_card r3 r5[0u32][0u32] into r6;
-    assert.eq r6 r1[0u32][0u32];
+    call commutative_encryption.aleo/decrypt_card r3 r5[0u32] into r6;
+    assert.eq r6 r1[0u32];
     cast self.signer r2 r3 into r7 as Keys.record;
     async create_game r0 r5 self.signer into r8;
     output r7 as Keys.record;
@@ -83,7 +83,7 @@ function create_game:
 
 finalize create_game:
     input r0 as u32.public;
-    input r1 as [[group; 26u32]; 2u32].public;
+    input r1 as [group; 52u32].public;
     input r2 as address.public;
     cast r2 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc 10u64 0u8 1u8 0u8 0u8 0u8 5u16 10u16 10u8 0u8 0u16 into r3 as Game;
     set r3 into games[r0];
@@ -91,14 +91,14 @@ finalize create_game:
 
 function join_game:
     input r0 as u32.private;
-    input r1 as [[group; 26u32]; 2u32].private;
-    input r2 as [[group; 26u32]; 2u32].private;
+    input r1 as [group; 52u32].private;
+    input r2 as [group; 52u32].private;
     input r3 as scalar.private;
     input r4 as scalar.private;
     call commutative_encryption.aleo/verify_permutation r1 r2;
     call commutative_encryption.aleo/encrypt_deck r3 r2 into r5;
-    call commutative_encryption.aleo/decrypt_card r4 r5[0u32][0u32] into r6;
-    assert.eq r6 r2[0u32][0u32];
+    call commutative_encryption.aleo/decrypt_card r4 r5[0u32] into r6;
+    assert.eq r6 r2[0u32];
     cast self.signer r3 r4 into r7 as Keys.record;
     async join_game r0 r1 r5 self.signer into r8;
     output r7 as Keys.record;
@@ -106,8 +106,8 @@ function join_game:
 
 finalize join_game:
     input r0 as u32.public;
-    input r1 as [[group; 26u32]; 2u32].public;
-    input r2 as [[group; 26u32]; 2u32].public;
+    input r1 as [group; 52u32].public;
+    input r2 as [group; 52u32].public;
     input r3 as address.public;
     get games[r0] into r4;
     get decks[r0] into r5;
@@ -128,11 +128,11 @@ finalize join_game:
     sub 1000u16 r4.sb into r15;
     sub 1000u16 r4.bb into r16;
     cast r15 r16 1000u16 r4.sb r4.bb 0u16 into r17 as Chips;
-    cast r2[0u32][0u32] r2[0u32][3u32] into r18 as [group; 2u32];
-    cast r2[0u32][1u32] r2[0u32][4u32] into r19 as [group; 2u32];
-    cast r2[0u32][2u32] r2[0u32][5u32] into r20 as [group; 2u32];
-    cast r2[0u32][7u32] r2[0u32][8u32] r2[0u32][9u32] into r21 as [group; 3u32];
-    cast r18 r19 r20 r21 r2[0u32][11u32] r2[0u32][13u32] into r22 as Cards;
+    cast r2[0u32] r2[3u32] into r18 as [group; 2u32];
+    cast r2[1u32] r2[4u32] into r19 as [group; 2u32];
+    cast r2[2u32] r2[5u32] into r20 as [group; 2u32];
+    cast r2[7u32] r2[8u32] r2[9u32] into r21 as [group; 3u32];
+    cast r18 r19 r20 r21 r2[11u32] r2[13u32] into r22 as Cards;
     cast 255u8 255u8 into r23 as [u8; 2u32];
     cast 255u8 255u8 255u8 into r24 as [u8; 3u32];
     cast r23 r23 r23 r24 255u8 255u8 into r25 as RevealedCards;

@@ -3,7 +3,7 @@ import commutative_encryption.aleo;
 program mental_poker.aleo {
 
     mapping games: u32 => Game;
-    mapping decks: u32 => [[group; 26]; 2];
+    mapping decks: u32 => [group; 52];
     mapping chips: u32 => Chips;
     mapping cards: u32 => Cards;
     mapping revealed_cards: u32 => RevealedCards;
@@ -169,22 +169,22 @@ program mental_poker.aleo {
         secret: scalar,
         secret_inv: scalar,
     }
-    async transition create_game(game_id: u32, shuffled_deck: [[group; 26]; 2], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
-        let deck: [[group; 26]; 2] = commutative_encryption.aleo/initialize_deck();
-        commutative_encryption.aleo/verify_permutation(deck, shuffled_deck);
+    async transition create_game(game_id: u32, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+        let deck: [group; 52] = commutative_encryption.aleo/initialize_deck();
+        commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
 
-        let deck_encrypted: [[group; 26]; 2] = commutative_encryption.aleo/encrypt_deck(secret, shuffled_deck);
+        let deck_enc: [group; 52] = commutative_encryption.aleo/encrypt_deck(secret, deck_shuffled);
 
         // Check if decryption key is correct
-        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_encrypted[0][0]), shuffled_deck[0][0]);
+        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
         let keys: Keys = Keys {
             owner: self.signer,
             secret: secret,
             secret_inv: secret_inv,
         };
-        return (keys, finalize_new_game(game_id, deck_encrypted, self.signer));
+        return (keys, finalize_new_game(game_id, deck_enc, self.signer));
     }
-    async function finalize_new_game(game_id: u32, deck: [[group; 26]; 2], signer: address) {
+    async function finalize_new_game(game_id: u32, deck: [group; 52], signer: address) {
         let game: Game = Game {
             player1: signer,
             player2: 0u128 as address,
@@ -204,23 +204,23 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, game);
         Mapping::set(decks, game_id, deck);
     }
-    async transition join_game(game_id: u32, deck: [[group; 26]; 2], shuffled_deck: [[group; 26]; 2], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
-        commutative_encryption.aleo/verify_permutation(deck, shuffled_deck);
+    async transition join_game(game_id: u32, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+        commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
 
-        let deck_encrypted: [[group; 26]; 2] = commutative_encryption.aleo/encrypt_deck(secret, shuffled_deck);
+        let deck_enc: [group; 52] = commutative_encryption.aleo/encrypt_deck(secret, deck_shuffled);
 
-        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_encrypted[0][0]), shuffled_deck[0][0]);
+        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
         let keys: Keys = Keys {
             owner: self.signer,
             secret: secret,
             secret_inv: secret_inv,
         };
-        return (keys, finalize_join_game(game_id, deck, deck_encrypted, self.signer));
+        return (keys, finalize_join_game(game_id, deck, deck_enc, self.signer));
     }
-    async function finalize_join_game(game_id: u32, deck: [[group; 26]; 2], new_deck: [[group; 26]; 2], signer: address) {
+    async function finalize_join_game(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address) {
         let game: Game = Mapping::get(games, game_id);
-        let current_deck: [[group; 26]; 2] = Mapping::get(decks, game_id);
-        assert(current_deck == deck);
+        let previous_deck: [group; 52] = Mapping::get(decks, game_id);
+        assert(previous_deck == deck);
 
         let player2_joining: bool = game.state == p2_join;
         assert(player2_joining || game.state == p3_join);
@@ -256,12 +256,12 @@ program mental_poker.aleo {
             };
             
             let card: Cards = Cards {
-                player1: [new_deck[0u8][0u8], new_deck[0u8][3u8]],
-                player2: [new_deck[0u8][1u8], new_deck[0u8][4u8]],
-                player3: [new_deck[0u8][2u8], new_deck[0u8][5u8]],
-                flop: [new_deck[0u8][7u8], new_deck[0u8][8u8], new_deck[0u8][9u8]],
-                turn: new_deck[0u8][11u8],
-                river: new_deck[0u8][13u8],
+                player1: [new_deck[0u8], new_deck[3u8]],
+                player2: [new_deck[1u8], new_deck[4u8]],
+                player3: [new_deck[2u8], new_deck[5u8]],
+                flop: [new_deck[7u8], new_deck[8u8], new_deck[9u8]],
+                turn: new_deck[11u8],
+                river: new_deck[13u8],
             };
 
             let revealed: RevealedCards = RevealedCards {

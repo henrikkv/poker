@@ -15,13 +15,13 @@
         },
         {
           "name": "deck",
-          "type": "[[Group; 26]; 2]",
+          "type": "[Group; 52]",
           "mode": "None"
         }
       ],
       "outputs": [
         {
-          "type": "[[Group; 26]; 2]",
+          "type": "[Group; 52]",
           "mode": "None"
         }
       ],
@@ -37,13 +37,13 @@
         },
         {
           "name": "deck",
-          "type": "[[Group; 26]; 2]",
+          "type": "[Group; 52]",
           "mode": "None"
         }
       ],
       "outputs": [
         {
-          "type": "[[Group; 26]; 2]",
+          "type": "[Group; 52]",
           "mode": "None"
         }
       ],
@@ -93,7 +93,7 @@
       "inputs": [],
       "outputs": [
         {
-          "type": "[[Group; 26]; 2]",
+          "type": "[Group; 52]",
           "mode": "None"
         }
       ],
@@ -104,12 +104,12 @@
       "inputs": [
         {
           "name": "deck_a",
-          "type": "[[Group; 26]; 2]",
+          "type": "[Group; 52]",
           "mode": "None"
         },
         {
           "name": "deck_b",
-          "type": "[[Group; 26]; 2]",
+          "type": "[Group; 52]",
           "mode": "None"
         }
       ],

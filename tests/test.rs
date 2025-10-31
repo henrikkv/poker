@@ -12,15 +12,13 @@ use std::str::FromStr;
 const ENDPOINT: &str = "http://localhost:3030";
 const PRIVATE_KEY: &str = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
 
-fn shuffle_deck<N: Network>(deck: [[Group<N>; 26]; 2]) -> [[Group<N>; 26]; 2] {
+fn shuffle_deck<N: Network>(deck: [Group<N>; 52]) -> [Group<N>; 52] {
     let mut rng = rand::thread_rng();
 
-    let mut cards: Vec<Group<N>> = deck[0].iter().chain(deck[1].iter()).copied().collect();
+    let mut cards: Vec<Group<N>> = deck.into();
     cards.shuffle(&mut rng);
-    let first_half: [Group<N>; 26] = cards[0..26].try_into().unwrap();
-    let second_half: [Group<N>; 26] = cards[26..52].try_into().unwrap();
 
-    [first_half, second_half]
+    cards.try_into().unwrap()
 }
 
 #[test]

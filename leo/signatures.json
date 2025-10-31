@@ -221,7 +221,7 @@
     {
       "name": "decks",
       "key_type": "u32",
-      "value_type": "[[Group; 26]; 2]"
+      "value_type": "[Group; 52]"
     },
     {
       "name": "chips",
@@ -249,8 +249,8 @@
           "mode": "None"
         },
         {
-          "name": "shuffled_deck",
-          "type": "[[Group; 26]; 2]",
+          "name": "deck_shuffled",
+          "type": "[Group; 52]",
           "mode": "None"
         },
         {
@@ -286,12 +286,12 @@
         },
         {
           "name": "deck",
-          "type": "[[Group; 26]; 2]",
+          "type": "[Group; 52]",
           "mode": "None"
         },
         {
-          "name": "shuffled_deck",
-          "type": "[[Group; 26]; 2]",
+          "name": "deck_shuffled",
+          "type": "[Group; 52]",
           "mode": "None"
         },
         {

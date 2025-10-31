@@ -1554,8 +1554,8 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "leo-ast"
-version = "3.3.0"
-source = "git+https://github.com/henrikkv/leo#5ecf13d4d3dc60d15d51ebaff4b5059d5aa73dc5"
+version = "3.3.1"
+source = "git+https://github.com/henrikkv/leo#826aadea8225e19c259cef2ffd8471c107ac8baf"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -1639,8 +1639,8 @@ dependencies = [
 
 [[package]]
 name = "leo-errors"
-version = "3.3.0"
-source = "git+https://github.com/henrikkv/leo#5ecf13d4d3dc60d15d51ebaff4b5059d5aa73dc5"
+version = "3.3.1"
+source = "git+https://github.com/henrikkv/leo#826aadea8225e19c259cef2ffd8471c107ac8baf"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -1655,8 +1655,8 @@ dependencies = [
 
 [[package]]
 name = "leo-interpreter"
-version = "3.3.0"
-source = "git+https://github.com/henrikkv/leo#5ecf13d4d3dc60d15d51ebaff4b5059d5aa73dc5"
+version = "3.3.1"
+source = "git+https://github.com/henrikkv/leo#826aadea8225e19c259cef2ffd8471c107ac8baf"
 dependencies = [
  "colored 2.2.0",
  "crossterm",
@@ -1675,8 +1675,8 @@ dependencies = [
 
 [[package]]
 name = "leo-package"
-version = "3.3.0"
-source = "git+https://github.com/henrikkv/leo#5ecf13d4d3dc60d15d51ebaff4b5059d5aa73dc5"
+version = "3.3.1"
+source = "git+https://github.com/henrikkv/leo#826aadea8225e19c259cef2ffd8471c107ac8baf"
 dependencies = [
  "indexmap",
  "leo-ast",
@@ -1691,8 +1691,8 @@ dependencies = [
 
 [[package]]
 name = "leo-parser"
-version = "3.3.0"
-source = "git+https://github.com/henrikkv/leo#5ecf13d4d3dc60d15d51ebaff4b5059d5aa73dc5"
+version = "3.3.1"
+source = "git+https://github.com/henrikkv/leo#826aadea8225e19c259cef2ffd8471c107ac8baf"
 dependencies = [
  "indexmap",
  "itertools 0.13.0",
@@ -1705,8 +1705,8 @@ dependencies = [
 
 [[package]]
 name = "leo-parser-lossless"
-version = "3.3.0"
-source = "git+https://github.com/henrikkv/leo#5ecf13d4d3dc60d15d51ebaff4b5059d5aa73dc5"
+version = "3.3.1"
+source = "git+https://github.com/henrikkv/leo#826aadea8225e19c259cef2ffd8471c107ac8baf"
 dependencies = [
  "itertools 0.13.0",
  "lalrpop",
@@ -1719,8 +1719,8 @@ dependencies = [
 
 [[package]]
 name = "leo-span"
-version = "3.3.0"
-source = "git+https://github.com/henrikkv/leo#5ecf13d4d3dc60d15d51ebaff4b5059d5aa73dc5"
+version = "3.3.1"
+source = "git+https://github.com/henrikkv/leo#826aadea8225e19c259cef2ffd8471c107ac8baf"
 dependencies = [
  "fxhash",
  "indexmap",

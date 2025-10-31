@@ -138,6 +138,12 @@ fn gameplay<
     let secret_bob_inv = Inverse::inverse(&secret_bob).unwrap();
     let secret_charlie_inv = Inverse::inverse(&secret_charlie).unwrap();
 
+    let balances_before = [
+        credits.get_account(alice.address()).unwrap(),
+        credits.get_account(bob.address()).unwrap(),
+        credits.get_account(charlie.address()).unwrap(),
+    ];
+
     let initial_deck = commutative_encryption.initialize_deck(alice).unwrap();
     let alice_shuffled_deck = shuffle_deck(initial_deck);
 
@@ -274,4 +280,16 @@ fn gameplay<
     dbg!(&chips);
     let revealed = poker.get_revealed_cards(1).unwrap();
     println!("{}", &revealed.display_cards());
+
+    let balances_after = [
+        credits.get_account(alice.address()).unwrap(),
+        credits.get_account(bob.address()).unwrap(),
+        credits.get_account(charlie.address()).unwrap(),
+    ];
+    println!(
+        "Credits spent by each player: Alice: {}, Bob: {}, Charlie {}",
+        (balances_before[0] - balances_after[0]) as f64 / 1_000_000f64,
+        (balances_before[1] - balances_after[1]) as f64 / 1_000_000f64,
+        (balances_before[2] - balances_after[2]) as f64 / 1_000_000f64
+    );
 }

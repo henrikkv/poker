@@ -57,15 +57,15 @@ program mental_poker.aleo {
     const p2_claim: u8 = 35u8;
     const p3_claim: u8 = 36u8;
 
-    const HAND_HIGH_CARD: u32 =          2 ** 28u32;
-    const HAND_PAIR: u32 =           2 * 2 ** 28u32;
-    const HAND_TWO_PAIR: u32 =       3 * 2 ** 28u32;
-    const HAND_TRIPS: u32 =          4 * 2 ** 28u32;
-    const HAND_STRAIGHT: u32 =       5 * 2 ** 28u32;
-    const HAND_FLUSH: u32 =          6 * 2 ** 28u32;
-    const HAND_FULL_HOUSE: u32 =     7 * 2 ** 28u32;
-    const HAND_QUADS: u32 =          8 * 2 ** 28u32;
-    const HAND_STRAIGHT_FLUSH: u32 = 9 * 2 ** 28u32;
+    const HAND_HIGH_CARD: u32 =      1 << 28u32;
+    const HAND_PAIR: u32 =           2 << 28u32;
+    const HAND_TWO_PAIR: u32 =       3 << 28u32;
+    const HAND_TRIPS: u32 =          4 << 28u32;
+    const HAND_STRAIGHT: u32 =       5 << 28u32;
+    const HAND_FLUSH: u32 =          6 << 28u32;
+    const HAND_FULL_HOUSE: u32 =     7 << 28u32;
+    const HAND_QUADS: u32 =          8 << 28u32;
+    const HAND_STRAIGHT_FLUSH: u32 = 9 << 28u32;
 
     struct Game {
         player1: address,
@@ -1278,45 +1278,6 @@ program mental_poker.aleo {
         s7: u8, r7: u8
     ) -> u32 {
 
-        let r1_inc: u8 = r1 + 1u8;
-        let r2_inc: u8 = r2 + 1u8;
-        let r3_inc: u8 = r3 + 1u8;
-        let r4_inc: u8 = r4 + 1u8;
-        let r5_inc: u8 = r5 + 1u8;
-        let r6_inc: u8 = r6 + 1u8;
-
-        let ranks_high_consec: bool = r3_inc == r4 && r4_inc == r5 && r5_inc == r6 && r6_inc == r7;
-        let ranks_mid_consec: bool =  r2_inc == r3 && r3_inc == r4 && r4_inc == r5 && r5_inc == r6;
-        let ranks_low_consec: bool =  r1_inc == r2 && r2_inc == r3 && r3_inc == r4 && r4_inc == r5;
-        let ranks_wheel: bool = r1 == 0u8 &&
-                                r2 == 1u8 &&
-                                r3 == 2u8 &&
-                                r4 == 3u8 && (r5 == 12u8 || r6 == 12u8 || r7 == 12u8);
-
-        // Straight flush
-        let suit_eq_12: bool = s1 == s2;
-        let suit_eq_23: bool = s2 == s3;
-        let suit_eq_34: bool = s3 == s4;
-        let suit_eq_45: bool = s4 == s5;
-        let suit_eq_56: bool = s5 == s6;
-        let suit_eq_67: bool = s6 == s7;
-
-        let sf_high: bool = ranks_high_consec && suit_eq_34 && suit_eq_45 && suit_eq_56 && suit_eq_67;
-        let sf_mid: bool =  ranks_mid_consec  && suit_eq_23 && suit_eq_34 && suit_eq_45 && suit_eq_56;
-        let sf_low: bool =  ranks_low_consec  && suit_eq_12 && suit_eq_23 && suit_eq_34 && suit_eq_45;
-
-        let wheel_suit_2345: bool = suit_eq_12 && suit_eq_23 && suit_eq_34;
-        let ace_matches_wheel: bool = (r5 == 12u8 && s5 == s1) ||
-                                      (r6 == 12u8 && s6 == s1) ||
-                                      (r7 == 12u8 && s7 == s1);
-        let sf_wheel: bool = ranks_wheel && wheel_suit_2345 && ace_matches_wheel;
-
-        let has_sf: bool = sf_high || sf_mid || sf_low || sf_wheel;
-        let sf_high_card: u8 = sf_high ? r7 :
-                               sf_mid ? r6 :
-                               sf_low ? r5 :
-                                        3u8; // Wheel
-
         let eq_12: bool = r1 == r2;
         let eq_23: bool = r2 == r3;
         let eq_34: bool = r3 == r4;
@@ -1407,67 +1368,37 @@ program mental_poker.aleo {
                              suit1_flush ? 1u8 :
                                            0u8;
 
-        let f7: u8 = (s7 == flush_suit) as u8;
-        let f6: u8 = (s6 == flush_suit) as u8;
-        let f5: u8 = (s5 == flush_suit) as u8;
-        let f4: u8 = (s4 == flush_suit) as u8;
-        let f3: u8 = (s3 == flush_suit) as u8;
-        let f2: u8 = (s2 == flush_suit) as u8;
-        let f1: u8 = (s1 == flush_suit) as u8;
+       let hand_bitfield: u32 = (1u32 << r1 as u32) |
+                                (1u32 << r2 as u32) |
+                                (1u32 << r3 as u32) |
+                                (1u32 << r4 as u32) |
+                                (1u32 << r5 as u32) |
+                                (1u32 << r6 as u32) |
+                                (1u32 << r7 as u32);
 
-        let cnt7: u8 = f7;
-        let cnt6: u8 = cnt7 + f6;
-        let cnt5: u8 = cnt6 + f5;
-        let cnt4: u8 = cnt5 + f4;
-        let cnt3: u8 = cnt4 + f3;
-        let cnt2: u8 = cnt3 + f2;
+        let flush_bitfield: u32 = (s1 == flush_suit ? 1u32 << r1 as u32 : 0u32) |
+                                  (s2 == flush_suit ? 1u32 << r2 as u32 : 0u32) |
+                                  (s3 == flush_suit ? 1u32 << r3 as u32 : 0u32) |
+                                  (s4 == flush_suit ? 1u32 << r4 as u32 : 0u32) |
+                                  (s5 == flush_suit ? 1u32 << r5 as u32 : 0u32) |
+                                  (s6 == flush_suit ? 1u32 << r6 as u32 : 0u32) |
+                                  (s7 == flush_suit ? 1u32 << r7 as u32 : 0u32);
 
-        let c7_1: bool = cnt7 == 1u8;
-        let c6_1: bool = cnt6 == 1u8;
-        let c5_1: bool = cnt5 == 1u8;
-        let c4_1: bool = cnt4 == 1u8;
-        let c3_1: bool = cnt3 == 1u8;
-        let c2_1: bool = cnt2 == 1u8;
+        // Combine bitfield and make a space for the low ace bit
+        let combined_bitfield: u32 = ((flush_bitfield << 16u32) | hand_bitfield) << 1u32;
 
-        let c7_2: bool = cnt7 == 2u8;
-        let c6_2: bool = cnt6 == 2u8;
-        let c5_2: bool = cnt5 == 2u8;
-        let c4_2: bool = cnt4 == 2u8;
-        let c3_2: bool = cnt3 == 2u8;
-        let c2_2: bool = cnt2 == 2u8;
+        // Copy aces from bit 13 to bit 0, and from bit 29 to bit 16
+        let ace_low_bits: u32 = (combined_bitfield >> 13u32) & ((1u32 << 16u32) | 1u32);
+        let bitfield: u32 = combined_bitfield | ace_low_bits;
 
-        let c7_3: bool = cnt7 == 3u8;
-        let c6_3: bool = cnt6 == 3u8;
-        let c5_3: bool = cnt5 == 3u8;
-        let c4_3: bool = cnt4 == 3u8;
-        let c3_3: bool = cnt3 == 3u8;
-        let c2_3: bool = cnt2 == 3u8;
+        let straight_high: u32 = bitfield &
+                                 bitfield.shr_wrapped(1u32) &
+                                 bitfield.shr_wrapped(2u32) &
+                                 bitfield.shr_wrapped(3u32) &
+                                 bitfield.shr_wrapped(4u32);
 
-        let c7_4: bool = cnt7 == 4u8;
-        let c6_4: bool = cnt6 == 4u8;
-        let c5_4: bool = cnt5 == 4u8;
-        let c4_4: bool = cnt4 == 4u8;
-        let c3_4: bool = cnt3 == 4u8;
-        let c2_4: bool = cnt2 == 4u8;
-
-        let c7_5: bool = cnt7 == 5u8;
-        let c6_5: bool = cnt6 == 5u8;
-        let c5_5: bool = cnt5 == 5u8;
-        let c4_5: bool = cnt4 == 5u8;
-        let c3_5: bool = cnt3 == 5u8;
-        let c2_5: bool = cnt2 == 5u8;
-
-        let flush_r1: u8 = c7_1 ? r7 : c6_1 ? r6 : c5_1 ? r5 : c4_1 ? r4 : c3_1 ? r3 : c2_1 ? r2 : r1;
-        let flush_r2: u8 = c7_2 ? r7 : c6_2 ? r6 : c5_2 ? r5 : c4_2 ? r4 : c3_2 ? r3 : c2_2 ? r2 : r1;
-        let flush_r3: u8 = c7_3 ? r7 : c6_3 ? r6 : c5_3 ? r5 : c4_3 ? r4 : c3_3 ? r3 : c2_3 ? r2 : r1;
-        let flush_r4: u8 = c7_4 ? r7 : c6_4 ? r6 : c5_4 ? r5 : c4_4 ? r4 : c3_4 ? r3 : c2_4 ? r2 : r1;
-        let flush_r5: u8 = c7_5 ? r7 : c6_5 ? r6 : c5_5 ? r5 : c4_5 ? r4 : c3_5 ? r3 : c2_5 ? r2 : r1;
-
-        let has_straight: bool = ranks_high_consec || ranks_mid_consec || ranks_low_consec || ranks_wheel;
-        let straight_high: u8 = ranks_high_consec ? r7 :
-                                ranks_mid_consec ? r6 :
-                                ranks_low_consec ? r5 :
-                                                   3u8;
+        let has_straight: bool = straight_high != 0u32;
+        let has_sf: bool = (straight_high >> 16u32) != 0u32;
 
         let has_two_pair: bool = (pair_12 as u8) +
                                  (pair_23 as u8) +
@@ -1506,15 +1437,11 @@ program mental_poker.aleo {
                                pair_45 ? r3 :
                                          r5;
 
-        let hand_value: u32 = has_sf ? HAND_STRAIGHT_FLUSH | sf_high_card as u32 :
+        let hand_value: u32 = has_sf ? HAND_STRAIGHT_FLUSH | straight_high :
                               has_quads ? HAND_QUADS | (quad_rank as u32 << 4u8) | quad_kicker as u32 :
                               has_fh ? HAND_FULL_HOUSE | (trip_rank as u32 << 4u8) | pair_rank as u32 :
-                              has_flush ? HAND_FLUSH | (flush_r1 as u32 << 16u8) |
-                                                       (flush_r2 as u32 << 12u8) |
-                                                       (flush_r3 as u32 << 8u8) |
-                                                       (flush_r4 as u32 << 4u8) |
-                                                       flush_r5 as u32 :
-                              has_straight ? HAND_STRAIGHT | straight_high as u32 :
+                              has_flush ? HAND_FLUSH | flush_bitfield :
+                              has_straight ? HAND_STRAIGHT | straight_high :
                               trips_only ? HAND_TRIPS | (trip_rank as u32 << 8u8) |
                                                         (trips_kicker1 as u32 << 4u8) |
                                                         trips_kicker2 as u32 :

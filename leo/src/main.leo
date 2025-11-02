@@ -1330,43 +1330,52 @@ program mental_poker.aleo {
         let pair_only: bool = has_pair && !has_trips;
 
         // Flush
-        let suit0_flush: bool = (s1 == 0u8) as u8 +
-                                (s2 == 0u8) as u8 +
-                                (s3 == 0u8) as u8 +
-                                (s4 == 0u8) as u8 +
-                                (s5 == 0u8) as u8 +
-                                (s6 == 0u8) as u8 +
-                                (s7 == 0u8) as u8 >= 5u8;
+        let suit0_count: u8 = (s1 == 0u8) as u8 +
+                              (s2 == 0u8) as u8 +
+                              (s3 == 0u8) as u8 +
+                              (s4 == 0u8) as u8 +
+                              (s5 == 0u8) as u8 +
+                              (s6 == 0u8) as u8 +
+                              (s7 == 0u8) as u8;
 
-        let suit1_flush: bool = (s1 == 1u8) as u8 +
-                                (s2 == 1u8) as u8 +
-                                (s3 == 1u8) as u8 +
-                                (s4 == 1u8) as u8 +
-                                (s5 == 1u8) as u8 +
-                                (s6 == 1u8) as u8 +
-                                (s7 == 1u8) as u8 >= 5u8;
+        let suit1_count: u8 = (s1 == 1u8) as u8 +
+                              (s2 == 1u8) as u8 +
+                              (s3 == 1u8) as u8 +
+                              (s4 == 1u8) as u8 +
+                              (s5 == 1u8) as u8 +
+                              (s6 == 1u8) as u8 +
+                              (s7 == 1u8) as u8;
 
-        let suit2_flush: bool = (s1 == 2u8) as u8 +
-                                (s2 == 2u8) as u8 +
-                                (s3 == 2u8) as u8 +
-                                (s4 == 2u8) as u8 +
-                                (s5 == 2u8) as u8 +
-                                (s6 == 2u8) as u8 +
-                                (s7 == 2u8) as u8 >= 5u8;
+        let suit2_count: u8 = (s1 == 2u8) as u8 +
+                              (s2 == 2u8) as u8 +
+                              (s3 == 2u8) as u8 +
+                              (s4 == 2u8) as u8 +
+                              (s5 == 2u8) as u8 +
+                              (s6 == 2u8) as u8 +
+                              (s7 == 2u8) as u8;
 
-        let suit3_flush: bool = (s1 == 3u8) as u8 +
-                                (s2 == 3u8) as u8 +
-                                (s3 == 3u8) as u8 +
-                                (s4 == 3u8) as u8 +
-                                (s5 == 3u8) as u8 +
-                                (s6 == 3u8) as u8 +
-                                (s7 == 3u8) as u8 >= 5u8;
+        let suit3_count: u8 = (s1 == 3u8) as u8 +
+                              (s2 == 3u8) as u8 +
+                              (s3 == 3u8) as u8 +
+                              (s4 == 3u8) as u8 +
+                              (s5 == 3u8) as u8 +
+                              (s6 == 3u8) as u8 +
+                              (s7 == 3u8) as u8;
 
+        let suit0_flush: bool = suit0_count >= 5u8;
+        let suit1_flush: bool = suit1_count >= 5u8;
+        let suit2_flush: bool = suit2_count >= 5u8;
+        let suit3_flush: bool = suit3_count >= 5u8;
+ 
         let has_flush: bool = suit0_flush || suit1_flush || suit2_flush || suit3_flush;
         let flush_suit: u8 = suit3_flush ? 3u8 :
                              suit2_flush ? 2u8 :
                              suit1_flush ? 1u8 :
                                            0u8;
+        let flush_count: u8 = suit3_flush ? suit3_count :
+                              suit2_flush ? suit2_count :
+                              suit1_flush ? suit1_count :
+                                            suit0_count;
 
        let hand_bitfield: u32 = (1u32 << r1 as u32) |
                                 (1u32 << r2 as u32) |
@@ -1392,13 +1401,24 @@ program mental_poker.aleo {
         let bitfield: u32 = combined_bitfield | ace_low_bits;
 
         let straight_high: u32 = bitfield &
-                                 bitfield.shr_wrapped(1u32) &
-                                 bitfield.shr_wrapped(2u32) &
-                                 bitfield.shr_wrapped(3u32) &
-                                 bitfield.shr_wrapped(4u32);
+                                 bitfield >> 1u32 &
+                                 bitfield >> 2u32 &
+                                 bitfield >> 3u32 &
+                                 bitfield >> 4u32;
+
+        // Clear trailing bits to ignore lower straights
+        straight_high = (straight_high & (straight_high >> 1u32)) ^ straight_high;
+
+        // Only keep sf bits
+        let sf_high: u32 = straight_high >> 16u32;
 
         let has_straight: bool = straight_high != 0u32;
-        let has_sf: bool = (straight_high >> 16u32) != 0u32;
+        let has_sf: bool = sf_high != 0u32;
+
+        // Only keep the five highest cards in a flush
+        flush_bitfield = flush_count == 7u8 ? flush_bitfield & (flush_bitfield - 1u32) : flush_bitfield;
+        flush_bitfield = flush_count >= 6u8 ? flush_bitfield & (flush_bitfield - 1u32) : flush_bitfield;
+
 
         let has_two_pair: bool = (pair_12 as u8) +
                                  (pair_23 as u8) +
@@ -1437,7 +1457,7 @@ program mental_poker.aleo {
                                pair_45 ? r3 :
                                          r5;
 
-        let hand_value: u32 = has_sf ? HAND_STRAIGHT_FLUSH | straight_high :
+        let hand_value: u32 = has_sf ? HAND_STRAIGHT_FLUSH | sf_high :
                               has_quads ? HAND_QUADS | (quad_rank as u32 << 4u8) | quad_kicker as u32 :
                               has_fh ? HAND_FULL_HOUSE | (trip_rank as u32 << 4u8) | pair_rank as u32 :
                               has_flush ? HAND_FLUSH | flush_bitfield :

@@ -2141,9 +2141,11 @@ dependencies = [
  "colored 3.0.0",
  "commutative_encryption_bindings",
  "credits_bindings",
+ "crossterm",
  "leo-bindings",
  "mental_poker_bindings",
  "rand",
+ "ratatui",
  "snarkvm",
 ]
 

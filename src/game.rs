@@ -9,15 +9,14 @@ use ratatui::{
     layout::{Alignment, Rect},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
-use snarkvm::console::network::TestnetV0;
-use snarkvm::prelude::{Future, Group, Inverse, Network, Scalar, TestRng, Uniform};
+use snarkvm::prelude::{Group, Inverse, Network, Scalar, TestRng, Uniform};
 use std::str::FromStr;
 use std::time::Instant;
 
 use crate::game_state::{GameModel, NetworkType, Screen, describe_game_state};
 
-const DEFAULT_ENDPOINT: &str = "http://localhost:3030";
-const DEFAULT_PRIVATE_KEY: &str = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
+pub const DEFAULT_ENDPOINT: &str = "http://localhost:3030";
+pub const DEFAULT_PRIVATE_KEY: &str = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
 
 fn shuffle_deck<N: Network>(deck: [Group<N>; 52]) -> [Group<N>; 52] {
     let mut rng = rand::thread_rng();
@@ -33,6 +32,8 @@ pub struct PokerGame<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryption
     pub secret_inv: Scalar<N>,
     pub poker: P,
     pub encryption: E,
+    pub player_id: u8,
+    pub keys: Option<Keys<N>>,
 }
 
 impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGame<N, P, E> {
@@ -41,6 +42,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         endpoint: String,
         poker: P,
         encryption: E,
+        player_id: u8,
     ) -> anyhow::Result<Self> {
         let mut rng = TestRng::default();
         let secret = Scalar::rand(&mut rng);
@@ -53,10 +55,30 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             secret_inv,
             poker,
             encryption,
+            player_id,
+            keys: None,
         })
     }
 
-    pub fn initialize_game(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<Keys<N>> {
+    fn set_player_id(&mut self, game_id: u32) -> anyhow::Result<()> {
+        let game = self
+            .poker
+            .get_games(game_id)
+            .ok_or_else(|| anyhow::anyhow!("Game {} not found", game_id))?;
+
+        let address = self.account.address();
+        if address == game.player1 {
+            self.player_id = 1;
+        } else if address == game.player2 {
+            self.player_id = 2;
+        } else if address == game.player3 {
+            self.player_id = 3;
+        }
+
+        Ok(())
+    }
+
+    pub fn initialize_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
         model.log_action_start("Initializing deck".to_string());
         let initial_deck = self.encryption.initialize_deck(&self.account)?;
         model.log_action_complete();
@@ -75,12 +97,15 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         )?;
         model.log_action_complete();
 
-        model.log(format!("Game {} created successfully", game_id));
+        self.keys = Some(keys);
+        self.set_player_id(game_id)?;
 
-        Ok(keys)
+        model.log(format!("Game {} created as P{}", game_id, self.player_id));
+
+        Ok(())
     }
 
-    pub fn poll_game_state(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+    pub fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
         if !model.game_initialized {
             return Ok(());
         }
@@ -98,6 +123,119 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             model.current_state = Some(new_state);
         }
 
+        if self.keys.is_some() {
+            let cards = self.poker.get_cards(game_id);
+
+            match (self.player_id, new_state) {
+                (1, 2) | (2, 3) | (3, 4) => {
+                    if let Some(cards) = cards {
+                        model.log_action_start("Decrypting hand cards".to_string());
+
+                        let (other1, other2) = match self.player_id {
+                            1 => (cards.player2, cards.player3),
+                            2 => (cards.player1, cards.player3),
+                            3 => (cards.player1, cards.player2),
+                            _ => unreachable!(),
+                        };
+
+                        self.keys = Some(
+                            self.poker
+                                .decrypt_hands(
+                                    &self.account,
+                                    game_id,
+                                    other1,
+                                    other2,
+                                    self.keys.take().unwrap(),
+                                )?
+                                .0,
+                        );
+
+                        model.log_action_complete();
+                    }
+                }
+                (1, 8) | (2, 9) | (3, 10) => {
+                    if let Some(cards) = cards {
+                        model.log_action_start("Decrypting flop".to_string());
+
+                        self.keys = Some(
+                            self.poker
+                                .decrypt_flop(
+                                    &self.account,
+                                    game_id,
+                                    cards.flop,
+                                    self.keys.take().unwrap(),
+                                )?
+                                .0,
+                        );
+
+                        model.log_action_complete();
+                    }
+                }
+                (1, 14) | (2, 15) | (3, 16) => {
+                    if let Some(cards) = cards {
+                        model.log_action_start("Decrypting turn".to_string());
+
+                        self.keys = Some(
+                            self.poker
+                                .decrypt_turn_river(
+                                    &self.account,
+                                    game_id,
+                                    cards.turn,
+                                    self.keys.take().unwrap(),
+                                )?
+                                .0,
+                        );
+
+                        model.log_action_complete();
+                    }
+                }
+                (1, 20) | (2, 21) | (3, 22) => {
+                    if let Some(cards) = cards {
+                        model.log_action_start("Decrypting river".to_string());
+
+                        self.keys = Some(
+                            self.poker
+                                .decrypt_turn_river(
+                                    &self.account,
+                                    game_id,
+                                    cards.river,
+                                    self.keys.take().unwrap(),
+                                )?
+                                .0,
+                        );
+
+                        model.log_action_complete();
+                    }
+                }
+                (1, 26) | (2, 27) | (3, 28) => {
+                    if let Some(cards) = cards {
+                        model.log_action_start("Revealing cards for showdown".to_string());
+
+                        let own_cards = match self.player_id {
+                            1 => cards.player1,
+                            2 => cards.player2,
+                            3 => cards.player3,
+                            _ => unreachable!(),
+                        };
+
+                        self.keys = Some(
+                            self.poker
+                                .showdown(
+                                    &self.account,
+                                    game_id,
+                                    own_cards,
+                                    self.keys.take().unwrap(),
+                                )?
+                                .0,
+                        );
+
+                        model.log_action_complete();
+                    }
+                }
+                _ => {}
+            }
+        }
+
         model.last_poll_time = Instant::now();
 
         Ok(())
@@ -107,9 +245,9 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
 pub trait GameHandle {
     fn check_game_exists(&self, game_id: u32) -> bool;
     fn get_game_state(&self, game_id: u32) -> Option<u8>;
-    fn initialize_game(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
-    fn join_game(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
-    fn poll_game_state(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn initialize_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn join_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
 }
 
 impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHandle
@@ -123,12 +261,11 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
         self.poker.get_games(game_id).map(|game| game.state)
     }
 
-    fn initialize_game(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
-        self.initialize_game(model, game_id)?;
-        Ok(())
+    fn initialize_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+        self.initialize_game(model, game_id)
     }
 
-    fn join_game(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+    fn join_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
         model.log_action_start("Getting current deck".to_string());
         let deck = self
             .poker
@@ -141,7 +278,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
         model.log_action_complete();
 
         model.log_action_start(format!("Joining game {}", game_id));
-        let (_keys, _) = self.poker.join_game(
+        let (keys, _) = self.poker.join_game(
             &self.account,
             game_id,
             deck,
@@ -151,30 +288,33 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
         )?;
         model.log_action_complete();
 
-        model.log(format!("Successfully joined game {}", game_id));
+        self.keys = Some(keys);
+
+        self.set_player_id(game_id)?;
+
+        model.log(format!("Joined game {} as P{}", game_id, self.player_id));
         Ok(())
     }
 
-    fn poll_game_state(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+    fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
         self.poll_game_state(model, game_id)
     }
 }
 
-pub fn new_interpreter_game() -> anyhow::Result<Box<dyn GameHandle>> {
-    let account = Account::from_str(DEFAULT_PRIVATE_KEY)?;
-    let endpoint = DEFAULT_ENDPOINT.to_string();
-    let poker = MentalPokerInterpreter::new(&account, &endpoint)?;
-    let encryption = CommutativeEncryptionInterpreter::new(&account, &endpoint)?;
-    let game = PokerGame::new(account, endpoint, poker, encryption)?;
+pub fn new_interpreter_game(private_key: &str) -> anyhow::Result<Box<dyn GameHandle>> {
+    let account = Account::from_str(private_key)?;
+    let endpoint = DEFAULT_ENDPOINT;
+    let poker = MentalPokerInterpreter::new(&account, endpoint)?;
+    let encryption = CommutativeEncryptionInterpreter::new(&account, endpoint)?;
+    let game = PokerGame::new(account, endpoint.to_string(), poker, encryption, 0)?;
     Ok(Box::new(game))
 }
 
-pub fn new_testnet_game() -> anyhow::Result<Box<dyn GameHandle>> {
-    let account = Account::from_str(DEFAULT_PRIVATE_KEY)?;
-    let endpoint = DEFAULT_ENDPOINT.to_string();
-    let poker = MentalPokerTestnet::new(&account, &endpoint)?;
-    let encryption = CommutativeEncryptionTestnet::new(&account, &endpoint)?;
-    let game = PokerGame::new(account, endpoint, poker, encryption)?;
+pub fn new_testnet_game(private_key: &str, endpoint: &str) -> anyhow::Result<Box<dyn GameHandle>> {
+    let account = Account::from_str(private_key)?;
+    let poker = MentalPokerTestnet::new(&account, endpoint)?;
+    let encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
+    let game = PokerGame::new(account, endpoint.to_string(), poker, encryption, 0)?;
     Ok(Box::new(game))
 }
 
@@ -218,8 +358,10 @@ impl Game {
             }
 
             GameMessage::ConfirmGameId => {
-                if let Ok(id) = self.model.game_id_input.parse::<u32>() {
-                    self.join_or_create_game(id);
+                if self.model.screen == Screen::GameIdInput {
+                    if let Ok(id) = self.model.game_id_input.parse::<u32>() {
+                        self.join_or_create_game(id);
+                    }
                 }
                 None
             }
@@ -266,6 +408,10 @@ impl Game {
     }
 
     fn join_or_create_game(&mut self, id: u32) {
+        if self.model.game_initialized {
+            return;
+        }
+
         self.model.game_id = Some(id);
         self.model.screen = Screen::InGame;
 

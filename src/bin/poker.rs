@@ -3,7 +3,9 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use poker::game::{Game, GameMessage, handle_game_key, new_testnet_game};
+use poker::game::{
+    DEFAULT_ENDPOINT, DEFAULT_PRIVATE_KEY, Game, GameMessage, handle_game_key, new_testnet_game,
+};
 use poker::game_state::NetworkType;
 use ratatui::{
     Terminal,
@@ -69,7 +71,18 @@ fn create_game_handle(
     network_type: NetworkType,
 ) -> Result<Box<dyn poker::game::GameHandle>, Box<dyn std::error::Error>> {
     match network_type {
-        NetworkType::Testnet | NetworkType::Mainnet => Ok(new_testnet_game()?),
+        NetworkType::Testnet => {
+            let private_key =
+                std::env::var("PRIVATE_KEY").unwrap_or_else(|_| DEFAULT_PRIVATE_KEY.to_string());
+            let endpoint =
+                std::env::var("ENDPOINT").unwrap_or_else(|_| DEFAULT_ENDPOINT.to_string());
+            Ok(new_testnet_game(&private_key, &endpoint)?)
+        }
+        NetworkType::Mainnet => {
+            let private_key = std::env::var("PRIVATE_KEY").expect("PRIVATE_KEY not set.");
+            let endpoint = std::env::var("ENDPOINT").expect("ENDPOINT not set.");
+            Ok(new_testnet_game(&private_key, &endpoint)?)
+        }
         NetworkType::Interpreter => {
             eprintln!("Interpreter mode only available in test mode");
             std::process::exit(1);

@@ -3,6 +3,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use leo_bindings::utils::Account;
 use poker::game::{Game, GameMessage, handle_game_key, new_interpreter_game};
 use poker::game_state::NetworkType;
 use ratatui::{
@@ -12,6 +13,8 @@ use ratatui::{
     style::{Color, Style},
     widgets::{Block, Borders},
 };
+use snarkvm::prelude::TestRng;
+use snarkvm::prelude::TestnetV0;
 use std::io;
 use std::panic;
 use std::time::Duration;
@@ -31,10 +34,18 @@ enum TestMessage {
 
 impl TestModel {
     fn new(network_type: NetworkType) -> Result<Self, Box<dyn std::error::Error>> {
+        let pk1 = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
+        let mut rng = TestRng::default();
+        let account2: Account<TestnetV0> = Account::new(&mut rng)?;
+        let account3: Account<TestnetV0> = Account::new(&mut rng)?;
+
+        let pk2 = account2.private_key().to_string();
+        let pk3 = account3.private_key().to_string();
+
         let games = [
-            Game::new(new_interpreter_game()?, network_type),
-            Game::new(new_interpreter_game()?, network_type),
-            Game::new(new_interpreter_game()?, network_type),
+            Game::new(new_interpreter_game(pk1)?, network_type),
+            Game::new(new_interpreter_game(&pk2)?, network_type),
+            Game::new(new_interpreter_game(&pk3)?, network_type),
         ];
 
         Ok(Self {

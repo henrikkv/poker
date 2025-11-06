@@ -29,6 +29,7 @@ pub struct GameModel {
     pub game_initialized: bool,
     pub last_poll_time: Instant,
     pub current_state: Option<u8>,
+    pub current_player_id: u8,
 
     pub screen: Screen,
     pub game_id_input: String,
@@ -36,6 +37,11 @@ pub struct GameModel {
 
     pub network_type: NetworkType,
     pub should_quit: bool,
+
+    pub decrypted_hand: Option<[u8; 2]>,
+
+    pub card: Option<crate::game::Card>,
+    pub chip: Option<crate::game::Chip>,
 }
 
 impl GameModel {
@@ -45,11 +51,15 @@ impl GameModel {
             game_initialized: false,
             last_poll_time: Instant::now(),
             current_state: None,
+            current_player_id: 0,
             screen: Screen::GameIdInput,
             game_id_input: String::new(),
             logs: Vec::new(),
             network_type,
             should_quit: false,
+            decrypted_hand: None,
+            card: None,
+            chip: None,
         };
         model.log(format!("Starting poker with {}", network_type.name()));
         model
@@ -70,10 +80,10 @@ impl GameModel {
     }
 
     pub fn log_action_complete(&mut self) {
-        if let Some(last) = self.logs.last_mut() {
-            if last.starts_with("⏳ ") {
-                *last = last.replace("⏳ ", "✓ ");
-            }
+        if let Some(last) = self.logs.last_mut()
+            && last.starts_with("⏳ ")
+        {
+            *last = last.replace("⏳ ", "✓ ");
         }
     }
 

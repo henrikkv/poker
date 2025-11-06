@@ -1,6 +1,7 @@
 use colored::*;
 use mental_poker_bindings::mental_poker::RevealedCards;
 use snarkvm::prelude::*;
+use std::collections::HashMap;
 
 /// Formats a card index (0-51) as a string with suit emoji and value.
 /// - Suits: ♠️ (0-12), ♣️ (13-25), ❤️ (26-38), ♦️ (39-51)
@@ -42,6 +43,28 @@ pub fn format_card(card_index: u8) -> ColoredString {
         2 | 3 => card_str.red().on_green(),
         _ => card_str.yellow().on_green(),
     }
+}
+
+pub fn compute_card_hashes_from_deck<N: Network>(deck: [Group<N>; 52]) -> HashMap<Group<N>, u8> {
+    deck.iter()
+        .enumerate()
+        .map(|(i, &hash)| (hash, i as u8))
+        .collect()
+}
+
+pub fn decrypt_hand_local<N: Network>(
+    encrypted_hand: [Group<N>; 2],
+    secret_inv: Scalar<N>,
+    card_hashes: &HashMap<Group<N>, u8>,
+) -> [u8; 2] {
+    let decrypted_hand = [
+        encrypted_hand[0] * secret_inv,
+        encrypted_hand[1] * secret_inv,
+    ];
+    [
+        card_hashes.get(&decrypted_hand[0]).copied().unwrap_or(255),
+        card_hashes.get(&decrypted_hand[1]).copied().unwrap_or(255),
+    ]
 }
 
 pub trait CardDisplay {

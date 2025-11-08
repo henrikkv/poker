@@ -16,11 +16,81 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Instant;
 
-use crate::cards::decrypt_hand_local;
+use crate::cards::{
+    CardInfo, card_info, decrypt_hand_local, get_opponents, get_other_players_cards,
+    get_player_cards,
+};
 use crate::game_state::{GameModel, NetworkType, Screen, describe_game_state};
 
 pub const DEFAULT_ENDPOINT: &str = "http://localhost:3030";
 pub const DEFAULT_PRIVATE_KEY: &str = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
+
+const P1_DEC_HAND: u8 = 2;
+const P2_DEC_HAND: u8 = 3;
+const P3_DEC_HAND: u8 = 4;
+
+const P1_DEC_FLOP: u8 = 8;
+const P2_DEC_FLOP: u8 = 9;
+const P3_DEC_FLOP: u8 = 10;
+
+const P1_DEC_TURN: u8 = 14;
+const P2_DEC_TURN: u8 = 15;
+const P3_DEC_TURN: u8 = 16;
+
+const P1_DEC_RIVER: u8 = 20;
+const P2_DEC_RIVER: u8 = 21;
+const P3_DEC_RIVER: u8 = 22;
+
+const P1_SHOWDOWN: u8 = 26;
+const P2_SHOWDOWN: u8 = 27;
+const P3_SHOWDOWN: u8 = 28;
+
+#[derive(Debug, Clone, Copy)]
+enum DecryptionStep {
+    Hands,
+    Flop,
+    Turn,
+    River,
+    Showdown,
+}
+
+impl DecryptionStep {
+    fn matches(&self, player_id: u8, state: u8) -> bool {
+        match (self, player_id) {
+            (DecryptionStep::Hands, 1) => state == P1_DEC_HAND,
+            (DecryptionStep::Hands, 2) => state == P2_DEC_HAND,
+            (DecryptionStep::Hands, 3) => state == P3_DEC_HAND,
+
+            (DecryptionStep::Flop, 1) => state == P1_DEC_FLOP,
+            (DecryptionStep::Flop, 2) => state == P2_DEC_FLOP,
+            (DecryptionStep::Flop, 3) => state == P3_DEC_FLOP,
+
+            (DecryptionStep::Turn, 1) => state == P1_DEC_TURN,
+            (DecryptionStep::Turn, 2) => state == P2_DEC_TURN,
+            (DecryptionStep::Turn, 3) => state == P3_DEC_TURN,
+
+            (DecryptionStep::River, 1) => state == P1_DEC_RIVER,
+            (DecryptionStep::River, 2) => state == P2_DEC_RIVER,
+            (DecryptionStep::River, 3) => state == P3_DEC_RIVER,
+
+            (DecryptionStep::Showdown, 1) => state == P1_SHOWDOWN,
+            (DecryptionStep::Showdown, 2) => state == P2_SHOWDOWN,
+            (DecryptionStep::Showdown, 3) => state == P3_SHOWDOWN,
+
+            _ => false,
+        }
+    }
+
+    fn log_message(&self) -> &'static str {
+        match self {
+            DecryptionStep::Hands => "Decrypting hand cards",
+            DecryptionStep::Flop => "Decrypting flop",
+            DecryptionStep::Turn => "Decrypting turn",
+            DecryptionStep::River => "Decrypting river",
+            DecryptionStep::Showdown => "Revealing cards for showdown",
+        }
+    }
+}
 
 fn shuffle_deck<N: Network>(deck: [Group<N>; 52]) -> [Group<N>; 52] {
     let mut rng = rand::thread_rng();
@@ -71,28 +141,6 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         })
     }
 
-    fn get_other_players_cards(
-        &self,
-        player_id: u8,
-        cards: &Cards<N>,
-    ) -> ([Group<N>; 2], [Group<N>; 2]) {
-        match player_id {
-            1 => (cards.player2, cards.player3),
-            2 => (cards.player1, cards.player3),
-            3 => (cards.player1, cards.player2),
-            _ => unreachable!("Invalid player_id"),
-        }
-    }
-
-    fn get_player_cards(&self, player_id: u8, cards: &Cards<N>) -> [Group<N>; 2] {
-        match player_id {
-            1 => cards.player1,
-            2 => cards.player2,
-            3 => cards.player3,
-            _ => unreachable!("Invalid player_id"),
-        }
-    }
-
     fn set_player_id(&mut self, game_id: u32) -> anyhow::Result<()> {
         let game = self
             .poker
@@ -107,6 +155,72 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         } else if address == game.player3 {
             self.player_id = 3;
         }
+
+        Ok(())
+    }
+
+    fn handle_decryption_step(
+        &mut self,
+        step: DecryptionStep,
+        game_id: u32,
+        cards: &Cards<N>,
+        model: &mut GameModel,
+    ) -> anyhow::Result<()> {
+        model.log_action_start(step.log_message().to_string());
+
+        let new_keys = match step {
+            DecryptionStep::Hands => {
+                let (other1, other2) = get_other_players_cards(self.player_id, cards);
+                self.poker
+                    .decrypt_hands(
+                        &self.account,
+                        game_id,
+                        other1,
+                        other2,
+                        self.keys.take().unwrap(),
+                    )?
+                    .0
+            }
+            DecryptionStep::Flop => {
+                self.poker
+                    .decrypt_flop(
+                        &self.account,
+                        game_id,
+                        cards.flop,
+                        self.keys.take().unwrap(),
+                    )?
+                    .0
+            }
+            DecryptionStep::Turn => {
+                self.poker
+                    .decrypt_turn_river(
+                        &self.account,
+                        game_id,
+                        cards.turn,
+                        self.keys.take().unwrap(),
+                    )?
+                    .0
+            }
+            DecryptionStep::River => {
+                self.poker
+                    .decrypt_turn_river(
+                        &self.account,
+                        game_id,
+                        cards.river,
+                        self.keys.take().unwrap(),
+                    )?
+                    .0
+            }
+            DecryptionStep::Showdown => {
+                let own_cards = get_player_cards(self.player_id, cards);
+                self.poker
+                    .showdown(&self.account, game_id, own_cards, self.keys.take().unwrap())?
+                    .0
+            }
+        };
+
+        self.keys = Some(new_keys);
+        model.log_action_complete();
 
         Ok(())
     }
@@ -159,103 +273,19 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         if self.keys.is_some() {
             let cards = self.poker.get_cards(game_id);
 
-            match (self.player_id, new_state) {
-                (1, 2) | (2, 3) | (3, 4) => {
+            for step in [
+                DecryptionStep::Hands,
+                DecryptionStep::Flop,
+                DecryptionStep::Turn,
+                DecryptionStep::River,
+                DecryptionStep::Showdown,
+            ] {
+                if step.matches(self.player_id, new_state) {
                     if let Some(cards) = cards {
-                        model.log_action_start("Decrypting hand cards".to_string());
-
-                        let (other1, other2) = self.get_other_players_cards(self.player_id, &cards);
-
-                        self.keys = Some(
-                            self.poker
-                                .decrypt_hands(
-                                    &self.account,
-                                    game_id,
-                                    other1,
-                                    other2,
-                                    self.keys.take().unwrap(),
-                                )?
-                                .0,
-                        );
-
-                        model.log_action_complete();
+                        self.handle_decryption_step(step, game_id, &cards, model)?;
                     }
+                    break;
                 }
-                (1, 8) | (2, 9) | (3, 10) => {
-                    if let Some(cards) = cards {
-                        model.log_action_start("Decrypting flop".to_string());
-
-                        self.keys = Some(
-                            self.poker
-                                .decrypt_flop(
-                                    &self.account,
-                                    game_id,
-                                    cards.flop,
-                                    self.keys.take().unwrap(),
-                                )?
-                                .0,
-                        );
-
-                        model.log_action_complete();
-                    }
-                }
-                (1, 14) | (2, 15) | (3, 16) => {
-                    if let Some(cards) = cards {
-                        model.log_action_start("Decrypting turn".to_string());
-
-                        self.keys = Some(
-                            self.poker
-                                .decrypt_turn_river(
-                                    &self.account,
-                                    game_id,
-                                    cards.turn,
-                                    self.keys.take().unwrap(),
-                                )?
-                                .0,
-                        );
-
-                        model.log_action_complete();
-                    }
-                }
-                (1, 20) | (2, 21) | (3, 22) => {
-                    if let Some(cards) = cards {
-                        model.log_action_start("Decrypting river".to_string());
-
-                        self.keys = Some(
-                            self.poker
-                                .decrypt_turn_river(
-                                    &self.account,
-                                    game_id,
-                                    cards.river,
-                                    self.keys.take().unwrap(),
-                                )?
-                                .0,
-                        );
-
-                        model.log_action_complete();
-                    }
-                }
-                (1, 26) | (2, 27) | (3, 28) => {
-                    if let Some(cards) = cards {
-                        model.log_action_start("Revealing cards for showdown".to_string());
-
-                        let own_cards = self.get_player_cards(self.player_id, &cards);
-
-                        self.keys = Some(
-                            self.poker
-                                .showdown(
-                                    &self.account,
-                                    game_id,
-                                    own_cards,
-                                    self.keys.take().unwrap(),
-                                )?
-                                .0,
-                        );
-
-                        model.log_action_complete();
-                    }
-                }
-                _ => {}
             }
         }
 
@@ -264,7 +294,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             && model.decrypted_hand.is_none()
             && let (Some(cards), Some(_keys)) = (self.poker.get_cards(game_id), &self.keys)
         {
-            let encrypted_hand = self.get_player_cards(self.player_id, &cards);
+            let encrypted_hand = get_player_cards(self.player_id, &cards);
             let result = decrypt_hand_local(encrypted_hand, self.secret_inv, &self.card_hashes);
             if result != [255, 255] {
                 model.decrypted_hand = Some(result);
@@ -293,11 +323,42 @@ pub struct Card {
     pub player3: [u8; 2],
 }
 
+impl Card {
+    pub fn get_cards(&self, player_id: u8) -> [u8; 2] {
+        match player_id {
+            1 => self.player1,
+            2 => self.player2,
+            3 => self.player3,
+            _ => [255, 255],
+        }
+    }
+
+    pub fn set_cards(&mut self, player_id: u8, cards: [u8; 2]) {
+        match player_id {
+            1 => self.player1 = cards,
+            2 => self.player2 = cards,
+            3 => self.player3 = cards,
+            _ => {}
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Chip {
     pub player1: u16,
     pub player2: u16,
     pub player3: u16,
+}
+
+impl Chip {
+    pub fn get_chips(&self, player_id: u8) -> u16 {
+        match player_id {
+            1 => self.player1,
+            2 => self.player2,
+            3 => self.player3,
+            _ => 0,
+        }
+    }
 }
 
 pub trait GameHandle {
@@ -348,12 +409,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
         };
 
         if let Some(decrypted) = model.decrypted_hand {
-            match current_player_id {
-                1 => render_data.player1 = decrypted,
-                2 => render_data.player2 = decrypted,
-                3 => render_data.player3 = decrypted,
-                _ => {}
-            }
+            render_data.set_cards(current_player_id, decrypted);
         }
 
         Some(render_data)
@@ -431,13 +487,24 @@ pub enum GameMessage {
     Backspace,
     ConfirmGameId,
     Quit,
-
     Tick,
+
+    GameInitialized(Result<(), String>),
+    GameJoined(Result<(), String>),
+    GameStatePolled(Result<(), String>),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum GameCommand {
+    InitializeGame(u32),
+    JoinGame(u32),
+    PollGameState(u32),
 }
 
 pub struct Game {
     handle: Box<dyn GameHandle>,
     pub model: GameModel,
+    pending_command: Option<GameCommand>,
 }
 
 impl Game {
@@ -445,6 +512,7 @@ impl Game {
         Self {
             handle,
             model: GameModel::new(network_type),
+            pending_command: None,
         }
     }
 
@@ -468,20 +536,81 @@ impl Game {
                 if self.model.screen == Screen::GameIdInput
                     && let Ok(id) = self.model.game_id_input.parse::<u32>()
                 {
-                    self.join_or_create_game(id);
+                    self.model.game_id = Some(id);
+                    self.model.screen = Screen::InGame;
+
+                    let game_exists = self.handle.check_game_exists(id);
+                    if let Some(state) = self.handle.get_game_state(id) {
+                        match state {
+                            0 | 1 => {
+                                self.pending_command = Some(GameCommand::JoinGame(id));
+                            }
+                            _ => {
+                                self.model
+                                    .log(format!("Spectating game {} (already started)", id));
+                                self.model.game_initialized = true;
+                                self.pending_command = Some(GameCommand::PollGameState(id));
+                            }
+                        }
+                    } else if !game_exists {
+                        self.pending_command = Some(GameCommand::InitializeGame(id));
+                    }
                 }
                 None
             }
 
             GameMessage::Tick => {
-                if self.model.should_poll() {
-                    self.poll_game();
+                if self.pending_command.is_none()
+                    && self.model.game_initialized
+                    && self.model.should_poll()
+                    && let Some(game_id) = self.model.game_id
+                {
+                    self.pending_command = Some(GameCommand::PollGameState(game_id));
                 }
                 None
             }
 
             GameMessage::Quit => {
                 self.model.should_quit = true;
+                None
+            }
+
+            GameMessage::GameInitialized(result) => {
+                match result {
+                    Ok(()) => {
+                        self.model.game_initialized = true;
+                        self.model.current_player_id = self.handle.get_player_id();
+                        if let Some(game_id) = self.model.game_id {
+                            self.pending_command = Some(GameCommand::PollGameState(game_id));
+                        }
+                    }
+                    Err(e) => {
+                        self.model.log(format!("Error initializing: {}", e));
+                    }
+                }
+                None
+            }
+
+            GameMessage::GameJoined(result) => {
+                match result {
+                    Ok(()) => {
+                        self.model.game_initialized = true;
+                        self.model.current_player_id = self.handle.get_player_id();
+                        if let Some(game_id) = self.model.game_id {
+                            self.pending_command = Some(GameCommand::PollGameState(game_id));
+                        }
+                    }
+                    Err(e) => {
+                        self.model.log(format!("Error joining: {}", e));
+                    }
+                }
+                None
+            }
+
+            GameMessage::GameStatePolled(result) => {
+                if let Err(e) = result {
+                    self.model.log(format!("Error polling: {}", e));
+                }
                 None
             }
         }
@@ -496,6 +625,44 @@ impl Game {
 
     pub fn should_quit(&self) -> bool {
         self.model.should_quit
+    }
+
+    pub fn execute_pending_command(&mut self) -> Option<GameMessage> {
+        let command = self.pending_command.take()?;
+
+        match command {
+            GameCommand::InitializeGame(game_id) => {
+                self.model.log(format!("Creating new game {}", game_id));
+                let result = self
+                    .handle
+                    .initialize_game(&mut self.model, game_id)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::GameInitialized(result))
+            }
+
+            GameCommand::JoinGame(game_id) => {
+                let player_num = if self.handle.get_game_state(game_id) == Some(0) {
+                    2
+                } else {
+                    3
+                };
+                self.model
+                    .log(format!("Joining game {} as Player {}", game_id, player_num));
+                let result = self
+                    .handle
+                    .join_game(&mut self.model, game_id)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::GameJoined(result))
+            }
+
+            GameCommand::PollGameState(game_id) => {
+                let result = self
+                    .handle
+                    .poll_game_state(&mut self.model, game_id)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::GameStatePolled(result))
+            }
+        }
     }
 
     pub fn render_logs(&self, frame: &mut Frame, area: Rect) {
@@ -513,96 +680,28 @@ impl Game {
 
         frame.render_widget(list, area);
     }
-
-    fn join_or_create_game(&mut self, id: u32) {
-        if self.model.game_initialized {
-            return;
-        }
-
-        self.model.game_id = Some(id);
-        self.model.screen = Screen::InGame;
-
-        match self.handle.get_game_state(id) {
-            Some(0) => self.join_game_as_player(id, 2),
-            Some(1) => self.join_game_as_player(id, 3),
-            Some(_) => self.spectate_game(id),
-            None => self.create_game(id),
-        }
-    }
-
-    fn join_game_as_player(&mut self, id: u32, player_num: u8) {
-        self.model
-            .log(format!("Joining game {} as Player {}", id, player_num));
-        match self.handle.join_game(&mut self.model, id) {
-            Ok(_) => {
-                self.model.game_initialized = true;
-                self.model.current_player_id = self.handle.get_player_id();
-                self.poll_game();
-            }
-            Err(e) => self.model.log(format!("Error joining: {}", e)),
-        }
-    }
-
-    fn spectate_game(&mut self, id: u32) {
-        self.model
-            .log(format!("Spectating game {} (already started)", id));
-        self.model.game_initialized = true;
-        self.poll_game();
-    }
-
-    fn create_game(&mut self, id: u32) {
-        self.model.log(format!("Creating new game {}", id));
-        match self.handle.initialize_game(&mut self.model, id) {
-            Ok(_) => {
-                self.model.game_initialized = true;
-                self.model.current_player_id = self.handle.get_player_id();
-                self.poll_game();
-            }
-            Err(e) => self.model.log(format!("Error initializing: {}", e)),
-        }
-    }
-
-    fn poll_game(&mut self) {
-        if let Some(game_id) = self.model.game_id
-            && let Err(e) = self.handle.poll_game_state(&mut self.model, game_id)
-        {
-            self.model.log(format!("Error polling: {}", e));
-        }
-    }
 }
 
 fn format_card_span(card_index: u8) -> Span<'static> {
-    if card_index == 255 {
-        return Span::styled("???", Style::default().fg(Color::DarkGray));
+    match card_info(card_index) {
+        CardInfo::FaceDown => Span::styled("???", Style::default().fg(Color::DarkGray)),
+        CardInfo::Invalid(idx) => {
+            Span::styled(format!("Err:{}", idx), Style::default().fg(Color::Yellow))
+        }
+        CardInfo::Valid {
+            suit,
+            value,
+            is_red,
+        } => {
+            let card_str = format!("{}{}", suit, value);
+            let style = if is_red {
+                Style::default().fg(Color::Red).bg(Color::Green)
+            } else {
+                Style::default().fg(Color::Black).bg(Color::Green)
+            };
+            Span::styled(card_str, style)
+        }
     }
-
-    if card_index > 51 {
-        return Span::styled(
-            format!("Err:{}", card_index),
-            Style::default().fg(Color::Yellow),
-        );
-    }
-
-    let suit_index = card_index / 13;
-    let value_index = card_index % 13;
-
-    // Static string tables to avoid allocations
-    const SUITS: [&str; 4] = ["♠️", "♣️", "❤️", "♦️"];
-    const VALUES: [&str; 13] = [
-        " 2", " 3", " 4", " 5", " 6", " 7", " 8", " 9", "10", " J", " Q", " K", " A",
-    ];
-
-    let suit = SUITS[suit_index as usize];
-    let value = VALUES[value_index as usize];
-
-    let card_str = format!("{}{}", suit, value);
-    let style = match suit_index {
-        0 | 1 => Style::default().fg(Color::Black).bg(Color::Green),
-        2 | 3 => Style::default().fg(Color::Red).bg(Color::Green),
-        _ => Style::default().fg(Color::Yellow).bg(Color::Green),
-    };
-
-    Span::styled(card_str, style)
 }
 
 struct CommunityWidget {
@@ -778,40 +877,25 @@ fn create_opponents_layout() -> Layout {
 }
 
 fn render_game_table(frame: &mut Frame, area: Rect, current_player: u8, cards: Card, chips: Chip) {
-    let get_cards = |player_id: u8| -> [u8; 2] {
-        match player_id {
-            1 => cards.player1,
-            2 => cards.player2,
-            3 => cards.player3,
-            _ => [255, 255],
-        }
-    };
-
-    let get_chips = |player_id: u8| -> u16 {
-        match player_id {
-            1 => chips.player1,
-            2 => chips.player2,
-            3 => chips.player3,
-            _ => 0,
-        }
-    };
-
-    let (opponent1, opponent2) = match current_player {
-        1 => (2, 3),
-        2 => (1, 3),
-        3 => (1, 2),
-        _ => (1, 2),
-    };
+    let (opponent1, opponent2) = get_opponents(current_player);
 
     let vertical_layout = create_table_layout().split(area);
     let top_layout = create_opponents_layout().split(vertical_layout[0]);
 
     frame.render_widget(
-        PlayerWidget::new(opponent1, get_cards(opponent1), get_chips(opponent1)),
+        PlayerWidget::new(
+            opponent1,
+            cards.get_cards(opponent1),
+            chips.get_chips(opponent1),
+        ),
         top_layout[0],
     );
     frame.render_widget(
-        PlayerWidget::new(opponent2, get_cards(opponent2), get_chips(opponent2)),
+        PlayerWidget::new(
+            opponent2,
+            cards.get_cards(opponent2),
+            chips.get_chips(opponent2),
+        ),
         top_layout[1],
     );
 
@@ -823,8 +907,8 @@ fn render_game_table(frame: &mut Frame, area: Rect, current_player: u8, cards: C
     frame.render_widget(
         PlayerWidget::new(
             current_player,
-            get_cards(current_player),
-            get_chips(current_player),
+            cards.get_cards(current_player),
+            chips.get_chips(current_player),
         ),
         vertical_layout[2],
     );

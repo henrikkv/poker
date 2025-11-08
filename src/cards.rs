@@ -1,47 +1,58 @@
 use colored::*;
-use mental_poker_bindings::mental_poker::RevealedCards;
+use mental_poker_bindings::mental_poker::{Cards, RevealedCards};
 use snarkvm::prelude::*;
 use std::collections::HashMap;
 
-/// Formats a card index (0-51) as a string with suit emoji and value.
-/// - Suits: ♠️ (0-12), ♣️ (13-25), ❤️ (26-38), ♦️ (39-51)
-/// - Values: 2-10, J, Q, K, A
-/// - 255 represents a face-down card and displays as "???"
-pub fn format_card(card_index: u8) -> ColoredString {
+#[derive(Debug, Clone, Copy)]
+pub enum CardInfo {
+    Valid {
+        suit: &'static str,
+        value: &'static str,
+        is_red: bool,
+    },
+    FaceDown,
+    Invalid(u8),
+}
+
+pub fn card_info(card_index: u8) -> CardInfo {
     if card_index == 255 {
-        return "???".bright_black();
+        return CardInfo::FaceDown;
     }
 
     if card_index > 51 {
-        return format!("Incorrect card index: {}", card_index).yellow();
+        return CardInfo::Invalid(card_index);
     }
+
+    const SUITS: [&str; 4] = ["♠️", "♣️", "❤️", "♦️"];
+    const VALUES: [&str; 13] = [
+        " 2", " 3", " 4", " 5", " 6", " 7", " 8", " 9", "10", " J", " Q", " K", " A",
+    ];
 
     let suit_index = card_index / 13;
     let value_index = card_index % 13;
+    CardInfo::Valid {
+        suit: SUITS[suit_index as usize],
+        value: VALUES[value_index as usize],
+        is_red: suit_index == 2 || suit_index == 3,
+    }
+}
 
-    let suit = match suit_index {
-        0 => "♠️",
-        1 => "♣️",
-        2 => "❤️",
-        3 => "♦️",
-        _ => "?",
-    };
-
-    let value = match value_index {
-        0..=7 => format!(" {}", value_index + 2),
-        8 => "10".to_string(),
-        9 => " J".to_string(),
-        10 => " Q".to_string(),
-        11 => " K".to_string(),
-        12 => " A".to_string(),
-        _ => "??".to_string(),
-    };
-
-    let card_str = format!("{}{}", suit, value);
-    match suit_index {
-        0 | 1 => card_str.black().on_green(),
-        2 | 3 => card_str.red().on_green(),
-        _ => card_str.yellow().on_green(),
+pub fn format_card(card_index: u8) -> ColoredString {
+    match card_info(card_index) {
+        CardInfo::FaceDown => "???".bright_black(),
+        CardInfo::Invalid(idx) => format!("Incorrect card index: {}", idx).yellow(),
+        CardInfo::Valid {
+            suit,
+            value,
+            is_red,
+        } => {
+            let card_str = format!("{}{}", suit, value);
+            if is_red {
+                card_str.red().on_green()
+            } else {
+                card_str.black().on_green()
+            }
+        }
     }
 }
 
@@ -87,6 +98,32 @@ impl<N: Network> CardDisplay for RevealedCards<N> {
             format_card(self.player3[0]),
             format_card(self.player3[1]),
         )
+    }
+}
+
+pub fn get_opponents(player_id: u8) -> (u8, u8) {
+    match player_id {
+        1 => (2, 3),
+        2 => (1, 3),
+        3 => (1, 2),
+        _ => unreachable!("Invalid player_id"),
+    }
+}
+
+pub fn get_other_players_cards<N: Network>(
+    player_id: u8,
+    cards: &Cards<N>,
+) -> ([Group<N>; 2], [Group<N>; 2]) {
+    let (opp1, opp2) = get_opponents(player_id);
+    (get_player_cards(opp1, cards), get_player_cards(opp2, cards))
+}
+
+pub fn get_player_cards<N: Network>(player_id: u8, cards: &Cards<N>) -> [Group<N>; 2] {
+    match player_id {
+        1 => cards.player1,
+        2 => cards.player2,
+        3 => cards.player3,
+        _ => unreachable!("Invalid player_id"),
     }
 }
 

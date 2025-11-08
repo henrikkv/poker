@@ -46,6 +46,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             while let Some(msg) = current_msg {
                 current_msg = game.update(msg);
             }
+            while let Some(result_msg) = game.execute_pending_command() {
+                current_msg = Some(result_msg);
+                while let Some(msg) = current_msg {
+                    current_msg = game.update(msg);
+                }
+            }
         }
     }
 

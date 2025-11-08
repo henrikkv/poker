@@ -74,6 +74,9 @@ impl TestModel {
             TestMessage::TickAll => {
                 for game in &mut self.games {
                     game.update(GameMessage::Tick);
+                    while let Some(result_msg) = game.execute_pending_command() {
+                        game.update(result_msg);
+                    }
                 }
                 None
             }
@@ -137,6 +140,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             while let Some(msg) = current_msg {
                 current_msg = model.update(msg);
             }
+            while let Some(result_msg) = model.games[model.active_index].execute_pending_command() {
+                current_msg = Some(TestMessage::GameMessage(result_msg));
+                while let Some(msg) = current_msg {
+                    current_msg = model.update(msg);
+                }
+            }
         }
     }
 
@@ -163,14 +172,14 @@ fn restore_terminal(
 }
 
 fn handle_event() -> Result<Option<TestMessage>, Box<dyn std::error::Error>> {
-    if event::poll(Duration::from_millis(100))? {
-        if let Event::Key(key) = event::read()? {
-            return Ok(match key.code {
-                KeyCode::Tab | KeyCode::Right => Some(TestMessage::NextPlayer),
-                KeyCode::Left => Some(TestMessage::PrevPlayer),
-                _ => handle_game_key(key).map(TestMessage::GameMessage),
-            });
-        }
+    if event::poll(Duration::from_millis(100))?
+        && let Event::Key(key) = event::read()?
+    {
+        return Ok(match key.code {
+            KeyCode::Tab | KeyCode::Right => Some(TestMessage::NextPlayer),
+            KeyCode::Left => Some(TestMessage::PrevPlayer),
+            _ => handle_game_key(key).map(TestMessage::GameMessage),
+        });
     }
 
     Ok(Some(TestMessage::TickAll))

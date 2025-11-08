@@ -65,18 +65,19 @@ impl GameModel {
         model
     }
 
-    pub fn log(&mut self, message: String) {
+    fn add_log(&mut self, message: String) {
         self.logs.push(message);
         if self.logs.len() > 100 {
             self.logs.remove(0);
         }
     }
 
+    pub fn log(&mut self, message: String) {
+        self.add_log(message);
+    }
+
     pub fn log_action_start(&mut self, message: String) {
-        self.logs.push(format!("⏳ {}", message));
-        if self.logs.len() > 100 {
-            self.logs.remove(0);
-        }
+        self.add_log(format!("⏳ {}", message));
     }
 
     pub fn log_action_complete(&mut self) {

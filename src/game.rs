@@ -25,25 +25,175 @@ use crate::game_state::{GameModel, NetworkType, Screen, describe_game_state};
 pub const DEFAULT_ENDPOINT: &str = "http://localhost:3030";
 pub const DEFAULT_PRIVATE_KEY: &str = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
 
-const P1_DEC_HAND: u8 = 2;
-const P2_DEC_HAND: u8 = 3;
-const P3_DEC_HAND: u8 = 4;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameState {
+    P2Join = 0,
+    P3Join = 1,
 
-const P1_DEC_FLOP: u8 = 8;
-const P2_DEC_FLOP: u8 = 9;
-const P3_DEC_FLOP: u8 = 10;
+    P1DecHand = 2,
+    P2DecHand = 3,
+    P3DecHand = 4,
 
-const P1_DEC_TURN: u8 = 14;
-const P2_DEC_TURN: u8 = 15;
-const P3_DEC_TURN: u8 = 16;
+    P1BetPre = 5,
+    P2BetPre = 6,
+    P3BetPre = 7,
 
-const P1_DEC_RIVER: u8 = 20;
-const P2_DEC_RIVER: u8 = 21;
-const P3_DEC_RIVER: u8 = 22;
+    P1DecFlop = 8,
+    P2DecFlop = 9,
+    P3DecFlop = 10,
 
-const P1_SHOWDOWN: u8 = 26;
-const P2_SHOWDOWN: u8 = 27;
-const P3_SHOWDOWN: u8 = 28;
+    P1BetFlop = 11,
+    P2BetFlop = 12,
+    P3BetFlop = 13,
+
+    P1DecTurn = 14,
+    P2DecTurn = 15,
+    P3DecTurn = 16,
+
+    P1BetTurn = 17,
+    P2BetTurn = 18,
+    P3BetTurn = 19,
+
+    P1DecRiver = 20,
+    P2DecRiver = 21,
+    P3DecRiver = 22,
+
+    P1BetRiver = 23,
+    P2BetRiver = 24,
+    P3BetRiver = 25,
+
+    P1Showdown = 26,
+    P2Showdown = 27,
+    P3Showdown = 28,
+
+    Compare = 29,
+
+    P1NewShuffle = 30,
+    P2NewShuffle = 31,
+    P2Shuffle = 32,
+    P3Shuffle = 33,
+    P1Claim = 34,
+    P2Claim = 35,
+    P3Claim = 36,
+}
+
+impl std::fmt::Display for GameState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
+    }
+}
+
+impl GameState {
+    pub fn from_u8(state: u8) -> Option<Self> {
+        match state {
+            0 => Some(Self::P2Join),
+            1 => Some(Self::P3Join),
+            2 => Some(Self::P1DecHand),
+            3 => Some(Self::P2DecHand),
+            4 => Some(Self::P3DecHand),
+            5 => Some(Self::P1BetPre),
+            6 => Some(Self::P2BetPre),
+            7 => Some(Self::P3BetPre),
+            8 => Some(Self::P1DecFlop),
+            9 => Some(Self::P2DecFlop),
+            10 => Some(Self::P3DecFlop),
+            11 => Some(Self::P1BetFlop),
+            12 => Some(Self::P2BetFlop),
+            13 => Some(Self::P3BetFlop),
+            14 => Some(Self::P1DecTurn),
+            15 => Some(Self::P2DecTurn),
+            16 => Some(Self::P3DecTurn),
+            17 => Some(Self::P1BetTurn),
+            18 => Some(Self::P2BetTurn),
+            19 => Some(Self::P3BetTurn),
+            20 => Some(Self::P1DecRiver),
+            21 => Some(Self::P2DecRiver),
+            22 => Some(Self::P3DecRiver),
+            23 => Some(Self::P1BetRiver),
+            24 => Some(Self::P2BetRiver),
+            25 => Some(Self::P3BetRiver),
+            26 => Some(Self::P1Showdown),
+            27 => Some(Self::P2Showdown),
+            28 => Some(Self::P3Showdown),
+            29 => Some(Self::Compare),
+            30 => Some(Self::P1NewShuffle),
+            31 => Some(Self::P2NewShuffle),
+            32 => Some(Self::P2Shuffle),
+            33 => Some(Self::P3Shuffle),
+            34 => Some(Self::P1Claim),
+            35 => Some(Self::P2Claim),
+            36 => Some(Self::P3Claim),
+            _ => None,
+        }
+    }
+
+    pub fn to_u8(self) -> u8 {
+        self as u8
+    }
+
+    pub fn is_betting_state(self) -> bool {
+        matches!(
+            self,
+            Self::P1BetPre
+                | Self::P2BetPre
+                | Self::P3BetPre
+                | Self::P1BetFlop
+                | Self::P2BetFlop
+                | Self::P3BetFlop
+                | Self::P1BetTurn
+                | Self::P2BetTurn
+                | Self::P3BetTurn
+                | Self::P1BetRiver
+                | Self::P2BetRiver
+                | Self::P3BetRiver
+        )
+    }
+
+    pub fn current_player(self) -> Option<u8> {
+        match self {
+            Self::P1DecHand
+            | Self::P1BetPre
+            | Self::P1DecFlop
+            | Self::P1BetFlop
+            | Self::P1DecTurn
+            | Self::P1BetTurn
+            | Self::P1DecRiver
+            | Self::P1BetRiver
+            | Self::P1Showdown
+            | Self::P1NewShuffle
+            | Self::P1Claim => Some(1),
+
+            Self::P2Join
+            | Self::P2DecHand
+            | Self::P2BetPre
+            | Self::P2DecFlop
+            | Self::P2BetFlop
+            | Self::P2DecTurn
+            | Self::P2BetTurn
+            | Self::P2DecRiver
+            | Self::P2BetRiver
+            | Self::P2Showdown
+            | Self::P2NewShuffle
+            | Self::P2Shuffle
+            | Self::P2Claim => Some(2),
+
+            Self::P3Join
+            | Self::P3DecHand
+            | Self::P3BetPre
+            | Self::P3DecFlop
+            | Self::P3BetFlop
+            | Self::P3DecTurn
+            | Self::P3BetTurn
+            | Self::P3DecRiver
+            | Self::P3BetRiver
+            | Self::P3Showdown
+            | Self::P3Shuffle
+            | Self::P3Claim => Some(3),
+
+            Self::Compare => None,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 enum DecryptionStep {
@@ -55,27 +205,27 @@ enum DecryptionStep {
 }
 
 impl DecryptionStep {
-    fn matches(&self, player_id: u8, state: u8) -> bool {
+    fn matches(&self, player_id: u8, state: GameState) -> bool {
         match (self, player_id) {
-            (DecryptionStep::Hands, 1) => state == P1_DEC_HAND,
-            (DecryptionStep::Hands, 2) => state == P2_DEC_HAND,
-            (DecryptionStep::Hands, 3) => state == P3_DEC_HAND,
+            (DecryptionStep::Hands, 1) => state == GameState::P1DecHand,
+            (DecryptionStep::Hands, 2) => state == GameState::P2DecHand,
+            (DecryptionStep::Hands, 3) => state == GameState::P3DecHand,
 
-            (DecryptionStep::Flop, 1) => state == P1_DEC_FLOP,
-            (DecryptionStep::Flop, 2) => state == P2_DEC_FLOP,
-            (DecryptionStep::Flop, 3) => state == P3_DEC_FLOP,
+            (DecryptionStep::Flop, 1) => state == GameState::P1DecFlop,
+            (DecryptionStep::Flop, 2) => state == GameState::P2DecFlop,
+            (DecryptionStep::Flop, 3) => state == GameState::P3DecFlop,
 
-            (DecryptionStep::Turn, 1) => state == P1_DEC_TURN,
-            (DecryptionStep::Turn, 2) => state == P2_DEC_TURN,
-            (DecryptionStep::Turn, 3) => state == P3_DEC_TURN,
+            (DecryptionStep::Turn, 1) => state == GameState::P1DecTurn,
+            (DecryptionStep::Turn, 2) => state == GameState::P2DecTurn,
+            (DecryptionStep::Turn, 3) => state == GameState::P3DecTurn,
 
-            (DecryptionStep::River, 1) => state == P1_DEC_RIVER,
-            (DecryptionStep::River, 2) => state == P2_DEC_RIVER,
-            (DecryptionStep::River, 3) => state == P3_DEC_RIVER,
+            (DecryptionStep::River, 1) => state == GameState::P1DecRiver,
+            (DecryptionStep::River, 2) => state == GameState::P2DecRiver,
+            (DecryptionStep::River, 3) => state == GameState::P3DecRiver,
 
-            (DecryptionStep::Showdown, 1) => state == P1_SHOWDOWN,
-            (DecryptionStep::Showdown, 2) => state == P2_SHOWDOWN,
-            (DecryptionStep::Showdown, 3) => state == P3_SHOWDOWN,
+            (DecryptionStep::Showdown, 1) => state == GameState::P1Showdown,
+            (DecryptionStep::Showdown, 2) => state == GameState::P2Showdown,
+            (DecryptionStep::Showdown, 3) => state == GameState::P3Showdown,
 
             _ => false,
         }
@@ -262,15 +412,37 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             .get_games(game_id)
             .ok_or_else(|| anyhow::anyhow!("Game {} not found", game_id))?;
 
-        let new_state = game.state;
-        let state_changed = model.current_state != Some(new_state);
+        let new_state = GameState::from_u8(game.state);
+        let state_changed = model.current_state != new_state;
+
         if state_changed {
-            let description = describe_game_state(new_state);
-            model.log(format!("State {}: {}", new_state, description));
-            model.current_state = Some(new_state);
+            if let Some(state) = new_state {
+                let description = describe_game_state(state);
+                model.log(format!("State {}: {}", state, description));
+
+                if state.is_betting_state() && state.current_player() == Some(self.player_id) {
+                    if let Some(chips) = self.poker.get_chips(game_id) {
+                        use crate::game_state::BettingUIState;
+                        let player_chips = match self.player_id {
+                            1 => chips.player1,
+                            2 => chips.player2,
+                            3 => chips.player3,
+                            _ => 0,
+                        };
+                        let min_raise = 10;
+                        model.betting_ui =
+                            Some(BettingUIState::new(player_chips as u64, min_raise));
+                    }
+                } else {
+                    model.betting_ui = None;
+                }
+            }
+            model.current_state = new_state;
         }
 
-        if self.keys.is_some() {
+        if self.keys.is_some()
+            && let Some(state) = new_state
+        {
             let cards = self.poker.get_cards(game_id);
 
             for step in [
@@ -280,7 +452,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
                 DecryptionStep::River,
                 DecryptionStep::Showdown,
             ] {
-                if step.matches(self.player_id, new_state) {
+                if step.matches(self.player_id, state) {
                     if let Some(cards) = cards {
                         self.handle_decryption_step(step, game_id, &cards, model)?;
                     }
@@ -290,15 +462,26 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         }
 
         let mut hand_decrypted = false;
-        if new_state >= 5
-            && model.decrypted_hand.is_none()
-            && let (Some(cards), Some(_keys)) = (self.poker.get_cards(game_id), &self.keys)
-        {
-            let encrypted_hand = get_player_cards(self.player_id, &cards);
-            let result = decrypt_hand_local(encrypted_hand, self.secret_inv, &self.card_hashes);
-            if result != [255, 255] {
-                model.decrypted_hand = Some(result);
-                hand_decrypted = true;
+        if let Some(state) = new_state {
+            let is_past_decrypt = !matches!(
+                state,
+                GameState::P2Join
+                    | GameState::P3Join
+                    | GameState::P1DecHand
+                    | GameState::P2DecHand
+                    | GameState::P3DecHand
+            );
+
+            if is_past_decrypt
+                && model.decrypted_hand.is_none()
+                && let (Some(cards), Some(_keys)) = (self.poker.get_cards(game_id), &self.keys)
+            {
+                let encrypted_hand = get_player_cards(self.player_id, &cards);
+                let result = decrypt_hand_local(encrypted_hand, self.secret_inv, &self.card_hashes);
+                if result != [255, 255] {
+                    model.decrypted_hand = Some(result);
+                    hand_decrypted = true;
+                }
             }
         }
 
@@ -485,20 +668,31 @@ pub fn new_testnet_game(private_key: &str, endpoint: &str) -> anyhow::Result<Box
 pub enum GameMessage {
     CharInput(char),
     Backspace,
-    ConfirmGameId,
+    Confirm,
     Quit,
     Tick,
+
+    Left,
+    Right,
+    Up,
+    Down,
 
     GameInitialized(Result<(), String>),
     GameJoined(Result<(), String>),
     GameStatePolled(Result<(), String>),
+    BetPlaced(Result<(), String>),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum GameCommand {
     InitializeGame(u32),
     JoinGame(u32),
     PollGameState(u32),
+    PlaceBet {
+        game_id: u32,
+        action: crate::game_state::BettingAction,
+        amount: u64,
+    },
 }
 
 pub struct Game {
@@ -532,7 +726,7 @@ impl Game {
                 None
             }
 
-            GameMessage::ConfirmGameId => {
+            GameMessage::Confirm => {
                 if self.model.screen == Screen::GameIdInput
                     && let Ok(id) = self.model.game_id_input.parse::<u32>()
                 {
@@ -555,6 +749,44 @@ impl Game {
                     } else if !game_exists {
                         self.pending_command = Some(GameCommand::InitializeGame(id));
                     }
+                } else if let (Some(betting_ui), Some(game_id)) =
+                    (&self.model.betting_ui, self.model.game_id)
+                {
+                    let action = betting_ui.selected_action;
+                    let amount = betting_ui.raise_amount;
+                    self.pending_command = Some(GameCommand::PlaceBet {
+                        game_id,
+                        action,
+                        amount,
+                    });
+                }
+                None
+            }
+
+            GameMessage::Left => {
+                if let Some(betting_ui) = &mut self.model.betting_ui {
+                    betting_ui.select_prev();
+                }
+                None
+            }
+
+            GameMessage::Right => {
+                if let Some(betting_ui) = &mut self.model.betting_ui {
+                    betting_ui.select_next();
+                }
+                None
+            }
+
+            GameMessage::Up => {
+                if let Some(betting_ui) = &mut self.model.betting_ui {
+                    betting_ui.increase_raise();
+                }
+                None
+            }
+
+            GameMessage::Down => {
+                if let Some(betting_ui) = &mut self.model.betting_ui {
+                    betting_ui.decrease_raise();
                 }
                 None
             }
@@ -613,6 +845,22 @@ impl Game {
                 }
                 None
             }
+
+            GameMessage::BetPlaced(result) => {
+                match result {
+                    Ok(()) => {
+                        self.model.log_action_complete();
+                        self.model.betting_ui = None;
+                        if let Some(game_id) = self.model.game_id {
+                            self.pending_command = Some(GameCommand::PollGameState(game_id));
+                        }
+                    }
+                    Err(e) => {
+                        self.model.log(format!("Error placing bet: {}", e));
+                    }
+                }
+                None
+            }
         }
     }
 
@@ -661,6 +909,21 @@ impl Game {
                     .poll_game_state(&mut self.model, game_id)
                     .map_err(|e| e.to_string());
                 Some(GameMessage::GameStatePolled(result))
+            }
+
+            GameCommand::PlaceBet {
+                game_id,
+                action,
+                amount,
+            } => {
+                use crate::game_state::BettingAction;
+                let action_name = match action {
+                    BettingAction::Fold => "Folding",
+                    BettingAction::Call => "Calling",
+                    BettingAction::Raise => &format!("Raising {}", amount),
+                };
+                self.model.log(action_name.to_string());
+                Some(GameMessage::BetPlaced(Ok(())))
             }
         }
     }
@@ -734,6 +997,59 @@ impl Widget for CommunityWidget {
         let paragraph = Paragraph::new(line).alignment(Alignment::Center);
 
         paragraph.render(area, buf);
+    }
+}
+
+struct BettingWidget<'a> {
+    betting_ui: &'a crate::game_state::BettingUIState,
+}
+
+impl<'a> BettingWidget<'a> {
+    fn new(betting_ui: &'a crate::game_state::BettingUIState) -> Self {
+        Self { betting_ui }
+    }
+}
+
+impl<'a> Widget for BettingWidget<'a> {
+    fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer) {
+        use crate::game_state::BettingAction;
+
+        let actions = BettingAction::all();
+        let button_width = area.width / 3;
+
+        for (i, action) in actions.iter().enumerate() {
+            let is_selected = *action == self.betting_ui.selected_action;
+            let x = area.x + (i as u16 * button_width);
+            let button_area = Rect {
+                x,
+                y: area.y,
+                width: button_width,
+                height: area.height,
+            };
+
+            let text = if *action == BettingAction::Raise {
+                format!("{} ({})", action.name(), self.betting_ui.raise_amount)
+            } else {
+                action.name().to_string()
+            };
+
+            let style = if is_selected {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            let line = Line::from(text).alignment(Alignment::Center).style(style);
+            line.render(
+                Rect {
+                    x: button_area.x,
+                    y: button_area.y + button_area.height / 2,
+                    width: button_area.width,
+                    height: 1,
+                },
+                buf,
+            );
+        }
     }
 }
 
@@ -857,17 +1173,28 @@ fn render_in_game(frame: &mut Frame, model: &GameModel, area: Rect) {
         }
     };
 
-    render_game_table(frame, inner, model.current_player_id, cards, chips);
+    render_game_table(frame, inner, model);
 }
 
-fn create_table_layout() -> Layout {
-    Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(5), // Top row for opponents
-            Constraint::Min(3),    // Middle for community cards
-            Constraint::Length(5), // Bottom for current player
-        ])
+fn create_table_layout(has_betting_ui: bool) -> Layout {
+    if has_betting_ui {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(5), // Top row for opponents
+                Constraint::Min(3),    // Middle for community cards
+                Constraint::Length(3), // Betting buttons
+                Constraint::Length(5), // Bottom for current player
+            ])
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(5), // Top row for opponents
+                Constraint::Min(3),    // Middle for community cards
+                Constraint::Length(5), // Bottom for current player
+            ])
+    }
 }
 
 fn create_opponents_layout() -> Layout {
@@ -876,10 +1203,14 @@ fn create_opponents_layout() -> Layout {
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
 }
 
-fn render_game_table(frame: &mut Frame, area: Rect, current_player: u8, cards: Card, chips: Chip) {
+fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
+    let cards = model.card.unwrap();
+    let chips = model.chip.unwrap();
+    let current_player = model.current_player_id;
     let (opponent1, opponent2) = get_opponents(current_player);
 
-    let vertical_layout = create_table_layout().split(area);
+    let has_betting_ui = model.betting_ui.is_some();
+    let vertical_layout = create_table_layout(has_betting_ui).split(area);
     let top_layout = create_opponents_layout().split(vertical_layout[0]);
 
     frame.render_widget(
@@ -904,14 +1235,26 @@ fn render_game_table(frame: &mut Frame, area: Rect, current_player: u8, cards: C
         vertical_layout[1],
     );
 
-    frame.render_widget(
-        PlayerWidget::new(
-            current_player,
-            cards.get_cards(current_player),
-            chips.get_chips(current_player),
-        ),
-        vertical_layout[2],
-    );
+    if let Some(betting_ui) = &model.betting_ui {
+        frame.render_widget(BettingWidget::new(betting_ui), vertical_layout[2]);
+        frame.render_widget(
+            PlayerWidget::new(
+                current_player,
+                cards.get_cards(current_player),
+                chips.get_chips(current_player),
+            ),
+            vertical_layout[3],
+        );
+    } else {
+        frame.render_widget(
+            PlayerWidget::new(
+                current_player,
+                cards.get_cards(current_player),
+                chips.get_chips(current_player),
+            ),
+            vertical_layout[2],
+        );
+    }
 }
 
 pub fn handle_game_key(key: KeyEvent) -> Option<GameMessage> {
@@ -919,7 +1262,11 @@ pub fn handle_game_key(key: KeyEvent) -> Option<GameMessage> {
         KeyCode::Char('q') => Some(GameMessage::Quit),
         KeyCode::Char(c) => Some(GameMessage::CharInput(c)),
         KeyCode::Backspace => Some(GameMessage::Backspace),
-        KeyCode::Enter => Some(GameMessage::ConfirmGameId),
+        KeyCode::Enter => Some(GameMessage::Confirm),
+        KeyCode::Left => Some(GameMessage::Left),
+        KeyCode::Right => Some(GameMessage::Right),
+        KeyCode::Up => Some(GameMessage::Up),
+        KeyCode::Down => Some(GameMessage::Down),
         _ => None,
     }
 }

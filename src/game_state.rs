@@ -23,12 +23,87 @@ pub enum Screen {
     InGame,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BettingAction {
+    Fold,
+    Call,
+    Raise,
+}
+
+impl BettingAction {
+    pub fn all() -> [Self; 3] {
+        [Self::Fold, Self::Call, Self::Raise]
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            BettingAction::Fold => "Fold",
+            BettingAction::Call => "Call",
+            BettingAction::Raise => "Raise",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct BettingUIState {
+    pub selected_action: BettingAction,
+    pub raise_amount: u64,
+    pub min_raise: u64,
+    pub max_raise: u64,
+}
+
+impl BettingUIState {
+    pub fn new(player_chips: u64, min_raise: u64) -> Self {
+        Self {
+            selected_action: BettingAction::Call,
+            raise_amount: min_raise,
+            min_raise,
+            max_raise: player_chips,
+        }
+    }
+
+    pub fn select_next(&mut self) {
+        self.selected_action = match self.selected_action {
+            BettingAction::Fold => BettingAction::Call,
+            BettingAction::Call => BettingAction::Raise,
+            BettingAction::Raise => BettingAction::Fold,
+        };
+    }
+
+    pub fn select_prev(&mut self) {
+        self.selected_action = match self.selected_action {
+            BettingAction::Fold => BettingAction::Raise,
+            BettingAction::Call => BettingAction::Fold,
+            BettingAction::Raise => BettingAction::Call,
+        };
+    }
+
+    pub fn increase_raise(&mut self) {
+        if self.selected_action == BettingAction::Raise {
+            self.raise_amount = (self.raise_amount + self.min_raise).min(self.max_raise);
+        }
+    }
+
+    pub fn decrease_raise(&mut self) {
+        if self.selected_action == BettingAction::Raise {
+            self.raise_amount =
+                (self.raise_amount.saturating_sub(self.min_raise)).max(self.min_raise);
+        }
+    }
+
+    pub fn set_all_in(&mut self) {
+        if self.selected_action == BettingAction::Raise {
+            self.raise_amount = self.max_raise;
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct GameModel {
     pub game_id: Option<u32>,
     pub game_initialized: bool,
     pub last_poll_time: Instant,
-    pub current_state: Option<u8>,
+    pub current_state: Option<crate::game::GameState>,
     pub current_player_id: u8,
 
     pub screen: Screen,
@@ -42,6 +117,8 @@ pub struct GameModel {
 
     pub card: Option<crate::game::Card>,
     pub chip: Option<crate::game::Chip>,
+
+    pub betting_ui: Option<BettingUIState>,
 }
 
 impl GameModel {
@@ -60,6 +137,7 @@ impl GameModel {
             decrypted_hand: None,
             card: None,
             chip: None,
+            betting_ui: None,
         };
         model.log(format!("Starting poker with {}", network_type.name()));
         model
@@ -93,45 +171,45 @@ impl GameModel {
     }
 }
 
-pub fn describe_game_state(state: u8) -> &'static str {
+pub fn describe_game_state(state: crate::game::GameState) -> &'static str {
+    use crate::game::GameState;
     match state {
-        0 => "Waiting for Player 2 to join",
-        1 => "Waiting for Player 3 to join",
-        2 => "Waiting for Player 1 to decrypt hands",
-        3 => "Waiting for Player 2 to decrypt hands",
-        4 => "Waiting for Player 3 to decrypt hands",
-        5 => "Waiting for Player 1 to bet (pre-flop)",
-        6 => "Waiting for Player 2 to bet (pre-flop)",
-        7 => "Waiting for Player 3 to bet (pre-flop)",
-        8 => "Waiting for Player 1 to decrypt flop",
-        9 => "Waiting for Player 2 to decrypt flop",
-        10 => "Waiting for Player 3 to decrypt flop",
-        11 => "Waiting for Player 1 to bet (flop)",
-        12 => "Waiting for Player 2 to bet (flop)",
-        13 => "Waiting for Player 3 to bet (flop)",
-        14 => "Waiting for Player 1 to decrypt turn",
-        15 => "Waiting for Player 2 to decrypt turn",
-        16 => "Waiting for Player 3 to decrypt turn",
-        17 => "Waiting for Player 1 to bet (turn)",
-        18 => "Waiting for Player 2 to bet (turn)",
-        19 => "Waiting for Player 3 to bet (turn)",
-        20 => "Waiting for Player 1 to decrypt river",
-        21 => "Waiting for Player 2 to decrypt river",
-        22 => "Waiting for Player 3 to decrypt river",
-        23 => "Waiting for Player 1 to bet (river)",
-        24 => "Waiting for Player 2 to bet (river)",
-        25 => "Waiting for Player 3 to bet (river)",
-        26 => "Waiting for Player 1 showdown",
-        27 => "Waiting for Player 2 showdown",
-        28 => "Waiting for Player 3 showdown",
-        29 => "Ready to compare hands",
-        30 => "Waiting for Player 1 to shuffle new deck",
-        31 => "Waiting for Player 2 to shuffle new deck",
-        32 => "Waiting for Player 2 to shuffle",
-        33 => "Waiting for Player 3 to shuffle",
-        34 => "Waiting for Player 1 to claim prize",
-        35 => "Waiting for Player 2 to claim prize",
-        36 => "Waiting for Player 3 to claim prize",
-        _ => "Unknown state",
+        GameState::P2Join => "Waiting for Player 2 to join",
+        GameState::P3Join => "Waiting for Player 3 to join",
+        GameState::P1DecHand => "Waiting for Player 1 to decrypt hands",
+        GameState::P2DecHand => "Waiting for Player 2 to decrypt hands",
+        GameState::P3DecHand => "Waiting for Player 3 to decrypt hands",
+        GameState::P1BetPre => "Waiting for Player 1 to bet (pre-flop)",
+        GameState::P2BetPre => "Waiting for Player 2 to bet (pre-flop)",
+        GameState::P3BetPre => "Waiting for Player 3 to bet (pre-flop)",
+        GameState::P1DecFlop => "Waiting for Player 1 to decrypt flop",
+        GameState::P2DecFlop => "Waiting for Player 2 to decrypt flop",
+        GameState::P3DecFlop => "Waiting for Player 3 to decrypt flop",
+        GameState::P1BetFlop => "Waiting for Player 1 to bet (flop)",
+        GameState::P2BetFlop => "Waiting for Player 2 to bet (flop)",
+        GameState::P3BetFlop => "Waiting for Player 3 to bet (flop)",
+        GameState::P1DecTurn => "Waiting for Player 1 to decrypt turn",
+        GameState::P2DecTurn => "Waiting for Player 2 to decrypt turn",
+        GameState::P3DecTurn => "Waiting for Player 3 to decrypt turn",
+        GameState::P1BetTurn => "Waiting for Player 1 to bet (turn)",
+        GameState::P2BetTurn => "Waiting for Player 2 to bet (turn)",
+        GameState::P3BetTurn => "Waiting for Player 3 to bet (turn)",
+        GameState::P1DecRiver => "Waiting for Player 1 to decrypt river",
+        GameState::P2DecRiver => "Waiting for Player 2 to decrypt river",
+        GameState::P3DecRiver => "Waiting for Player 3 to decrypt river",
+        GameState::P1BetRiver => "Waiting for Player 1 to bet (river)",
+        GameState::P2BetRiver => "Waiting for Player 2 to bet (river)",
+        GameState::P3BetRiver => "Waiting for Player 3 to bet (river)",
+        GameState::P1Showdown => "Waiting for Player 1 showdown",
+        GameState::P2Showdown => "Waiting for Player 2 showdown",
+        GameState::P3Showdown => "Waiting for Player 3 showdown",
+        GameState::Compare => "Ready to compare hands",
+        GameState::P1NewShuffle => "Waiting for Player 1 to shuffle new deck",
+        GameState::P2NewShuffle => "Waiting for Player 2 to shuffle new deck",
+        GameState::P2Shuffle => "Waiting for Player 2 to shuffle",
+        GameState::P3Shuffle => "Waiting for Player 3 to shuffle",
+        GameState::P1Claim => "Waiting for Player 1 to claim prize",
+        GameState::P2Claim => "Waiting for Player 2 to claim prize",
+        GameState::P3Claim => "Waiting for Player 3 to claim prize",
     }
 }

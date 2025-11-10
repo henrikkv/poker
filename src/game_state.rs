@@ -15,6 +15,14 @@ impl NetworkType {
             NetworkType::Mainnet => "Mainnet",
         }
     }
+
+    pub fn poll_interval_ms(&self) -> u64 {
+        match self {
+            NetworkType::Interpreter => 100,
+            NetworkType::Testnet => 1000,
+            NetworkType::Mainnet => 1000,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,6 +129,10 @@ pub struct GameModel {
     pub chip: Option<crate::game::Chip>,
 
     pub betting_ui: Option<BettingUIState>,
+
+    pub previous_chips: Option<crate::game::Chip>,
+    pub chip_differences: Option<[i32; 3]>,
+    pub round_start_chips: Option<crate::game::Chip>,
 }
 
 impl GameModel {
@@ -140,6 +152,9 @@ impl GameModel {
             card: None,
             chip: None,
             betting_ui: None,
+            previous_chips: None,
+            chip_differences: None,
+            round_start_chips: None,
         };
         model.log(format!("Starting poker with {}", network_type.name()));
         model
@@ -169,7 +184,28 @@ impl GameModel {
     }
 
     pub fn should_poll(&self) -> bool {
-        self.last_poll_time.elapsed() >= std::time::Duration::from_secs(1)
+        let interval_ms = self.network_type.poll_interval_ms();
+        self.last_poll_time.elapsed() >= std::time::Duration::from_millis(interval_ms)
+    }
+
+    pub fn calculate_chip_differences(&mut self, new_chips: &crate::game::Chip) {
+        if let Some(prev_chips) = &self.previous_chips {
+            let diff1 = new_chips.player1 as i32 - prev_chips.player1 as i32;
+            let diff2 = new_chips.player2 as i32 - prev_chips.player2 as i32;
+            let diff3 = new_chips.player3 as i32 - prev_chips.player3 as i32;
+            self.chip_differences = Some([diff1, diff2, diff3]);
+        }
+    }
+
+    pub fn reset_chip_tracking(&mut self) {
+        self.chip_differences = None;
+        self.previous_chips = None;
+    }
+
+    pub fn ensure_previous_chips(&mut self, current_chips: Option<crate::game::Chip>) {
+        if self.previous_chips.is_none() {
+            self.previous_chips = current_chips;
+        }
     }
 }
 

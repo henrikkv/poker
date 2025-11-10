@@ -191,12 +191,12 @@ program mental_poker.aleo {
             player3: 0u128 as address,
             buy_in: 10u64,
             state: 0u8,
-            dealer_button: player1(),
+            dealer_button: player3(),
             players_out: 0u8,
             players_folded: 0u8,
             last_bet: 0u8,
-            sb: 5u16,         // Start with 5 chip small blind
-            bb: 10u16,        // Start with 10 chip big blind
+            sb: 5u16,
+            bb: 10u16,
             remaining_hands: 10u8, // Increase blinds every 10 hands
             hands_played: 0u8,
             last_raise_size: 0u16,
@@ -247,11 +247,11 @@ program mental_poker.aleo {
         
         if (!player2_joining) {
             let chip: Chips = Chips {
-                player1: 1000u16 - game.sb,  // Deduct small blind
-                player2: 1000u16 - game.bb,  // Deduct big blind
+                player1: 1000u16 - game.sb,
+                player2: 1000u16 - game.bb,
                 player3: 1000u16,
-                player1_bet: game.sb,        // Post small blind
-                player2_bet: game.bb,        // Post big blind
+                player1_bet: game.sb,
+                player2_bet: game.bb,
                 player3_bet: 0u16,
             };
             
@@ -322,20 +322,10 @@ program mental_poker.aleo {
         let is_going_allin: bool = new_remaining == 0u16;
 
         let reopens_action: bool = new_amount >= min_raise_to;
-        let is_short_allin: bool = new_amount > highest_bet && !reopens_action && is_going_allin;
 
         let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded) || is_player1(game.players_out);
         let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded) || is_player2(game.players_out);
         let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded) || is_player3(game.players_out);
-
-        let active_players_count: u8 = (!is_p1_inactive as u8) + (!is_p2_inactive as u8) + (!is_p3_inactive as u8);
-        assert(active_players_count > 1u8 || (active_players_count == 1u8 && current_bet < highest_bet));
-
-        let post_action_active_count: u8 = active_players_count - (is_going_allin as u8);
-
-        let has_short_allin: bool = (chip.player1 == 0u16 && chip.player1_bet < highest_bet) ||
-                                    (chip.player2 == 0u16 && chip.player2_bet < highest_bet) ||
-                                    (chip.player3 == 0u16 && chip.player3_bet < highest_bet);
 
         let is_current_last_bet: bool = (is_p1 && is_player1(game.last_bet)) ||
                                         (is_p2 && is_player2(game.last_bet)) ||
@@ -347,13 +337,13 @@ program mental_poker.aleo {
 
         let all_matched: bool = p1_matched && p2_matched && p3_matched;
 
-        let should_end_betting: bool = post_action_active_count <= 1u8 ||
-                                       (new_amount >= highest_bet && all_matched && (is_current_last_bet ||
-                                                                                    game.last_bet == 0u8 ||
-                                                                                    is_short_allin ||
-                                                                                    has_short_allin));
+        let others_matched: bool = is_p1 ? (p2_matched && p3_matched) :
+                                   is_p2 ? (p1_matched && p3_matched) :
+                                           (p1_matched && p2_matched);
 
-        let is_pre_round: bool = game.state <= p3_bet_pre;
+        let is_preflop_round: bool = game.state >= p1_bet_pre && game.state <= p3_bet_pre;
+        let big_blind_has_option: bool = is_preflop_round && current_bet == game.bb && highest_bet == game.bb;
+
         let is_flop_round: bool = game.state >= p1_bet_flop && game.state <= p3_bet_flop;
         let is_turn_round: bool = game.state >= p1_bet_turn && game.state <= p3_bet_turn;
 
@@ -361,46 +351,59 @@ program mental_poker.aleo {
         let is_p2_out: bool = is_player2(game.players_out);
         let is_p3_out: bool = is_player3(game.players_out);
 
-        let first_active_dec_flop: u8 = is_p1_out ? (is_p2_out ? p3_dec_flop : p2_dec_flop) : p1_dec_flop;
-        let first_active_dec_turn: u8 = is_p1_out ? (is_p2_out ? p3_dec_turn : p2_dec_turn) : p1_dec_turn;
-        let first_active_dec_river: u8 = is_p1_out ? (is_p2_out ? p3_dec_river : p2_dec_river) : p1_dec_river;
+        let first_active_flop_decrypt: u8 = is_p1_out ? (is_p2_out ? p3_dec_flop : p2_dec_flop) : p1_dec_flop;
+        let first_active_turn_decrypt: u8 = is_p1_out ? (is_p2_out ? p3_dec_turn : p2_dec_turn) : p1_dec_turn;
+        let first_active_river_decrypt: u8 = is_p1_out ? (is_p2_out ? p3_dec_river : p2_dec_river) : p1_dec_river;
         let first_active_showdown: u8 = is_p1_inactive ? (is_p2_inactive ? p3_showdown : p2_showdown) : p1_showdown;
 
-        let next_round_state: u8 = is_pre_round ? first_active_dec_flop :
-                                   is_flop_round ? first_active_dec_turn :
-                                   is_turn_round ? first_active_dec_river :
+        let next_round_state: u8 = is_preflop_round ? first_active_flop_decrypt :
+                                   is_flop_round ? first_active_turn_decrypt :
+                                   is_turn_round ? first_active_river_decrypt :
                                    first_active_showdown;
 
-        let round_base: u8 = is_pre_round ? p1_bet_pre :
-                             is_flop_round ? p1_bet_flop :
-                             is_turn_round ? p1_bet_turn :
-                                             p1_bet_river;
+        let current_round_base_state: u8 = is_preflop_round ? p1_bet_pre :
+                                           is_flop_round ? p1_bet_flop :
+                                           is_turn_round ? p1_bet_turn :
+                                           p1_bet_river;
 
         let next_player_offset: u8 = is_p1 ? (is_p2_inactive ? 2u8 : 1u8) :
                                      is_p2 ? (is_p3_inactive ? 0u8 : 2u8) :
                                              (is_p1_inactive ? 1u8 : 0u8);
 
-        let next_player_state: u8 = round_base + next_player_offset;
+        let next_player_state: u8 = current_round_base_state + next_player_offset;
 
-        let should_end_betting_updated: bool = post_action_active_count <= 1u8 ||
-                                                (new_amount >= highest_bet &&
-                                                 all_matched &&
-                                                 (is_current_last_bet ||
-                                                  game.last_bet == 0u8 ||
-                                                  is_short_allin ||
-                                                  (has_short_allin && !reopens_action && is_current_last_bet)));
+        let next_player_is_last_raiser: bool = (next_player_offset == 0u8 && is_player1(game.last_bet)) ||
+                                                (next_player_offset == 1u8 && is_player2(game.last_bet)) ||
+                                                (next_player_offset == 2u8 && is_player3(game.last_bet));
 
-        let next_state: u8 = should_end_betting_updated ? next_round_state : next_player_state;
+        let is_first_postflop_action: bool = !is_preflop_round && game.last_bet == 0u8;
+
+        let action_returns_to_last_raiser: bool = next_player_is_last_raiser && all_matched && !(is_preflop_round && highest_bet == game.bb);
+
+        let last_raiser_completed_action: bool = is_current_last_bet && others_matched && !reopens_action;
+
+        let last_raiser_is_inactive: bool = (is_player1(game.last_bet) && is_p1_inactive) ||
+                                             (is_player2(game.last_bet) && is_p2_inactive) ||
+                                             (is_player3(game.last_bet) && is_p3_inactive);
+
+        let betting_round_should_end: bool = action_returns_to_last_raiser ||
+                                              last_raiser_completed_action ||
+                                              (last_raiser_is_inactive && all_matched);
+
+        let next_state: u8 = betting_round_should_end ? next_round_state : next_player_state;
 
         let current_player: u8 = is_p1 ? player1() :
                                  is_p2 ? player2() :
                                          player3();
 
-        let new_last_bet: u8 = reopens_action ? current_player : game.last_bet;
+        let should_set_current_as_raiser: bool = reopens_action || is_first_postflop_action;
+        let big_blind_used_option: bool = is_current_last_bet && big_blind_has_option && !reopens_action;
 
-        let pot_size: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet + amount;
+        let new_last_bet: u8 = should_set_current_as_raiser ? current_player :
+                                      big_blind_used_option ? 0u8 :
+                                      game.last_bet;
 
-        let new_chip: Chips = Chips {
+        let new_chips: Chips = Chips {
             player1: is_p1 ? new_remaining : chip.player1,
             player2: is_p2 ? new_remaining : chip.player2,
             player3: is_p3 ? new_remaining : chip.player3,
@@ -409,7 +412,7 @@ program mental_poker.aleo {
             player3_bet: is_p3 ? new_amount : chip.player3_bet,
         };
 
-        let new_raise_size: u16 = reopens_action ? (new_amount - highest_bet) : game.last_raise_size;
+        let new_last_raise_size: u16 = reopens_action ? (new_amount - highest_bet) : game.last_raise_size;
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -425,10 +428,10 @@ program mental_poker.aleo {
             bb: game.bb,
             remaining_hands: game.remaining_hands,
             hands_played: game.hands_played,
-            last_raise_size: new_raise_size,
+            last_raise_size: new_last_raise_size,
         };
-        
-        Mapping::set(chips, game_id, new_chip);
+
+        Mapping::set(chips, game_id, new_chips);
         Mapping::set(games, game_id, new_game);
     }
     async transition decrypt_hands(game_id: u32, other1: [group; 2], other2: [group; 2], keys: Keys) -> (Keys, Future) {
@@ -454,13 +457,13 @@ program mental_poker.aleo {
 
         assert(is_p1 || is_p2 || is_p3);
         assert((is_p1 && old_card.player2 == other1 && old_card.player3 == other2) ||
-               (is_p2 && old_card.player1 == other1 && old_card.player3 == other2) ||
+               (is_p2 && old_card.player3 == other1 && old_card.player1 == other2) ||
                (is_p3 && old_card.player1 == other1 && old_card.player2 == other2));
 
         let final_card: Cards = Cards {
-            player1: is_p1 ? old_card.player1 : new_other1,
+            player1: is_p1 ? old_card.player1 : (is_p2 ? new_other2 : new_other1),
             player2: is_p2 ? old_card.player2 : (is_p1 ? new_other1 : new_other2),
-            player3: is_p3 ? old_card.player3 : new_other2,
+            player3: is_p3 ? old_card.player3 : (is_p2 ? new_other1 : new_other2),
             flop: old_card.flop,
             turn: old_card.turn,
             river: old_card.river,
@@ -475,24 +478,22 @@ program mental_poker.aleo {
         let is_dealer_p1: bool = is_player1(game.dealer_button);
         let is_dealer_p2: bool = is_player2(game.dealer_button);
 
-        // Determine first bettor preflop (two positions left of dealer in 3-player)
-        // When all active: dealer P1->first P3, dealer P2->first P1, dealer P3->first P2
-        let first_bettor_offset: u8 =
-            (is_p1_out || is_p1_folded) ? (is_dealer_p2 ? 2u8 : 1u8) :
-            (is_p2_out || is_p2_folded) ? (is_dealer_p1 ? 2u8 : 0u8) :
-            (is_p3_out || is_p3_folded) ? (is_dealer_p2 ? 0u8 : 1u8) :
-            is_dealer_p1 ? 2u8 :
-            is_dealer_p2 ? 0u8 :
-            1u8;
 
-        let first_bettor_state: u8 = p1_bet_pre + first_bettor_offset;
-        let first_bettor_player: u8 = first_bettor_offset == 0u8 ? player1() :
-                                       (first_bettor_offset == 1u8 ? player2() : player3());
+        let is_p1_active: bool = !is_p1_out && !is_p1_folded;
+        let is_p2_active: bool = !is_p2_out && !is_p2_folded;
+        let is_p3_active: bool = !is_p3_out && !is_p3_folded;
 
-        // Big blind player is one position after dealer (clockwise)
-        let big_blind_player: u8 = is_dealer_p1 ? player2() :
-                                   is_dealer_p2 ? player3() :
-                                   player1();
+        let first_bettor_state: u8 = is_dealer_p1 ? (is_p1_active ? p1_bet_pre : (is_p2_active ? p2_bet_pre : p3_bet_pre)) :
+                                     is_dealer_p2 ? (is_p2_active ? p2_bet_pre : (is_p3_active ? p3_bet_pre : p1_bet_pre)) :
+                                                    (is_p3_active ? p3_bet_pre : (is_p1_active ? p1_bet_pre : p2_bet_pre));
+
+        let first_bettor_player: u8 = first_bettor_state == p1_bet_pre ? player1() :
+                                      first_bettor_state == p2_bet_pre ? player2() :
+                                                                         player3();
+
+        let big_blind_player: u8 = is_dealer_p1 ? player3() :
+                                   is_dealer_p2 ? player1() :
+                                                  player2();
 
         let next_state: u8 =
             is_p1 ? (is_p2_out ? first_bettor_state : p2_dec_hand) :
@@ -589,13 +590,7 @@ program mental_poker.aleo {
             is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_flop : !is_p1_inactive ? p1_bet_flop : p2_bet_flop) :
                                              (!is_p1_inactive ? p1_bet_flop : !is_p2_inactive ? p2_bet_flop : p3_bet_flop);
 
-        let new_last_bet: u8 =
-            (is_p1 || is_p2) ? 0u8 :
-            is_player1(game.dealer_button) ?
-                (!is_p1_inactive ? player1() : !is_p3_inactive ? player3() : player2()) :
-            is_player2(game.dealer_button) ?
-                (!is_p2_inactive ? player2() : !is_p1_inactive ? player1() : player3()) :
-                (!is_p3_inactive ? player3() : !is_p2_inactive ? player2() : player1());
+        let new_last_bet: u8 = 0u8;
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -816,13 +811,7 @@ program mental_poker.aleo {
             is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river : !is_p1_inactive ? p1_bet_river : p2_bet_river) :
                                              (!is_p1_inactive ? p1_bet_river : !is_p2_inactive ? p2_bet_river : p3_bet_river);
 
-        let new_last_bet: u8 =
-            (is_p1_turn || is_p2_turn || is_p1_river || is_p2_river) ? 0u8 :
-            is_player1(game.dealer_button) ?
-                (!is_p1_inactive ? player1() : !is_p3_inactive ? player3() : player2()) :
-            is_player2(game.dealer_button) ?
-                (!is_p2_inactive ? player2() : !is_p1_inactive ? player1() : player3()) :
-                (!is_p3_inactive ? player3() : !is_p2_inactive ? player2() : player1());
+        let new_last_bet: u8 = 0u8;
 
         let new_game: Game = Game {
             player1: game.player1,

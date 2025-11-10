@@ -104,7 +104,7 @@ impl<N: Network> CardDisplay for RevealedCards<N> {
 pub fn get_opponents(player_id: u8) -> (u8, u8) {
     match player_id {
         1 => (2, 3),
-        2 => (1, 3),
+        2 => (3, 1),
         3 => (1, 2),
         _ => unreachable!("Invalid player_id"),
     }

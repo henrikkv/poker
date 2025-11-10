@@ -48,15 +48,17 @@ impl BettingAction {
 pub struct BettingUIState {
     pub selected_action: BettingAction,
     pub raise_amount: u64,
+    pub call_amount: u64,
     pub min_raise: u64,
     pub max_raise: u64,
 }
 
 impl BettingUIState {
-    pub fn new(player_chips: u64, min_raise: u64) -> Self {
+    pub fn new(player_chips: u64, call_amount: u64, min_raise: u64) -> Self {
         Self {
             selected_action: BettingAction::Call,
             raise_amount: min_raise,
+            call_amount,
             min_raise,
             max_raise: player_chips,
         }

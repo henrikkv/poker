@@ -187,7 +187,7 @@ fn gameplay<
 
     let cards = poker.get_cards(1).unwrap();
     let (bob_keys, _) = poker
-        .decrypt_hands(bob, 1, cards.player1, cards.player3, bob_keys)
+        .decrypt_hands(bob, 1, cards.player3, cards.player1, bob_keys)
         .unwrap();
 
     let cards = poker.get_cards(1).unwrap();
@@ -213,9 +213,9 @@ fn gameplay<
 
     println!("{}", &poker.get_revealed_cards(1).unwrap().display_cards());
 
+    poker.bet(alice, 1, 0).unwrap();
     poker.bet(bob, 1, 0).unwrap();
     poker.bet(charlie, 1, 0).unwrap();
-    poker.bet(alice, 1, 0).unwrap();
 
     let (alice_keys, _) = poker
         .decrypt_turn_river(alice, 1, poker.get_cards(1).unwrap().turn, alice_keys)
@@ -232,9 +232,9 @@ fn gameplay<
     let revealed = poker.get_revealed_cards(1).unwrap();
     println!("{}", &revealed.display_cards());
 
+    poker.bet(alice, 1, 0).unwrap();
     poker.bet(bob, 1, 0).unwrap();
     poker.bet(charlie, 1, 0).unwrap();
-    poker.bet(alice, 1, 0).unwrap();
 
     let (alice_keys, _) = poker
         .decrypt_turn_river(alice, 1, poker.get_cards(1).unwrap().river, alice_keys)
@@ -251,9 +251,9 @@ fn gameplay<
     let revealed = poker.get_revealed_cards(1).unwrap();
     println!("{}", &revealed.display_cards());
 
+    poker.bet(alice, 1, 0).unwrap();
     poker.bet(bob, 1, 0).unwrap();
     poker.bet(charlie, 1, 0).unwrap();
-    poker.bet(alice, 1, 0).unwrap();
 
     let (_alice_keys, _) = poker
         .showdown(alice, 1, poker.get_cards(1).unwrap().player1, alice_keys)
@@ -272,7 +272,7 @@ fn gameplay<
         )
         .unwrap();
 
-    poker.compare_hands(alice, 1).unwrap();
+    poker.compare_hands(charlie, 1).unwrap();
 
     let game = poker.get_games(1).unwrap();
     dbg!(&game);

@@ -421,17 +421,38 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
                 model.log(format!("State {}: {}", state, description));
 
                 if state.is_betting_state() && state.current_player() == Some(self.player_id) {
-                    if let Some(chips) = self.poker.get_chips(game_id) {
+                    if let (Some(chips), Some(game)) =
+                        (self.poker.get_chips(game_id), self.poker.get_games(game_id))
+                    {
                         use crate::game_state::BettingUIState;
-                        let player_chips = match self.player_id {
-                            1 => chips.player1,
-                            2 => chips.player2,
-                            3 => chips.player3,
-                            _ => 0,
+
+                        let (player_chips, current_bet) = match self.player_id {
+                            1 => (chips.player1, chips.player1_bet),
+                            2 => (chips.player2, chips.player2_bet),
+                            3 => (chips.player3, chips.player3_bet),
+                            _ => (0, 0),
                         };
-                        let min_raise = 10;
-                        model.betting_ui =
-                            Some(BettingUIState::new(player_chips as u64, min_raise));
+
+                        let highest_bet = chips
+                            .player1_bet
+                            .max(chips.player2_bet)
+                            .max(chips.player3_bet);
+
+                        let min_raise_size = if highest_bet == 0 || game.last_raise_size == 0 {
+                            game.bb
+                        } else {
+                            game.last_raise_size
+                        };
+
+                        let min_raise_to = highest_bet + min_raise_size;
+                        let min_raise = min_raise_to - current_bet;
+                        let call_amount = highest_bet - current_bet;
+
+                        model.betting_ui = Some(BettingUIState::new(
+                            player_chips as u64,
+                            call_amount as u64,
+                            min_raise as u64,
+                        ));
                     }
                 } else {
                     model.betting_ui = None;
@@ -553,6 +574,13 @@ pub trait GameHandle {
     fn initialize_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
     fn join_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
     fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn place_bet(
+        &mut self,
+        model: &mut GameModel,
+        game_id: u32,
+        action: crate::game_state::BettingAction,
+        amount: u64,
+    ) -> anyhow::Result<()>;
 }
 
 impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHandle
@@ -644,6 +672,71 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
 
     fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
         self.poll_game_state(model, game_id)
+    }
+
+    fn place_bet(
+        &mut self,
+        model: &mut GameModel,
+        game_id: u32,
+        action: crate::game_state::BettingAction,
+        amount: u64,
+    ) -> anyhow::Result<()> {
+        use crate::game_state::BettingAction;
+
+        match action {
+            BettingAction::Fold => {
+                model.log_action_start("Folding".to_string());
+                self.poker.fold(&self.account, game_id)?;
+                model.log_action_complete();
+            }
+            BettingAction::Call => {
+                let chips = self
+                    .poker
+                    .get_chips(game_id)
+                    .ok_or_else(|| anyhow::anyhow!("No chips found"))?;
+
+                let (current_bet, highest_bet) = match self.player_id {
+                    1 => (
+                        chips.player1_bet,
+                        chips
+                            .player1_bet
+                            .max(chips.player2_bet)
+                            .max(chips.player3_bet),
+                    ),
+                    2 => (
+                        chips.player2_bet,
+                        chips
+                            .player1_bet
+                            .max(chips.player2_bet)
+                            .max(chips.player3_bet),
+                    ),
+                    3 => (
+                        chips.player3_bet,
+                        chips
+                            .player1_bet
+                            .max(chips.player2_bet)
+                            .max(chips.player3_bet),
+                    ),
+                    _ => return Err(anyhow::anyhow!("Invalid player_id")),
+                };
+
+                let call_amount = highest_bet - current_bet;
+                if call_amount == 0 {
+                    model.log_action_start("Checking".to_string());
+                } else {
+                    model.log_action_start(format!("Calling {}", call_amount));
+                }
+                self.poker.bet(&self.account, game_id, call_amount)?;
+                model.log_action_complete();
+            }
+            BettingAction::Raise => {
+                model.log_action_start(format!("Raising {}", amount));
+                self.poker.bet(&self.account, game_id, amount as u16)?;
+                model.log_action_complete();
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -849,7 +942,6 @@ impl Game {
             GameMessage::BetPlaced(result) => {
                 match result {
                     Ok(()) => {
-                        self.model.log_action_complete();
                         self.model.betting_ui = None;
                         if let Some(game_id) = self.model.game_id {
                             self.pending_command = Some(GameCommand::PollGameState(game_id));
@@ -916,14 +1008,11 @@ impl Game {
                 action,
                 amount,
             } => {
-                use crate::game_state::BettingAction;
-                let action_name = match action {
-                    BettingAction::Fold => "Folding",
-                    BettingAction::Call => "Calling",
-                    BettingAction::Raise => &format!("Raising {}", amount),
-                };
-                self.model.log(action_name.to_string());
-                Some(GameMessage::BetPlaced(Ok(())))
+                let result = self
+                    .handle
+                    .place_bet(&mut self.model, game_id, action, amount)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::BetPlaced(result))
             }
         }
     }
@@ -1027,10 +1116,18 @@ impl<'a> Widget for BettingWidget<'a> {
                 height: area.height,
             };
 
-            let text = if *action == BettingAction::Raise {
-                format!("{} ({})", action.name(), self.betting_ui.raise_amount)
-            } else {
-                action.name().to_string()
+            let text = match action {
+                BettingAction::Raise => {
+                    format!("Raise ({})", self.betting_ui.raise_amount)
+                }
+                BettingAction::Call => {
+                    if self.betting_ui.call_amount == 0 {
+                        "Check".to_string()
+                    } else {
+                        format!("Call ({})", self.betting_ui.call_amount)
+                    }
+                }
+                BettingAction::Fold => "Fold".to_string(),
             };
 
             let style = if is_selected {
@@ -1158,7 +1255,7 @@ fn render_in_game(frame: &mut Frame, model: &GameModel, area: Rect) {
         return;
     }
 
-    let (cards, chips) = match (model.card, model.chip) {
+    let (_cards, _chips) = match (model.card, model.chip) {
         (Some(c), Some(ch)) => (c, ch),
         _ => {
             let content = if let Some(state) = model.current_state {

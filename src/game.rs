@@ -13,7 +13,6 @@ use ratatui::{
 };
 use snarkvm::prelude::{Group, Inverse, Network, Scalar, TestRng, Uniform};
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::time::Instant;
 
 use crate::cards::{
@@ -23,7 +22,6 @@ use crate::cards::{
 use crate::game_state::{GameModel, NetworkType, Screen, describe_game_state};
 
 pub const DEFAULT_ENDPOINT: &str = "http://localhost:3030";
-pub const DEFAULT_PRIVATE_KEY: &str = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameState {
@@ -270,12 +268,13 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         player_id: u8,
     ) -> anyhow::Result<Self> {
         use crate::cards::compute_card_hashes_from_deck;
+        use crate::deck::initialized_deck;
 
         let mut rng = TestRng::default();
         let secret = Scalar::rand(&mut rng);
         let secret_inv = Inverse::inverse(&secret).unwrap();
 
-        let initial_deck = encryption.initialize_deck(&account)?;
+        let initial_deck = initialized_deck();
         let card_hashes = compute_card_hashes_from_deck(initial_deck);
 
         Ok(Self {
@@ -376,8 +375,10 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
     }
 
     pub fn initialize_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+        use crate::deck::initialized_deck;
+
         model.log_action_start("Initializing deck".to_string());
-        let initial_deck = self.encryption.initialize_deck(&self.account)?;
+        let initial_deck = initialized_deck();
         model.log_action_complete();
 
         model.log_action_start("Shuffling deck".to_string());
@@ -919,8 +920,8 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
     }
 }
 
-pub fn new_interpreter_game(private_key: &str) -> anyhow::Result<Box<dyn GameHandle>> {
-    let account = Account::from_str(private_key)?;
+pub fn new_interpreter_game(account_index: u16) -> anyhow::Result<Box<dyn GameHandle>> {
+    let account = get_dev_account(account_index).unwrap();
     let endpoint = DEFAULT_ENDPOINT;
     let poker = MentalPokerInterpreter::new(&account, endpoint)?;
     let encryption = CommutativeEncryptionInterpreter::new(&account, endpoint)?;
@@ -928,8 +929,8 @@ pub fn new_interpreter_game(private_key: &str) -> anyhow::Result<Box<dyn GameHan
     Ok(Box::new(game))
 }
 
-pub fn new_testnet_game(private_key: &str, endpoint: &str) -> anyhow::Result<Box<dyn GameHandle>> {
-    let account = Account::from_str(private_key)?;
+pub fn new_testnet_game(account_index: u16, endpoint: &str) -> anyhow::Result<Box<dyn GameHandle>> {
+    let account = get_dev_account(account_index).unwrap();
     let poker = MentalPokerTestnet::new(&account, endpoint)?;
     let encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
     let game = PokerGame::new(account, endpoint.to_string(), poker, encryption, 0)?;

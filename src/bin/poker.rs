@@ -4,7 +4,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use poker::game::{
-    DEFAULT_ENDPOINT, DEFAULT_PRIVATE_KEY, Game, GameMessage, handle_game_key, new_testnet_game,
+    DEFAULT_ENDPOINT, Game, GameMessage, handle_game_key, new_testnet_game,
 };
 use poker::game_state::NetworkType;
 use ratatui::{
@@ -78,16 +78,21 @@ fn create_game_handle(
 ) -> Result<Box<dyn poker::game::GameHandle>, Box<dyn std::error::Error>> {
     match network_type {
         NetworkType::Testnet => {
-            let private_key =
-                std::env::var("PRIVATE_KEY").unwrap_or_else(|_| DEFAULT_PRIVATE_KEY.to_string());
+            let account_index = std::env::var("ACCOUNT_INDEX")
+                .ok()
+                .and_then(|s| s.parse::<u16>().ok())
+                .unwrap_or(0u16);
             let endpoint =
                 std::env::var("ENDPOINT").unwrap_or_else(|_| DEFAULT_ENDPOINT.to_string());
-            Ok(new_testnet_game(&private_key, &endpoint)?)
+            Ok(new_testnet_game(account_index, &endpoint)?)
         }
         NetworkType::Mainnet => {
-            let private_key = std::env::var("PRIVATE_KEY").expect("PRIVATE_KEY not set.");
+            let account_index = std::env::var("ACCOUNT_INDEX")
+                .ok()
+                .and_then(|s| s.parse::<u16>().ok())
+                .expect("ACCOUNT_INDEX not set.");
             let endpoint = std::env::var("ENDPOINT").expect("ENDPOINT not set.");
-            Ok(new_testnet_game(&private_key, &endpoint)?)
+            Ok(new_testnet_game(account_index, &endpoint)?)
         }
         NetworkType::Interpreter => {
             eprintln!("Interpreter mode only available in test mode");

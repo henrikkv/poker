@@ -9,6 +9,7 @@ path = "lib.rs"
 
 [dependencies]
 leo-bindings.workspace = true
+log.workspace = true
 
 [build-dependencies]
 leo-bindings-core = { git = "https://github.com/henrikkv/leo-bindings" }

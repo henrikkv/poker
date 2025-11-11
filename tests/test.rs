@@ -23,6 +23,7 @@ fn shuffle_deck<N: Network>(deck: [Group<N>; 52]) -> [Group<N>; 52] {
 
 #[test]
 fn commutative_encryption_interpreter() {
+    leo_bindings::utils::init_test_logger();
     let alice: Account<TestnetV0> = Account::from_str(PRIVATE_KEY).unwrap();
     run_commutative_encryption(
         &CommutativeEncryptionInterpreter::new(&alice, ENDPOINT).unwrap(),
@@ -32,6 +33,7 @@ fn commutative_encryption_interpreter() {
 
 #[test]
 fn commutative_encryption_testnet() {
+    leo_bindings::utils::init_test_logger();
     let alice: Account<TestnetV0> = Account::from_str(PRIVATE_KEY).unwrap();
     run_commutative_encryption(
         &CommutativeEncryptionTestnet::new(&alice, ENDPOINT).unwrap(),
@@ -81,6 +83,7 @@ fn run_commutative_encryption<N: Network, C: CommutativeEncryptionAleo<N>>(
 
 #[test]
 fn poker_interpreter() {
+    leo_bindings::utils::init_test_logger();
     let alice = Account::from_str(PRIVATE_KEY).unwrap();
     let rng = &mut rand::thread_rng();
     let bob = Account::new(rng).unwrap();
@@ -96,6 +99,7 @@ fn poker_interpreter() {
 }
 #[test]
 fn poker_testnet() {
+    leo_bindings::utils::init_test_logger();
     let alice = Account::from_str(PRIVATE_KEY).unwrap();
     let rng = &mut rand::thread_rng();
     let bob = Account::new(rng).unwrap();

@@ -437,6 +437,7 @@ version = "0.1.0"
 dependencies = [
  "leo-bindings",
  "leo-bindings-core",
+ "log",
  "serde_json",
 ]
 
@@ -554,10 +555,11 @@ dependencies = [
 [[package]]
 name = "credits_bindings"
 version = "0.1.0"
-source = "git+https://github.com/henrikkv/leo-bindings#50bdf14d48c67777f92c422023bd88f13977328b"
+source = "git+https://github.com/henrikkv/leo-bindings#6b9dfd9456dd86bcf993e3548b8e2c0d231bb194"
 dependencies = [
  "leo-bindings",
  "leo-bindings-core",
+ "log",
  "rand",
  "serde_json",
  "snarkvm",
@@ -902,6 +904,29 @@ checksum = "8ab22c8085548bf06190113dca556e149ecdbb05ae5b972a2b9899f26b944ee4"
 dependencies = [
  "quote 0.3.15",
  "syn 0.11.11",
+]
+
+[[package]]
+name = "env_filter"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bf3c259d255ca70051b30e2e95b5446cdb8949ac4cd22c0d7fd634d89f568e2"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13c863f0904021b108aa8b2f55046443e6b1ebde8fd4a15c399893aae4fa069f"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "jiff",
+ "log",
 ]
 
 [[package]]
@@ -1477,6 +1502,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
+name = "jiff"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49cce2b81f2098e7e3efc35bc2e0a6b7abec9d34128283d7a26fa8f32a6dbb35"
+dependencies = [
+ "jiff-static",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde_core",
+]
+
+[[package]]
+name = "jiff-static"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "980af8b43c3ad5d8d349ace167ec8170839f753a42d233ba19e08afe1850fa69"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.42",
+ "syn 2.0.110",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1572,12 +1621,13 @@ dependencies = [
 [[package]]
 name = "leo-bindings"
 version = "0.1.0"
-source = "git+https://github.com/henrikkv/leo-bindings#50bdf14d48c67777f92c422023bd88f13977328b"
+source = "git+https://github.com/henrikkv/leo-bindings#6b9dfd9456dd86bcf993e3548b8e2c0d231bb194"
 dependencies = [
  "aleo-std",
  "anyhow",
  "clap",
  "colored 3.0.0",
+ "env_logger",
  "http",
  "indexmap",
  "itertools 0.14.0",
@@ -1602,7 +1652,7 @@ dependencies = [
 [[package]]
 name = "leo-bindings-core"
 version = "0.1.0"
-source = "git+https://github.com/henrikkv/leo-bindings#50bdf14d48c67777f92c422023bd88f13977328b"
+source = "git+https://github.com/henrikkv/leo-bindings#6b9dfd9456dd86bcf993e3548b8e2c0d231bb194"
 dependencies = [
  "aleo-std",
  "anyhow",
@@ -1617,6 +1667,7 @@ dependencies = [
  "leo-package",
  "leo-parser",
  "leo-span",
+ "log",
  "num-format",
  "proc-macro2",
  "quote 1.0.42",
@@ -1629,7 +1680,7 @@ dependencies = [
 [[package]]
 name = "leo-bindings-macro"
 version = "0.1.0"
-source = "git+https://github.com/henrikkv/leo-bindings#50bdf14d48c67777f92c422023bd88f13977328b"
+source = "git+https://github.com/henrikkv/leo-bindings#6b9dfd9456dd86bcf993e3548b8e2c0d231bb194"
 dependencies = [
  "leo-bindings-core",
  "proc-macro2",
@@ -1861,6 +1912,7 @@ dependencies = [
  "commutative_encryption_bindings",
  "leo-bindings",
  "leo-bindings-core",
+ "log",
  "rand",
  "serde_json",
  "snarkvm",
@@ -2144,11 +2196,28 @@ dependencies = [
  "commutative_encryption_bindings",
  "credits_bindings",
  "crossterm",
+ "env_logger",
  "leo-bindings",
+ "log",
  "mental_poker_bindings",
  "rand",
  "ratatui",
  "snarkvm",
+]
+
+[[package]]
+name = "portable-atomic"
+version = "1.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f84267b20a16ea918e43c6a88433c2d54fa145c92a811b5b047ccbe153674483"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
+dependencies = [
+ "portable-atomic",
 ]
 
 [[package]]

@@ -64,6 +64,7 @@ struct Expectation {
 }
 
 fn run_test(setup: GameSetup, cards: Cards, expectation: Expectation) {
+    leo_bindings::utils::init_test_logger();
     let p1: Account<TestnetV0> = Account::from_str(PRIVATE_KEY).unwrap();
     let p2: Account<TestnetV0> = Account::new(&mut rand::thread_rng()).unwrap();
     let p3: Account<TestnetV0> = Account::new(&mut rand::thread_rng()).unwrap();

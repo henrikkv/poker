@@ -3,9 +3,7 @@ use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use poker::game::{
-    DEFAULT_ENDPOINT, Game, GameMessage, handle_game_key, new_testnet_game,
-};
+use poker::game::{DEFAULT_ENDPOINT, Game, GameMessage, handle_game_key, new_testnet_game};
 use poker::game_state::NetworkType;
 use ratatui::{
     Terminal,
@@ -17,6 +15,12 @@ use std::panic;
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let account_index = std::env::var("ACCOUNT_INDEX")
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .unwrap_or(0u16);
+    init_file_logger(account_index)?;
+
     let original_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
         let _ = disable_raw_mode();
@@ -56,6 +60,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     restore_terminal(&mut terminal)?;
+    Ok(())
+}
+
+fn init_file_logger(account_index: u16) -> Result<(), Box<dyn std::error::Error>> {
+    use std::fs::File;
+    use std::io::Write;
+
+    let log_file_name = format!(".logsP{}", account_index + 1);
+    let log_file = File::create(&log_file_name)?;
+
+    env_logger::Builder::from_env(env_logger::Env::default().filter_or("RUST_LOG", "info"))
+        .target(env_logger::Target::Pipe(Box::new(log_file)))
+        .format(|buf, record| writeln!(buf, "{}", record.args()))
+        .filter_module("leo_bindings", log::LevelFilter::Debug)
+        .filter_module("credits_bindings", log::LevelFilter::Debug)
+        .filter_module("mental_poker_bindings", log::LevelFilter::Debug)
+        .filter_module("commutative_encryption_bindings", log::LevelFilter::Debug)
+        .filter(Some("ureq"), log::LevelFilter::Off)
+        .try_init()?;
+
     Ok(())
 }
 

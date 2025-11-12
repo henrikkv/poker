@@ -1,3 +1,4 @@
+use clap::{Parser, Subcommand};
 use crossterm::{
     event::{self, Event},
     execute,
@@ -14,7 +15,29 @@ use std::io;
 use std::panic;
 use std::time::Duration;
 
+#[derive(Parser)]
+#[command(name = "poker")]
+#[command(about = "Mental Poker on Aleo", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Testnet {
+        #[arg(short, long, default_value = DEFAULT_ENDPOINT)]
+        endpoint: String,
+    },
+    Mainnet {
+        #[arg(short, long)]
+        endpoint: String,
+    },
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
+
     let account_index = std::env::var("ACCOUNT_INDEX")
         .ok()
         .and_then(|s| s.parse::<u16>().ok())
@@ -28,9 +51,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         original_hook(panic_info);
     }));
 
-    let network_type = parse_network_type();
+    let (network_type, endpoint) = match cli.command {
+        Commands::Testnet { endpoint } => (NetworkType::Testnet, endpoint),
+        Commands::Mainnet { endpoint } => (NetworkType::Mainnet, endpoint),
+    };
 
-    let handle = create_game_handle(network_type)?;
+    let handle = create_game_handle(network_type, account_index, &endpoint)?;
     let mut game = Game::new(handle, network_type);
 
     let mut terminal = setup_terminal()?;
@@ -83,40 +109,14 @@ fn init_file_logger(account_index: u16) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-fn parse_network_type() -> NetworkType {
-    let args: Vec<String> = std::env::args().collect();
-
-    for arg in args.iter().skip(1) {
-        match arg.as_str() {
-            "testnet" => return NetworkType::Testnet,
-            "mainnet" => return NetworkType::Mainnet,
-            _ => {}
-        }
-    }
-
-    NetworkType::Testnet
-}
-
 fn create_game_handle(
     network_type: NetworkType,
+    account_index: u16,
+    endpoint: &str,
 ) -> Result<Box<dyn poker::game::GameHandle>, Box<dyn std::error::Error>> {
     match network_type {
-        NetworkType::Testnet => {
-            let account_index = std::env::var("ACCOUNT_INDEX")
-                .ok()
-                .and_then(|s| s.parse::<u16>().ok())
-                .unwrap_or(0u16);
-            let endpoint =
-                std::env::var("ENDPOINT").unwrap_or_else(|_| DEFAULT_ENDPOINT.to_string());
-            Ok(new_testnet_game(account_index, &endpoint)?)
-        }
-        NetworkType::Mainnet => {
-            let account_index = std::env::var("ACCOUNT_INDEX")
-                .ok()
-                .and_then(|s| s.parse::<u16>().ok())
-                .expect("ACCOUNT_INDEX not set.");
-            let endpoint = std::env::var("ENDPOINT").expect("ENDPOINT not set.");
-            Ok(new_testnet_game(account_index, &endpoint)?)
+        NetworkType::Testnet | NetworkType::Mainnet => {
+            Ok(new_testnet_game(account_index, endpoint)?)
         }
         NetworkType::Interpreter => {
             eprintln!("Interpreter mode only available in test mode");

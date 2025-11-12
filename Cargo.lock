@@ -555,7 +555,7 @@ dependencies = [
 [[package]]
 name = "credits_bindings"
 version = "0.1.0"
-source = "git+https://github.com/henrikkv/leo-bindings#6b9dfd9456dd86bcf993e3548b8e2c0d231bb194"
+source = "git+https://github.com/henrikkv/leo-bindings#7096acaf921307a0f26f09bc8220b422daa62731"
 dependencies = [
  "leo-bindings",
  "leo-bindings-core",
@@ -1621,7 +1621,7 @@ dependencies = [
 [[package]]
 name = "leo-bindings"
 version = "0.1.0"
-source = "git+https://github.com/henrikkv/leo-bindings#6b9dfd9456dd86bcf993e3548b8e2c0d231bb194"
+source = "git+https://github.com/henrikkv/leo-bindings#7096acaf921307a0f26f09bc8220b422daa62731"
 dependencies = [
  "aleo-std",
  "anyhow",
@@ -1652,7 +1652,7 @@ dependencies = [
 [[package]]
 name = "leo-bindings-core"
 version = "0.1.0"
-source = "git+https://github.com/henrikkv/leo-bindings#6b9dfd9456dd86bcf993e3548b8e2c0d231bb194"
+source = "git+https://github.com/henrikkv/leo-bindings#7096acaf921307a0f26f09bc8220b422daa62731"
 dependencies = [
  "aleo-std",
  "anyhow",
@@ -1680,7 +1680,7 @@ dependencies = [
 [[package]]
 name = "leo-bindings-macro"
 version = "0.1.0"
-source = "git+https://github.com/henrikkv/leo-bindings#6b9dfd9456dd86bcf993e3548b8e2c0d231bb194"
+source = "git+https://github.com/henrikkv/leo-bindings#7096acaf921307a0f26f09bc8220b422daa62731"
 dependencies = [
  "leo-bindings-core",
  "proc-macro2",
@@ -1798,9 +1798,9 @@ dependencies = [
 
 [[package]]
 name = "libz-sys"
-version = "1.1.22"
+version = "1.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b70e7a7df205e92a1a4cd9aaae7898dac0aa555503cc0a649494d0d60e7651d"
+checksum = "15d118bbf3771060e7311cc7bb0545b01d08a8b4a7de949198dec1fa0ca1c0f7"
 dependencies = [
  "cc",
  "libc",
@@ -2192,6 +2192,7 @@ name = "poker"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "colored 3.0.0",
  "commutative_encryption_bindings",
  "credits_bindings",

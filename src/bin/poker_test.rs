@@ -1,9 +1,12 @@
+use clap::{Parser, Subcommand};
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use poker::game::{Game, GameMessage, handle_game_key, new_interpreter_game};
+use poker::game::{
+    DEFAULT_ENDPOINT, Game, GameMessage, handle_game_key, new_interpreter_game, new_testnet_game,
+};
 use poker::game_state::NetworkType;
 use ratatui::{
     Terminal,
@@ -15,6 +18,23 @@ use ratatui::{
 use std::io;
 use std::panic;
 use std::time::Duration;
+
+#[derive(Parser)]
+#[command(name = "poker_test")]
+#[command(about = "Mental Poker test mode", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    Interpreter,
+    Testnet {
+        #[arg(short, long, default_value = DEFAULT_ENDPOINT)]
+        endpoint: String,
+    },
+}
 
 struct TestModel {
     games: [Game; 3],
@@ -30,12 +50,22 @@ enum TestMessage {
 }
 
 impl TestModel {
-    fn new(network_type: NetworkType) -> Result<Self, Box<dyn std::error::Error>> {
-        let games = [
-            Game::new(new_interpreter_game(0u16)?, network_type),
-            Game::new(new_interpreter_game(1u16)?, network_type),
-            Game::new(new_interpreter_game(2u16)?, network_type),
-        ];
+    fn new(network_type: NetworkType, endpoint: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let games = match network_type {
+            NetworkType::Interpreter => [
+                Game::new(new_interpreter_game(0u16)?, network_type),
+                Game::new(new_interpreter_game(1u16)?, network_type),
+                Game::new(new_interpreter_game(2u16)?, network_type),
+            ],
+            NetworkType::Testnet => [
+                Game::new(new_testnet_game(0u16, endpoint)?, network_type),
+                Game::new(new_testnet_game(1u16, endpoint)?, network_type),
+                Game::new(new_testnet_game(2u16, endpoint)?, network_type),
+            ],
+            NetworkType::Mainnet => {
+                panic!("Mainnet not supported in test mode");
+            }
+        };
 
         Ok(Self {
             games,
@@ -108,6 +138,8 @@ impl TestModel {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
+
     let original_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
         let _ = disable_raw_mode();
@@ -115,9 +147,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         original_hook(panic_info);
     }));
 
-    let network_type = NetworkType::Interpreter;
+    let (network_type, endpoint) = match cli.command {
+        Commands::Interpreter => (NetworkType::Interpreter, DEFAULT_ENDPOINT.to_string()),
+        Commands::Testnet { endpoint } => (NetworkType::Testnet, endpoint),
+    };
 
-    let mut model = TestModel::new(network_type)?;
+    let mut model = TestModel::new(network_type, &endpoint)?;
 
     let mut terminal = setup_terminal()?;
 

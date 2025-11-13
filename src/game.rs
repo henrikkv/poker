@@ -1758,7 +1758,9 @@ fn render_create_game(frame: &mut Frame, model: &GameModel, area: Rect) {
     };
 
     let buy_in_text = format!("Buy-in: {}", buy_in_display);
-    let buy_in_line = Line::from(buy_in_text).alignment(Alignment::Center).style(buy_in_style);
+    let buy_in_line = Line::from(buy_in_text)
+        .alignment(Alignment::Center)
+        .style(buy_in_style);
     buy_in_line.render(buy_in_area, frame.buffer_mut());
 
     // Render Password field
@@ -1777,7 +1779,9 @@ fn render_create_game(frame: &mut Frame, model: &GameModel, area: Rect) {
     };
 
     let password_text = format!("Password: {}", password_display);
-    let password_line = Line::from(password_text).alignment(Alignment::Center).style(password_style);
+    let password_line = Line::from(password_text)
+        .alignment(Alignment::Center)
+        .style(password_style);
     password_line.render(password_area, frame.buffer_mut());
 }
 
@@ -1818,7 +1822,9 @@ fn render_join_game(frame: &mut Frame, model: &GameModel, area: Rect) {
     };
 
     let game_id_text = format!("Game ID: {}", game_id_display);
-    let game_id_line = Line::from(game_id_text).alignment(Alignment::Center).style(game_id_style);
+    let game_id_line = Line::from(game_id_text)
+        .alignment(Alignment::Center)
+        .style(game_id_style);
     game_id_line.render(game_id_area, frame.buffer_mut());
 
     // Render Password field
@@ -1837,7 +1843,9 @@ fn render_join_game(frame: &mut Frame, model: &GameModel, area: Rect) {
     };
 
     let password_text = format!("Password: {}", password_display);
-    let password_line = Line::from(password_text).alignment(Alignment::Center).style(password_style);
+    let password_line = Line::from(password_text)
+        .alignment(Alignment::Center)
+        .style(password_style);
     password_line.render(password_area, frame.buffer_mut());
 }
 

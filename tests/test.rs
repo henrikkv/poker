@@ -158,6 +158,7 @@ fn gameplay<
             alice_shuffled_deck,
             secret_alice,
             secret_alice_inv,
+            0u128,
         )
         .unwrap();
     dbg!(&alice_keys);
@@ -165,7 +166,16 @@ fn gameplay<
     let deck = poker.get_decks(1).unwrap();
     let bob_shuffled_deck = shuffle_deck(deck);
     let (bob_keys, _) = poker
-        .join_game(bob, 1, deck, bob_shuffled_deck, secret_bob, secret_bob_inv)
+        .join_game(
+            bob,
+            1,
+            1u64,
+            deck,
+            bob_shuffled_deck,
+            secret_bob,
+            secret_bob_inv,
+            0u128,
+        )
         .unwrap();
     dbg!(&bob_keys);
 
@@ -175,10 +185,12 @@ fn gameplay<
         .join_game(
             charlie,
             1,
+            1u64,
             deck,
             charlie_shuffled_deck,
             secret_charlie,
             secret_charlie_inv,
+            0u128,
         )
         .unwrap();
     dbg!(&charlie_keys);

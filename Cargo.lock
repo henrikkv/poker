@@ -1910,6 +1910,7 @@ name = "mental_poker_bindings"
 version = "0.1.0"
 dependencies = [
  "commutative_encryption_bindings",
+ "credits_bindings",
  "leo-bindings",
  "leo-bindings-core",
  "log",

@@ -27,8 +27,70 @@ impl NetworkType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
-    GameIdInput,
+    Menu,
+    CreateGame,
+    JoinGame,
     InGame,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreateGameField {
+    BuyIn,
+    Password,
+}
+
+impl CreateGameField {
+    pub fn next(&self) -> Self {
+        match self {
+            CreateGameField::BuyIn => CreateGameField::Password,
+            CreateGameField::Password => CreateGameField::BuyIn,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JoinGameField {
+    GameId,
+    Password,
+}
+
+impl JoinGameField {
+    pub fn next(&self) -> Self {
+        match self {
+            JoinGameField::GameId => JoinGameField::Password,
+            JoinGameField::Password => JoinGameField::GameId,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuOption {
+    CreateGame,
+    JoinGame,
+}
+
+impl MenuOption {
+    pub fn all() -> [Self; 2] {
+        [Self::CreateGame, Self::JoinGame]
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            MenuOption::CreateGame => "Create Game",
+            MenuOption::JoinGame => "Join Game",
+        }
+    }
+
+    pub fn next(&self) -> Self {
+        match self {
+            MenuOption::CreateGame => MenuOption::JoinGame,
+            MenuOption::JoinGame => MenuOption::CreateGame,
+        }
+    }
+
+    pub fn prev(&self) -> Self {
+        self.next()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,7 +179,12 @@ pub struct GameModel {
     pub current_player_id: u8,
 
     pub screen: Screen,
+    pub selected_menu_option: MenuOption,
     pub game_id_input: String,
+    pub password_input: String,
+    pub buy_in_input: String,
+    pub create_game_field: CreateGameField,
+    pub join_game_field: JoinGameField,
     pub logs: Vec<String>,
 
     pub network_type: NetworkType,
@@ -133,6 +200,8 @@ pub struct GameModel {
     pub previous_chips: Option<crate::game::Chip>,
     pub chip_differences: Option<[i32; 3]>,
     pub round_start_chips: Option<crate::game::Chip>,
+
+    pub last_known_game_id: u32,
 }
 
 impl GameModel {
@@ -143,8 +212,13 @@ impl GameModel {
             last_poll_time: Instant::now(),
             current_state: None,
             current_player_id: 0,
-            screen: Screen::GameIdInput,
+            screen: Screen::Menu,
+            selected_menu_option: MenuOption::CreateGame,
             game_id_input: String::new(),
+            password_input: String::new(),
+            buy_in_input: "1000".to_string(),
+            create_game_field: CreateGameField::BuyIn,
+            join_game_field: JoinGameField::GameId,
             logs: Vec::new(),
             network_type,
             should_quit: false,
@@ -155,6 +229,7 @@ impl GameModel {
             previous_chips: None,
             chip_differences: None,
             round_start_chips: None,
+            last_known_game_id: 0,
         };
         model.log(format!("Starting poker with {}", network_type.name()));
         model

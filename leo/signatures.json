@@ -1,6 +1,7 @@
 {
   "program_name": "mental_poker",
   "imports": [
+    "credits",
     "commutative_encryption"
   ],
   "records": [
@@ -48,6 +49,11 @@
         {
           "name": "buy_in",
           "type": "u64",
+          "mode": "None"
+        },
+        {
+          "name": "password_hash",
+          "type": "u128",
           "mode": "None"
         },
         {
@@ -244,8 +250,8 @@
       "name": "create_game",
       "inputs": [
         {
-          "name": "game_id",
-          "type": "u32",
+          "name": "buy_in",
+          "type": "u64",
           "mode": "None"
         },
         {
@@ -261,6 +267,11 @@
         {
           "name": "secret_inv",
           "type": "Scalar",
+          "mode": "None"
+        },
+        {
+          "name": "password",
+          "type": "u128",
           "mode": "None"
         }
       ],
@@ -285,6 +296,11 @@
           "mode": "None"
         },
         {
+          "name": "buy_in",
+          "type": "u64",
+          "mode": "None"
+        },
+        {
           "name": "deck",
           "type": "[Group; 52]",
           "mode": "None"
@@ -302,6 +318,11 @@
         {
           "name": "secret_inv",
           "type": "Scalar",
+          "mode": "None"
+        },
+        {
+          "name": "password",
+          "type": "u128",
           "mode": "None"
         }
       ],
@@ -492,6 +513,105 @@
           "name": "game_id",
           "type": "u32",
           "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "new_hand",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "deck_shuffled",
+          "type": "[Group; 52]",
+          "mode": "None"
+        },
+        {
+          "name": "secret",
+          "type": "Scalar",
+          "mode": "None"
+        },
+        {
+          "name": "secret_inv",
+          "type": "Scalar",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "shuffle_deck",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "deck",
+          "type": "[Group; 52]",
+          "mode": "None"
+        },
+        {
+          "name": "deck_shuffled",
+          "type": "[Group; 52]",
+          "mode": "None"
+        },
+        {
+          "name": "secret",
+          "type": "Scalar",
+          "mode": "None"
+        },
+        {
+          "name": "secret_inv",
+          "type": "Scalar",
+          "mode": "None"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "Keys",
+          "mode": "None"
+        },
+        {
+          "type": "Future",
+          "mode": "None"
+        }
+      ],
+      "is_async": true
+    },
+    {
+      "name": "claim_prize",
+      "inputs": [
+        {
+          "name": "game_id",
+          "type": "u32",
+          "mode": "None"
+        },
+        {
+          "name": "prize",
+          "type": "u64",
+          "mode": "Public"
         }
       ],
       "outputs": [

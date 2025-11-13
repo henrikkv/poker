@@ -10,6 +10,12 @@
       "location": "local",
       "path": "./imports/commutative_encryption",
       "edition": null
+    },
+    {
+      "name": "credits.aleo",
+      "location": "network",
+      "path": null,
+      "edition": null
     }
   ],
   "dev_dependencies": null

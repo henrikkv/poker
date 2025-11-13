@@ -19,7 +19,9 @@ use crate::cards::{
     CardInfo, card_info, decrypt_hand_local, get_opponents, get_other_players_cards,
     get_player_cards,
 };
-use crate::game_state::{GameModel, NetworkType, Screen, describe_game_state};
+use crate::game_state::{
+    CreateGameField, GameModel, JoinGameField, MenuOption, NetworkType, Screen, describe_game_state,
+};
 
 pub const DEFAULT_ENDPOINT: &str = "http://localhost:3030";
 
@@ -203,32 +205,6 @@ enum DecryptionStep {
 }
 
 impl DecryptionStep {
-    fn matches(&self, player_id: u8, state: GameState) -> bool {
-        match (self, player_id) {
-            (DecryptionStep::Hands, 1) => state == GameState::P1DecHand,
-            (DecryptionStep::Hands, 2) => state == GameState::P2DecHand,
-            (DecryptionStep::Hands, 3) => state == GameState::P3DecHand,
-
-            (DecryptionStep::Flop, 1) => state == GameState::P1DecFlop,
-            (DecryptionStep::Flop, 2) => state == GameState::P2DecFlop,
-            (DecryptionStep::Flop, 3) => state == GameState::P3DecFlop,
-
-            (DecryptionStep::Turn, 1) => state == GameState::P1DecTurn,
-            (DecryptionStep::Turn, 2) => state == GameState::P2DecTurn,
-            (DecryptionStep::Turn, 3) => state == GameState::P3DecTurn,
-
-            (DecryptionStep::River, 1) => state == GameState::P1DecRiver,
-            (DecryptionStep::River, 2) => state == GameState::P2DecRiver,
-            (DecryptionStep::River, 3) => state == GameState::P3DecRiver,
-
-            (DecryptionStep::Showdown, 1) => state == GameState::P1Showdown,
-            (DecryptionStep::Showdown, 2) => state == GameState::P2Showdown,
-            (DecryptionStep::Showdown, 3) => state == GameState::P3Showdown,
-
-            _ => false,
-        }
-    }
-
     fn log_message(&self) -> &'static str {
         match self {
             DecryptionStep::Hands => "Decrypting hand cards",
@@ -374,7 +350,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         Ok(())
     }
 
-    pub fn initialize_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+    pub fn initialize_game(&mut self, model: &mut GameModel) -> anyhow::Result<()> {
         use crate::deck::initialized_deck;
 
         model.log_action_start("Initializing deck".to_string());
@@ -385,20 +361,26 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         let shuffled_deck = shuffle_deck(initial_deck);
         model.log_action_complete();
 
-        model.log_action_start(format!("Creating game with ID {}", game_id));
+        let password = if model.password_input.is_empty() {
+            0u128
+        } else {
+            model.password_input.parse::<u128>().unwrap_or(0u128)
+        };
+
+        let buy_in = model.buy_in_input.parse::<u64>().unwrap_or(1000u64);
+
+        model.log_action_start("Creating game".to_string());
         let (keys, _) = self.poker.create_game(
             &self.account,
-            game_id,
+            buy_in,
             shuffled_deck,
             self.secret,
             self.secret_inv,
+            password,
         )?;
         model.log_action_complete();
 
         self.keys = Some(keys);
-        self.set_player_id(game_id)?;
-
-        model.log(format!("Game {} created as P{}", game_id, self.player_id));
 
         Ok(())
     }
@@ -518,21 +500,21 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
 
             if self.keys.is_some() && state_changed {
                 let step = match (state, self.player_id) {
-                    (GameState::P1DecHand, 1) | (GameState::P2DecHand, 2) | (GameState::P3DecHand, 3) => {
-                        Some(DecryptionStep::Hands)
-                    }
-                    (GameState::P1DecFlop, 1) | (GameState::P2DecFlop, 2) | (GameState::P3DecFlop, 3) => {
-                        Some(DecryptionStep::Flop)
-                    }
-                    (GameState::P1DecTurn, 1) | (GameState::P2DecTurn, 2) | (GameState::P3DecTurn, 3) => {
-                        Some(DecryptionStep::Turn)
-                    }
-                    (GameState::P1DecRiver, 1) | (GameState::P2DecRiver, 2) | (GameState::P3DecRiver, 3) => {
-                        Some(DecryptionStep::River)
-                    }
-                    (GameState::P1Showdown, 1) | (GameState::P2Showdown, 2) | (GameState::P3Showdown, 3) => {
-                        Some(DecryptionStep::Showdown)
-                    }
+                    (GameState::P1DecHand, 1)
+                    | (GameState::P2DecHand, 2)
+                    | (GameState::P3DecHand, 3) => Some(DecryptionStep::Hands),
+                    (GameState::P1DecFlop, 1)
+                    | (GameState::P2DecFlop, 2)
+                    | (GameState::P3DecFlop, 3) => Some(DecryptionStep::Flop),
+                    (GameState::P1DecTurn, 1)
+                    | (GameState::P2DecTurn, 2)
+                    | (GameState::P3DecTurn, 3) => Some(DecryptionStep::Turn),
+                    (GameState::P1DecRiver, 1)
+                    | (GameState::P2DecRiver, 2)
+                    | (GameState::P3DecRiver, 3) => Some(DecryptionStep::River),
+                    (GameState::P1Showdown, 1)
+                    | (GameState::P2Showdown, 2)
+                    | (GameState::P3Showdown, 3) => Some(DecryptionStep::Showdown),
                     _ => None,
                 };
 
@@ -613,8 +595,12 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             model.current_state = new_state;
         }
 
-        if state_changed || hand_decrypted || chips_compared || model.card.is_none()
-            || new_state == Some(GameState::Compare) {
+        if state_changed
+            || hand_decrypted
+            || chips_compared
+            || model.card.is_none()
+            || new_state == Some(GameState::Compare)
+        {
             let mut render_data = if let Some(revealed) = revealed_cards {
                 Card {
                     flop: revealed.flop,
@@ -731,7 +717,7 @@ pub trait GameHandle {
     fn get_card(&self, game_id: u32, current_player_id: u8, model: &GameModel) -> Option<Card>;
     fn get_chip(&self, game_id: u32) -> Option<Chip>;
     fn check_address_conflict(&self, game_id: u32) -> bool;
-    fn initialize_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn initialize_game(&mut self, model: &mut GameModel) -> anyhow::Result<()>;
     fn join_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
     fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
     fn place_bet(
@@ -742,6 +728,8 @@ pub trait GameHandle {
         amount: u64,
     ) -> anyhow::Result<()>;
     fn compare_hands(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn search_for_player_game(&self, model: &mut GameModel) -> Option<u32>;
+    fn try_set_player_id(&mut self, game_id: u32) -> anyhow::Result<()>;
 }
 
 impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHandle
@@ -812,8 +800,8 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
         my_address == game.player1 || my_address == game.player2 || my_address == game.player3
     }
 
-    fn initialize_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
-        self.initialize_game(model, game_id)
+    fn initialize_game(&mut self, model: &mut GameModel) -> anyhow::Result<()> {
+        self.initialize_game(model)
     }
 
     fn join_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
@@ -828,14 +816,28 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
         let shuffled_deck = shuffle_deck(deck);
         model.log_action_complete();
 
+        let password = if model.password_input.is_empty() {
+            0u128
+        } else {
+            model.password_input.parse::<u128>().unwrap_or(0u128)
+        };
+
+        let game = self
+            .poker
+            .get_games(game_id)
+            .ok_or_else(|| anyhow::anyhow!("Game {} not found", game_id))?;
+        let buy_in = game.buy_in;
+
         model.log_action_start(format!("Joining game {}", game_id));
         let (keys, _) = self.poker.join_game(
             &self.account,
             game_id,
+            buy_in,
             deck,
             shuffled_deck,
             self.secret,
             self.secret_inv,
+            password,
         )?;
         model.log_action_complete();
 
@@ -929,6 +931,45 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
 
         Ok(())
     }
+
+    fn search_for_player_game(&self, model: &mut GameModel) -> Option<u32> {
+        let address = self.account.address();
+        let search_id = model.last_known_game_id;
+
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.poker.get_games(search_id)
+        })) {
+            Ok(Some(game)) => {
+                if game.player1 == address || game.player2 == address || game.player3 == address {
+                    return Some(search_id);
+                }
+            }
+            Ok(None) => {}
+            Err(_) => {}
+        }
+
+        None
+    }
+
+    fn try_set_player_id(&mut self, game_id: u32) -> anyhow::Result<()> {
+        let game = self
+            .poker
+            .get_games(game_id)
+            .ok_or_else(|| anyhow::anyhow!("Game {} not found", game_id))?;
+
+        let address = self.account.address();
+        if address == game.player1 {
+            self.player_id = 1;
+        } else if address == game.player2 {
+            self.player_id = 2;
+        } else if address == game.player3 {
+            self.player_id = 3;
+        } else {
+            anyhow::bail!("Not a player in game {}", game_id);
+        }
+
+        Ok(())
+    }
 }
 
 pub fn new_interpreter_game(account_index: u16) -> anyhow::Result<Box<dyn GameHandle>> {
@@ -972,6 +1013,7 @@ pub enum GameMessage {
 pub enum GameCommand {
     InitializeGame(u32),
     JoinGame(u32),
+    SearchForGame,
     PollGameState(u32),
     PlaceBet {
         game_id: u32,
@@ -999,87 +1041,195 @@ impl Game {
     pub fn update(&mut self, msg: GameMessage) -> Option<GameMessage> {
         match msg {
             GameMessage::CharInput(c) => {
-                if self.model.screen == Screen::GameIdInput && c.is_ascii_digit() {
-                    self.model.game_id_input.push(c);
+                match self.model.screen {
+                    Screen::JoinGame => {
+                        if c.is_ascii_digit() {
+                            match self.model.join_game_field {
+                                JoinGameField::GameId => {
+                                    self.model.game_id_input.push(c);
+                                }
+                                JoinGameField::Password => {
+                                    self.model.password_input.push(c);
+                                }
+                            }
+                        }
+                    }
+                    Screen::CreateGame => {
+                        if c.is_ascii_digit() {
+                            match self.model.create_game_field {
+                                CreateGameField::BuyIn => {
+                                    if self.model.buy_in_input.len() < 10 {
+                                        self.model.buy_in_input.push(c);
+                                    }
+                                }
+                                CreateGameField::Password => {
+                                    self.model.password_input.push(c);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
                 }
                 None
             }
 
             GameMessage::Backspace => {
-                if self.model.screen == Screen::GameIdInput {
-                    self.model.game_id_input.pop();
+                match self.model.screen {
+                    Screen::JoinGame => match self.model.join_game_field {
+                        JoinGameField::GameId => {
+                            self.model.game_id_input.pop();
+                        }
+                        JoinGameField::Password => {
+                            self.model.password_input.pop();
+                        }
+                    },
+                    Screen::CreateGame => match self.model.create_game_field {
+                        CreateGameField::BuyIn => {
+                            self.model.buy_in_input.pop();
+                        }
+                        CreateGameField::Password => {
+                            self.model.password_input.pop();
+                        }
+                    },
+                    _ => {}
                 }
                 None
             }
 
             GameMessage::Confirm => {
-                if self.model.screen == Screen::GameIdInput
-                    && let Ok(id) = self.model.game_id_input.parse::<u32>()
-                {
-                    self.model.game_id = Some(id);
-                    self.model.screen = Screen::InGame;
+                match self.model.screen {
+                    Screen::Menu => match self.model.selected_menu_option {
+                        MenuOption::CreateGame => {
+                            self.model.screen = Screen::CreateGame;
+                            self.model.buy_in_input = "1000".to_string();
+                            self.model.password_input.clear();
+                            self.model.create_game_field = CreateGameField::BuyIn;
+                        }
+                        MenuOption::JoinGame => {
+                            self.model.screen = Screen::JoinGame;
+                            self.model.game_id_input.clear();
+                            self.model.password_input.clear();
+                            self.model.join_game_field = JoinGameField::GameId;
+                        }
+                    },
+                    Screen::CreateGame => {
+                        self.model.screen = Screen::InGame;
+                        self.pending_command = Some(GameCommand::InitializeGame(0));
+                    }
+                    Screen::JoinGame => {
+                        if let Ok(id) = self.model.game_id_input.parse::<u32>() {
+                            self.model.game_id = Some(id);
+                            self.model.screen = Screen::InGame;
 
-                    let game_exists = self.handle.check_game_exists(id);
-                    if let Some(state) = self.handle.get_game_state(id) {
-                        match state {
-                            0 | 1 => {
-                                if self.handle.check_address_conflict(id) {
-                                    self.model.log(format!(
-                                        "Cannot join game {}: Your address is already a player in this game",
-                                        id
-                                    ));
-                                } else {
-                                    self.pending_command = Some(GameCommand::JoinGame(id));
+                            let game_exists = self.handle.check_game_exists(id);
+                            if let Some(state) = self.handle.get_game_state(id) {
+                                match state {
+                                    0 | 1 => {
+                                        if self.handle.check_address_conflict(id) {
+                                            self.model.log(format!(
+                                                "Cannot join game {}: Your address is already a player in this game",
+                                                id
+                                            ));
+                                        } else {
+                                            self.pending_command = Some(GameCommand::JoinGame(id));
+                                        }
+                                    }
+                                    _ => {
+                                        self.model.log(format!(
+                                            "Spectating game {} (already started)",
+                                            id
+                                        ));
+                                        self.model.game_initialized = true;
+                                        self.pending_command = Some(GameCommand::PollGameState(id));
+                                    }
                                 }
-                            }
-                            _ => {
-                                self.model
-                                    .log(format!("Spectating game {} (already started)", id));
-                                self.model.game_initialized = true;
-                                self.pending_command = Some(GameCommand::PollGameState(id));
+                            } else if !game_exists {
+                                self.model.log(format!("Game {} does not exist", id));
+                                self.model.screen = Screen::JoinGame;
                             }
                         }
-                    } else if !game_exists {
-                        self.pending_command = Some(GameCommand::InitializeGame(id));
                     }
-                } else if let (Some(betting_ui), Some(game_id)) =
-                    (&self.model.betting_ui, self.model.game_id)
-                {
-                    let action = betting_ui.selected_action;
-                    let amount = betting_ui.raise_amount;
-                    self.pending_command = Some(GameCommand::PlaceBet {
-                        game_id,
-                        action,
-                        amount,
-                    });
+                    Screen::InGame => {
+                        if let (Some(betting_ui), Some(game_id)) =
+                            (&self.model.betting_ui, self.model.game_id)
+                        {
+                            let action = betting_ui.selected_action;
+                            let amount = betting_ui.raise_amount;
+                            self.pending_command = Some(GameCommand::PlaceBet {
+                                game_id,
+                                action,
+                                amount,
+                            });
+                        }
+                    }
                 }
                 None
             }
 
             GameMessage::Left => {
-                if let Some(betting_ui) = &mut self.model.betting_ui {
-                    betting_ui.select_prev();
+                match self.model.screen {
+                    Screen::Menu => {
+                        self.model.selected_menu_option = self.model.selected_menu_option.prev();
+                    }
+                    Screen::CreateGame => {
+                        self.model.create_game_field = self.model.create_game_field.next();
+                    }
+                    Screen::JoinGame => {
+                        self.model.join_game_field = self.model.join_game_field.next();
+                    }
+                    _ => {
+                        if let Some(betting_ui) = &mut self.model.betting_ui {
+                            betting_ui.select_prev();
+                        }
+                    }
                 }
                 None
             }
 
             GameMessage::Right => {
-                if let Some(betting_ui) = &mut self.model.betting_ui {
-                    betting_ui.select_next();
+                match self.model.screen {
+                    Screen::Menu => {
+                        self.model.selected_menu_option = self.model.selected_menu_option.next();
+                    }
+                    Screen::CreateGame => {
+                        self.model.create_game_field = self.model.create_game_field.next();
+                    }
+                    Screen::JoinGame => {
+                        self.model.join_game_field = self.model.join_game_field.next();
+                    }
+                    _ => {
+                        if let Some(betting_ui) = &mut self.model.betting_ui {
+                            betting_ui.select_next();
+                        }
+                    }
                 }
                 None
             }
 
             GameMessage::Up => {
-                if let Some(betting_ui) = &mut self.model.betting_ui {
-                    betting_ui.increase_raise();
+                match self.model.screen {
+                    Screen::Menu => {
+                        self.model.selected_menu_option = self.model.selected_menu_option.prev();
+                    }
+                    _ => {
+                        if let Some(betting_ui) = &mut self.model.betting_ui {
+                            betting_ui.increase_raise();
+                        }
+                    }
                 }
                 None
             }
 
             GameMessage::Down => {
-                if let Some(betting_ui) = &mut self.model.betting_ui {
-                    betting_ui.decrease_raise();
+                match self.model.screen {
+                    Screen::Menu => {
+                        self.model.selected_menu_option = self.model.selected_menu_option.next();
+                    }
+                    _ => {
+                        if let Some(betting_ui) = &mut self.model.betting_ui {
+                            betting_ui.decrease_raise();
+                        }
+                    }
                 }
                 None
             }
@@ -1105,9 +1255,7 @@ impl Game {
                     Ok(()) => {
                         self.model.game_initialized = true;
                         self.model.current_player_id = self.handle.get_player_id();
-                        if let Some(game_id) = self.model.game_id {
-                            self.pending_command = Some(GameCommand::PollGameState(game_id));
-                        }
+                        self.pending_command = Some(GameCommand::SearchForGame);
                     }
                     Err(e) => {
                         self.model.log(format!("Error initializing: {}", e));
@@ -1172,7 +1320,9 @@ impl Game {
 
     pub fn view(&self, frame: &mut Frame, area: Rect) {
         match self.model.screen {
-            Screen::GameIdInput => render_game_id_input(frame, &self.model, area),
+            Screen::Menu => render_menu(frame, &self.model, area),
+            Screen::CreateGame => render_create_game(frame, &self.model, area),
+            Screen::JoinGame => render_join_game(frame, &self.model, area),
             Screen::InGame => render_in_game(frame, &self.model, area),
         }
     }
@@ -1189,7 +1339,7 @@ impl Game {
                 self.model.log(format!("Creating new game {}", game_id));
                 let result = self
                     .handle
-                    .initialize_game(&mut self.model, game_id)
+                    .initialize_game(&mut self.model)
                     .map_err(|e| e.to_string());
                 Some(GameMessage::GameInitialized(result))
             }
@@ -1207,6 +1357,32 @@ impl Game {
                     .join_game(&mut self.model, game_id)
                     .map_err(|e| e.to_string());
                 Some(GameMessage::GameJoined(result))
+            }
+
+            GameCommand::SearchForGame => {
+                if let Some(game_id) = self.model.game_id {
+                    self.pending_command = Some(GameCommand::PollGameState(game_id));
+                    None
+                } else {
+                    let found_id = self.handle.search_for_player_game(&mut self.model);
+                    if let Some(game_id) = found_id {
+                        self.model.game_id = Some(game_id);
+                        self.model.log(format!("Found game {}", game_id));
+                        if let Err(e) = self.handle.try_set_player_id(game_id) {
+                            self.model
+                                .log(format!("Warning: Could not determine player ID: {}", e));
+                        } else {
+                            self.model.current_player_id = self.handle.get_player_id();
+                            self.model
+                                .log(format!("You are Player {}", self.model.current_player_id));
+                        }
+                        self.pending_command = Some(GameCommand::PollGameState(game_id));
+                    } else {
+                        self.model.last_known_game_id += 1;
+                        self.pending_command = Some(GameCommand::SearchForGame);
+                    }
+                    None
+                }
             }
 
             GameCommand::PollGameState(game_id) => {
@@ -1513,20 +1689,156 @@ impl Widget for PlayerWidget {
     }
 }
 
-fn render_game_id_input(frame: &mut Frame, model: &GameModel, area: Rect) {
-    let title = format!("Poker - {}", model.network_type.name());
+fn render_menu(frame: &mut Frame, model: &GameModel, area: Rect) {
+    let title = format!("Mental Poker - {}", model.network_type.name());
     let block = Block::default().title(title).borders(Borders::ALL);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
 
-    let text = format!(
-        "Enter Game ID (or create new):\n\n{}\n\nPress Enter to confirm, Q to quit",
-        model.game_id_input
-    );
+    let options = MenuOption::all();
+    let button_width = inner.width / 2;
+    let center_y = inner.y + inner.height / 2;
 
-    let paragraph = Paragraph::new(text)
-        .block(block)
-        .alignment(Alignment::Center);
+    for (i, option) in options.iter().enumerate() {
+        let is_selected = *option == model.selected_menu_option;
+        let x = inner.x + (i as u16 * button_width);
+        let button_area = Rect {
+            x,
+            y: center_y,
+            width: button_width,
+            height: 1,
+        };
 
-    frame.render_widget(paragraph, area);
+        let style = if is_selected {
+            Style::default().fg(Color::Black).bg(Color::Yellow)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let text = option.name().to_string();
+        let line = Line::from(text).alignment(Alignment::Center).style(style);
+        line.render(button_area, frame.buffer_mut());
+    }
+}
+
+fn render_create_game(frame: &mut Frame, model: &GameModel, area: Rect) {
+    let title = "Create New Game";
+    let block = Block::default().title(title).borders(Borders::ALL);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let buy_in_display = if model.buy_in_input.is_empty() {
+        "_".to_string()
+    } else {
+        model.buy_in_input.clone()
+    };
+
+    let password_display = if model.password_input.is_empty() {
+        "_".to_string()
+    } else {
+        "*".repeat(model.password_input.len())
+    };
+
+    let button_width = inner.width / 2;
+    let center_y = inner.y + inner.height / 2;
+
+    // Render Buy-in field
+    let buy_in_selected = matches!(model.create_game_field, CreateGameField::BuyIn);
+    let buy_in_style = if buy_in_selected {
+        Style::default().fg(Color::Black).bg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let buy_in_area = Rect {
+        x: inner.x,
+        y: center_y,
+        width: button_width,
+        height: 1,
+    };
+
+    let buy_in_text = format!("Buy-in: {}", buy_in_display);
+    let buy_in_line = Line::from(buy_in_text).alignment(Alignment::Center).style(buy_in_style);
+    buy_in_line.render(buy_in_area, frame.buffer_mut());
+
+    // Render Password field
+    let password_selected = matches!(model.create_game_field, CreateGameField::Password);
+    let password_style = if password_selected {
+        Style::default().fg(Color::Black).bg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let password_area = Rect {
+        x: inner.x + button_width,
+        y: center_y,
+        width: button_width,
+        height: 1,
+    };
+
+    let password_text = format!("Password: {}", password_display);
+    let password_line = Line::from(password_text).alignment(Alignment::Center).style(password_style);
+    password_line.render(password_area, frame.buffer_mut());
+}
+
+fn render_join_game(frame: &mut Frame, model: &GameModel, area: Rect) {
+    let title = "Join Game";
+    let block = Block::default().title(title).borders(Borders::ALL);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let game_id_display = if model.game_id_input.is_empty() {
+        "_".to_string()
+    } else {
+        model.game_id_input.clone()
+    };
+
+    let password_display = if model.password_input.is_empty() {
+        "_".to_string()
+    } else {
+        "*".repeat(model.password_input.len())
+    };
+
+    let button_width = inner.width / 2;
+    let center_y = inner.y + inner.height / 2;
+
+    // Render Game ID field
+    let game_id_selected = matches!(model.join_game_field, JoinGameField::GameId);
+    let game_id_style = if game_id_selected {
+        Style::default().fg(Color::Black).bg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let game_id_area = Rect {
+        x: inner.x,
+        y: center_y,
+        width: button_width,
+        height: 1,
+    };
+
+    let game_id_text = format!("Game ID: {}", game_id_display);
+    let game_id_line = Line::from(game_id_text).alignment(Alignment::Center).style(game_id_style);
+    game_id_line.render(game_id_area, frame.buffer_mut());
+
+    // Render Password field
+    let password_selected = matches!(model.join_game_field, JoinGameField::Password);
+    let password_style = if password_selected {
+        Style::default().fg(Color::Black).bg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let password_area = Rect {
+        x: inner.x + button_width,
+        y: center_y,
+        width: button_width,
+        height: 1,
+    };
+
+    let password_text = format!("Password: {}", password_display);
+    let password_line = Line::from(password_text).alignment(Alignment::Center).style(password_style);
+    password_line.render(password_area, frame.buffer_mut());
 }
 
 fn render_status(frame: &mut Frame, message: &str, area: Rect) {

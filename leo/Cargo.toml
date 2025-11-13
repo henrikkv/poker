@@ -8,7 +8,7 @@ snarkvm = "4.3.1"
 log = "0.4"
 
 # BEGIN IMPORTS
-# credits_bindings = { git = "https://github.com/henrikkv/leo-bindings" }
+credits_bindings = { git = "https://github.com/henrikkv/leo-bindings" }
 # END IMPORTS
 
 [package]
@@ -27,6 +27,8 @@ snarkvm.workspace = true
 log.workspace = true
 
 commutative_encryption_bindings = { path = "./imports/commutative_encryption" }
+
+credits_bindings.workspace = true
 
 [build-dependencies]
 leo-bindings-core = { git = "https://github.com/henrikkv/leo-bindings" }

@@ -201,6 +201,7 @@ fn handle_event() -> Result<Option<TestMessage>, Box<dyn std::error::Error>> {
     {
         return Ok(match key.code {
             KeyCode::Tab => Some(TestMessage::NextPlayer),
+            KeyCode::BackTab => Some(TestMessage::PrevPlayer),
             _ => handle_game_key(key).map(TestMessage::GameMessage),
         });
     }

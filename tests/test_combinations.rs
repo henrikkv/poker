@@ -75,6 +75,7 @@ fn run_test(setup: GameSetup, cards: Cards, expectation: Expectation) {
         p2.address(),
         p3.address(),
         100u64,
+        0u128,
         29u8,
         1u8,
         setup.players_out,

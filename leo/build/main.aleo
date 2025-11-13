@@ -1,4 +1,5 @@
 import commutative_encryption.aleo;
+import credits.aleo;
 program mental_poker.aleo;
 
 record Keys:
@@ -11,6 +12,7 @@ struct Game:
     player2 as address;
     player3 as address;
     buy_in as u64;
+    password_hash as u128;
     state as u8;
     dealer_button as u8;
     players_out as u8;
@@ -66,79 +68,102 @@ mapping revealed_cards:
     key as u32.public;
     value as RevealedCards.public;
 
+mapping next_game_id__:
+    key as boolean.public;
+    value as u32.public;
+
 function create_game:
-    input r0 as u32.private;
+    input r0 as u64.private;
     input r1 as [group; 52u32].private;
     input r2 as scalar.private;
     input r3 as scalar.private;
-    call commutative_encryption.aleo/initialize_deck into r4;
-    call commutative_encryption.aleo/verify_permutation r4 r1;
-    call commutative_encryption.aleo/encrypt_deck r2 r1 into r5;
-    call commutative_encryption.aleo/decrypt_card r3 r5[0u32] into r6;
-    assert.eq r6 r1[0u32];
-    cast self.signer r2 r3 into r7 as Keys.record;
-    async create_game r0 r5 self.signer into r8;
-    output r7 as Keys.record;
-    output r8 as mental_poker.aleo/create_game.future;
+    input r4 as u128.private;
+    call commutative_encryption.aleo/initialize_deck into r5;
+    call commutative_encryption.aleo/verify_permutation r5 r1;
+    call commutative_encryption.aleo/encrypt_deck r2 r1 into r6;
+    call commutative_encryption.aleo/decrypt_card r3 r6[0u32] into r7;
+    assert.eq r7 r1[0u32];
+    is.eq r4 0u128 into r8;
+    hash.bhp256 r4 into r9 as u128;
+    ternary r8 0u128 r9 into r10;
+    cast self.signer r2 r3 into r11 as Keys.record;
+    call credits.aleo/transfer_public_as_signer mental_poker.aleo r0 into r12;
+    async create_game r6 self.signer r0 r10 r12 into r13;
+    output r11 as Keys.record;
+    output r13 as mental_poker.aleo/create_game.future;
 
 finalize create_game:
-    input r0 as u32.public;
-    input r1 as [group; 52u32].public;
-    input r2 as address.public;
-    cast r2 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc 10u64 0u8 4u8 0u8 0u8 0u8 5u16 10u16 10u8 0u8 0u16 into r3 as Game;
-    set r3 into games[r0];
-    set r1 into decks[r0];
+    input r0 as [group; 52u32].public;
+    input r1 as address.public;
+    input r2 as u64.public;
+    input r3 as u128.public;
+    input r4 as credits.aleo/transfer_public_as_signer.future;
+    await r4;
+    cast r1 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc r2 r3 0u8 4u8 0u8 0u8 0u8 5u16 10u16 10u8 0u8 0u16 into r5 as Game;
+    set r5 into games[1u32];
+    set r0 into decks[1u32];
 
 function join_game:
     input r0 as u32.private;
-    input r1 as [group; 52u32].private;
+    input r1 as u64.private;
     input r2 as [group; 52u32].private;
-    input r3 as scalar.private;
+    input r3 as [group; 52u32].private;
     input r4 as scalar.private;
-    call commutative_encryption.aleo/verify_permutation r1 r2;
-    call commutative_encryption.aleo/encrypt_deck r3 r2 into r5;
-    call commutative_encryption.aleo/decrypt_card r4 r5[0u32] into r6;
-    assert.eq r6 r2[0u32];
-    cast self.signer r3 r4 into r7 as Keys.record;
-    async join_game r0 r1 r5 self.signer into r8;
-    output r7 as Keys.record;
-    output r8 as mental_poker.aleo/join_game.future;
+    input r5 as scalar.private;
+    input r6 as u128.private;
+    call commutative_encryption.aleo/verify_permutation r2 r3;
+    call commutative_encryption.aleo/encrypt_deck r4 r3 into r7;
+    call commutative_encryption.aleo/decrypt_card r5 r7[0u32] into r8;
+    assert.eq r8 r3[0u32];
+    is.eq r6 0u128 into r9;
+    hash.bhp256 r6 into r10 as u128;
+    ternary r9 0u128 r10 into r11;
+    cast self.signer r4 r5 into r12 as Keys.record;
+    call credits.aleo/transfer_public_as_signer mental_poker.aleo r1 into r13;
+    async join_game r0 r2 r7 self.signer r1 r11 r13 into r14;
+    output r12 as Keys.record;
+    output r14 as mental_poker.aleo/join_game.future;
 
 finalize join_game:
     input r0 as u32.public;
     input r1 as [group; 52u32].public;
     input r2 as [group; 52u32].public;
     input r3 as address.public;
-    get games[r0] into r4;
-    get decks[r0] into r5;
-    is.eq r5 r1 into r6;
-    assert.eq r6 true;
-    is.eq r4.state 0u8 into r7;
-    is.eq r4.state 1u8 into r8;
-    or r7 r8 into r9;
-    assert.eq r9 true;
-    ternary r7 r3 r4.player2 into r10;
-    not r7 into r11;
-    ternary r11 r3 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc into r12;
-    ternary r7 1u8 2u8 into r13;
-    cast r4.player1 r10 r12 r4.buy_in r13 r4.dealer_button 0u8 0u8 0u8 r4.sb r4.bb r4.remaining_hands 0u8 0u16 into r14 as Game;
-    set r14 into games[r0];
+    input r4 as u64.public;
+    input r5 as u128.public;
+    input r6 as credits.aleo/transfer_public_as_signer.future;
+    await r6;
+    get games[r0] into r7;
+    get decks[r0] into r8;
+    assert.eq r8 r1;
+    assert.eq r4 r7.buy_in;
+    assert.eq r5 r7.password_hash;
+    is.eq r7.state 0u8 into r9;
+    is.eq r7.state 1u8 into r10;
+    or r9 r10 into r11;
+    assert.eq r11 true;
+    ternary r9 r3 r7.player2 into r12;
+    not r9 into r13;
+    ternary r13 r3 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc into r14;
+    ternary r9 1u8 2u8 into r15;
+    cast r7.player1 r12 r14 r7.buy_in r7.password_hash r15 r7.dealer_button 0u8 0u8 0u8 r7.sb r7.bb r7.remaining_hands 0u8 0u16 into r16 as Game;
+    set r16 into games[r0];
     set r2 into decks[r0];
-    branch.eq r11 false to end_then_0_0;
-    sub 1000u16 r4.sb into r15;
-    sub 1000u16 r4.bb into r16;
-    cast r15 r16 1000u16 r4.sb r4.bb 0u16 into r17 as Chips;
-    cast r2[0u32] r2[3u32] into r18 as [group; 2u32];
-    cast r2[1u32] r2[4u32] into r19 as [group; 2u32];
-    cast r2[2u32] r2[5u32] into r20 as [group; 2u32];
-    cast r2[7u32] r2[8u32] r2[9u32] into r21 as [group; 3u32];
-    cast r18 r19 r20 r21 r2[11u32] r2[13u32] into r22 as Cards;
-    cast 255u8 255u8 into r23 as [u8; 2u32];
-    cast 255u8 255u8 255u8 into r24 as [u8; 3u32];
-    cast r23 r23 r23 r24 255u8 255u8 into r25 as RevealedCards;
-    set r17 into chips[r0];
-    set r22 into cards[r0];
-    set r25 into revealed_cards[r0];
+    branch.eq r13 false to end_then_0_0;
+    sub 1000u16 r7.sb into r17;
+    sub 1000u16 r7.bb into r18;
+    cast r17 r18 1000u16 r7.sb r7.bb 0u16 into r19 as Chips;
+    cast r2[0u32] r2[3u32] into r20 as [group; 2u32];
+    cast r2[1u32] r2[4u32] into r21 as [group; 2u32];
+    cast r2[2u32] r2[5u32] into r22 as [group; 2u32];
+    cast r2[7u32] r2[8u32] r2[9u32] into r23 as [group; 3u32];
+    cast r20 r21 r22 r23 r2[11u32] r2[13u32] into r24 as Cards;
+    cast 255u8 255u8 into r25 as [u8; 2u32];
+    cast 255u8 255u8 255u8 into r26 as [u8; 3u32];
+    cast r25 r25 r25 r26 255u8 255u8 into r27 as RevealedCards;
+    set r19 into chips[r0];
+    set r24 into cards[r0];
+    set r27 into revealed_cards[r0];
     branch.eq true true to end_otherwise_0_1;
     position end_then_0_0;
     position end_otherwise_0_1;
@@ -350,7 +375,7 @@ finalize bet:
     cast r189 r190 r191 r192 r193 r194 into r195 as Chips;
     sub r54 r43 into r196;
     ternary r56 r196 r3.last_raise_size into r197;
-    cast r3.player1 r3.player2 r3.player3 r3.buy_in r181 r3.dealer_button r3.players_out r3.players_folded r188 r3.sb r3.bb r3.remaining_hands r3.hands_played r197 into r198 as Game;
+    cast r3.player1 r3.player2 r3.player3 r3.buy_in r3.password_hash r181 r3.dealer_button r3.players_out r3.players_folded r188 r3.sb r3.bb r3.remaining_hands r3.hands_played r197 into r198 as Game;
     set r195 into chips[r0];
     set r198 into games[r0];
 
@@ -467,7 +492,7 @@ finalize decrypt_hands:
     ternary r57 r86 r7.last_bet into r91;
     ternary r13 r91 r86 into r92;
     ternary r10 r7.last_bet r92 into r93;
-    cast r7.player1 r7.player2 r7.player3 r7.buy_in r90 r7.dealer_button r7.players_out r7.players_folded r93 r7.sb r7.bb r7.remaining_hands r7.hands_played r7.last_raise_size into r94 as Game;
+    cast r7.player1 r7.player2 r7.player3 r7.buy_in r7.password_hash r90 r7.dealer_button r7.players_out r7.players_folded r93 r7.sb r7.bb r7.remaining_hands r7.hands_played r7.last_raise_size into r94 as Game;
     set r51 into cards[r0];
     set r94 into games[r0];
 
@@ -566,7 +591,7 @@ finalize decrypt_flop:
     ternary r12 r63 r70 into r71;
     ternary r9 r46 r71 into r72;
     ternary r15 0u16 r6.last_raise_size into r73;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r72 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r73 into r74 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.password_hash r72 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r73 into r74 as Game;
     set r18 into cards[r0];
     set r74 into games[r0];
 
@@ -641,7 +666,7 @@ finalize fold:
     not r58 into r59;
     ternary r59 31u8 32u8 into r60;
     ternary r56 30u8 r60 into r61;
-    cast r2.player1 r2.player2 r2.player3 r2.buy_in r61 r2.dealer_button r2.players_out r26 0u8 r2.sb r2.bb r2.remaining_hands r2.hands_played 0u16 into r62 as Game;
+    cast r2.player1 r2.player2 r2.player3 r2.buy_in r2.password_hash r61 r2.dealer_button r2.players_out r26 0u8 r2.sb r2.bb r2.remaining_hands r2.hands_played 0u16 into r62 as Game;
     set r53 into chips[r0];
     set r62 into games[r0];
     branch.eq true true to end_otherwise_0_3;
@@ -695,7 +720,7 @@ finalize fold:
     ternary r76 r100 r107 into r108;
     ternary r76 0u8 r2.last_bet into r109;
     ternary r76 0u16 r2.last_raise_size into r110;
-    cast r2.player1 r2.player2 r2.player3 r2.buy_in r108 r2.dealer_button r2.players_out r26 r109 r2.sb r2.bb r2.remaining_hands r2.hands_played r110 into r111 as Game;
+    cast r2.player1 r2.player2 r2.player3 r2.buy_in r2.password_hash r108 r2.dealer_button r2.players_out r26 r109 r2.sb r2.bb r2.remaining_hands r2.hands_played r110 into r111 as Game;
     set r111 into games[r0];
 
 function decrypt_turn_river:
@@ -837,7 +862,7 @@ finalize decrypt_turn_river:
     ternary r13 r78 r116 into r117;
     ternary r11 r61 r117 into r118;
     ternary r31 0u16 r6.last_raise_size into r119;
-    cast r6.player1 r6.player2 r6.player3 r6.buy_in r118 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r119 into r120 as Game;
+    cast r6.player1 r6.player2 r6.player3 r6.buy_in r6.password_hash r118 r6.dealer_button r6.players_out r6.players_folded 0u8 r6.sb r6.bb r6.remaining_hands r6.hands_played r119 into r120 as Game;
     set r30 into cards[r0];
     set r120 into games[r0];
 
@@ -908,7 +933,7 @@ finalize showdown:
     ternary r38 27u8 r46 into r47;
     ternary r7 r46 29u8 into r48;
     ternary r6 r47 r48 into r49;
-    cast r5.player1 r5.player2 r5.player3 r5.buy_in r49 r5.dealer_button r5.players_out r5.players_folded r5.last_bet r5.sb r5.bb r5.remaining_hands r5.hands_played r5.last_raise_size into r50 as Game;
+    cast r5.player1 r5.player2 r5.player3 r5.buy_in r5.password_hash r49 r5.dealer_button r5.players_out r5.players_folded r5.last_bet r5.sb r5.bb r5.remaining_hands r5.hands_played r5.last_raise_size into r50 as Game;
     set r31 into revealed_cards[r0];
     set r50 into games[r0];
 
@@ -2418,9 +2443,166 @@ finalize compare_hands:
     ternary r1485 30u8 r1489 into r1490;
     ternary r1478 10u8 r1477 into r1491;
     add r2.hands_played 1u8 into r1492;
-    cast r2.player1 r2.player2 r2.player3 r2.buy_in r1490 r1476 r1465 r1465 0u8 r1481 r1482 r1491 r1492 0u16 into r1493 as Game;
+    cast r2.player1 r2.player2 r2.player3 r2.buy_in r2.password_hash r1490 r1476 r1465 r1465 0u8 r1481 r1482 r1491 r1492 0u16 into r1493 as Game;
     set r1457 into chips[r0];
     set r1493 into games[r0];
+
+function new_hand:
+    input r0 as u32.private;
+    input r1 as [group; 52u32].private;
+    input r2 as scalar.private;
+    input r3 as scalar.private;
+    call commutative_encryption.aleo/initialize_deck into r4;
+    call commutative_encryption.aleo/verify_permutation r4 r1;
+    call commutative_encryption.aleo/encrypt_deck r2 r1 into r5;
+    call commutative_encryption.aleo/decrypt_card r3 r5[0u32] into r6;
+    assert.eq r6 r1[0u32];
+    cast self.signer r2 r3 into r7 as Keys.record;
+    async new_hand r0 r5 self.signer into r8;
+    output r7 as Keys.record;
+    output r8 as mental_poker.aleo/new_hand.future;
+
+finalize new_hand:
+    input r0 as u32.public;
+    input r1 as [group; 52u32].public;
+    input r2 as address.public;
+    get games[r0] into r3;
+    get chips[r0] into r4;
+    is.eq r3.player1 r2 into r5;
+    is.eq r3.state 30u8 into r6;
+    and r5 r6 into r7;
+    is.eq r3.player2 r2 into r8;
+    is.eq r3.state 31u8 into r9;
+    and r8 r9 into r10;
+    or r7 r10 into r11;
+    assert.eq r11 true;
+    and r3.players_out 2u8 into r12;
+    is.neq r12 0u8 into r13;
+    ternary r13 33u8 32u8 into r14;
+    ternary r7 r14 33u8 into r15;
+    cast r3.player1 r3.player2 r3.player3 r3.buy_in r3.password_hash r15 r3.dealer_button r3.players_out r3.players_out 0u8 r3.sb r3.bb r3.remaining_hands r3.hands_played 0u16 into r16 as Game;
+    set r1 into decks[r0];
+    set r16 into games[r0];
+
+function shuffle_deck:
+    input r0 as u32.private;
+    input r1 as [group; 52u32].private;
+    input r2 as [group; 52u32].private;
+    input r3 as scalar.private;
+    input r4 as scalar.private;
+    call commutative_encryption.aleo/verify_permutation r1 r2;
+    call commutative_encryption.aleo/encrypt_deck r3 r2 into r5;
+    call commutative_encryption.aleo/decrypt_card r4 r5[0u32] into r6;
+    assert.eq r6 r2[0u32];
+    cast self.signer r3 r4 into r7 as Keys.record;
+    async shuffle_deck r0 r1 r5 self.signer into r8;
+    output r7 as Keys.record;
+    output r8 as mental_poker.aleo/shuffle_deck.future;
+
+finalize shuffle_deck:
+    input r0 as u32.public;
+    input r1 as [group; 52u32].public;
+    input r2 as [group; 52u32].public;
+    input r3 as address.public;
+    get games[r0] into r4;
+    get decks[r0] into r5;
+    is.eq r5 r1 into r6;
+    assert.eq r6 true;
+    is.eq r4.player2 r3 into r7;
+    is.eq r4.state 32u8 into r8;
+    and r7 r8 into r9;
+    is.eq r4.player3 r3 into r10;
+    is.eq r4.state 33u8 into r11;
+    and r10 r11 into r12;
+    or r9 r12 into r13;
+    assert.eq r13 true;
+    and r4.dealer_button 1u8 into r14;
+    is.neq r14 0u8 into r15;
+    and r4.dealer_button 2u8 into r16;
+    is.neq r16 0u8 into r17;
+    ternary r17 4u8 1u8 into r18;
+    ternary r15 2u8 r18 into r19;
+    ternary r17 1u8 2u8 into r20;
+    ternary r15 4u8 r20 into r21;
+    get chips[r0] into r22;
+    and r19 1u8 into r23;
+    is.neq r23 0u8 into r24;
+    sub r22.player1 r4.sb into r25;
+    and r21 1u8 into r26;
+    is.neq r26 0u8 into r27;
+    sub r22.player1 r4.bb into r28;
+    ternary r27 r28 r22.player1 into r29;
+    ternary r24 r25 r29 into r30;
+    and r19 2u8 into r31;
+    is.neq r31 0u8 into r32;
+    sub r22.player2 r4.sb into r33;
+    and r21 2u8 into r34;
+    is.neq r34 0u8 into r35;
+    sub r22.player2 r4.bb into r36;
+    ternary r35 r36 r22.player2 into r37;
+    ternary r32 r33 r37 into r38;
+    and r19 4u8 into r39;
+    is.neq r39 0u8 into r40;
+    sub r22.player3 r4.sb into r41;
+    and r21 4u8 into r42;
+    is.neq r42 0u8 into r43;
+    sub r22.player3 r4.bb into r44;
+    ternary r43 r44 r22.player3 into r45;
+    ternary r40 r41 r45 into r46;
+    ternary r27 r4.bb 0u16 into r47;
+    ternary r24 r4.sb r47 into r48;
+    ternary r35 r4.bb 0u16 into r49;
+    ternary r32 r4.sb r49 into r50;
+    ternary r43 r4.bb 0u16 into r51;
+    ternary r40 r4.sb r51 into r52;
+    cast r30 r38 r46 r48 r50 r52 into r53 as Chips;
+    cast r2[0u32] r2[3u32] into r54 as [group; 2u32];
+    cast r2[1u32] r2[4u32] into r55 as [group; 2u32];
+    cast r2[2u32] r2[5u32] into r56 as [group; 2u32];
+    cast r2[7u32] r2[8u32] r2[9u32] into r57 as [group; 3u32];
+    cast r54 r55 r56 r57 r2[11u32] r2[13u32] into r58 as Cards;
+    cast 255u8 255u8 into r59 as [u8; 2u32];
+    cast 255u8 255u8 255u8 into r60 as [u8; 3u32];
+    cast r59 r59 r59 r60 255u8 255u8 into r61 as RevealedCards;
+    cast r4.player1 r4.player2 r4.player3 r4.buy_in r4.password_hash 2u8 r4.dealer_button r4.players_out r4.players_out 0u8 r4.sb r4.bb r4.remaining_hands r4.hands_played 0u16 into r62 as Game;
+    set r2 into decks[r0];
+    set r53 into chips[r0];
+    set r58 into cards[r0];
+    set r61 into revealed_cards[r0];
+    set r62 into games[r0];
+
+function claim_prize:
+    input r0 as u32.private;
+    input r1 as u64.public;
+    call credits.aleo/transfer_public self.signer r1 into r2;
+    async claim_prize r0 self.signer r1 r2 into r3;
+    output r3 as mental_poker.aleo/claim_prize.future;
+
+finalize claim_prize:
+    input r0 as u32.public;
+    input r1 as address.public;
+    input r2 as u64.public;
+    input r3 as credits.aleo/transfer_public.future;
+    get games[r0] into r4;
+    get chips[r0] into r5;
+    is.eq r4.player1 r1 into r6;
+    is.eq r4.player2 r1 into r7;
+    or r6 r7 into r8;
+    is.eq r4.player3 r1 into r9;
+    or r8 r9 into r10;
+    assert.eq r10 true;
+    add r5.player1 r5.player2 into r11;
+    add r11 r5.player3 into r12;
+    is.eq r4.player1 r1 into r13;
+    is.eq r4.player2 r1 into r14;
+    ternary r14 r5.player2 r5.player3 into r15;
+    ternary r13 r5.player1 r15 into r16;
+    assert.eq r16 r12;
+    mul r4.buy_in 3u64 into r17;
+    assert.eq r2 r17;
+    await r3;
+    cast r4.player1 r4.player2 r4.player3 r4.buy_in r4.password_hash 255u8 r4.dealer_button 7u8 7u8 0u8 r4.sb r4.bb 0u8 r4.hands_played 0u16 into r18 as Game;
+    set r18 into games[r0];
 
 constructor:
     assert.eq edition 0u16;

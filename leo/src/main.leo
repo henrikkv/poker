@@ -1,6 +1,9 @@
 import commutative_encryption.aleo;
+import credits.aleo;
 
 program mental_poker.aleo {
+
+    storage next_game_id: u32;
 
     mapping games: u32 => Game;
     mapping decks: u32 => [group; 52];
@@ -72,6 +75,7 @@ program mental_poker.aleo {
         player2: address,
         player3: address,
         buy_in: u64,
+        password_hash: u128,
         // 0: Waiting for player2 to join
         // 1: Waiting for player3 to join
 
@@ -169,7 +173,7 @@ program mental_poker.aleo {
         secret: scalar,
         secret_inv: scalar,
     }
-    async transition create_game(game_id: u32, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+    async transition create_game(buy_in: u64, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128) -> (Keys, Future) {
         let deck: [group; 52] = commutative_encryption.aleo/initialize_deck();
         commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
 
@@ -177,19 +181,33 @@ program mental_poker.aleo {
 
         // Check if decryption key is correct
         assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+
+        let password_hash: u128 = password == 0u128 ? 0u128 : BHP256::hash_to_u128(password);
+
+        let signer: address = self.signer;
         let keys: Keys = Keys {
-            owner: self.signer,
+            owner: signer,
             secret: secret,
             secret_inv: secret_inv,
         };
-        return (keys, finalize_new_game(game_id, deck_enc, self.signer));
+
+        let transfer_future: Future = credits.aleo/transfer_public_as_signer(mental_poker.aleo, buy_in);
+
+        return (keys, finalize_new_game(deck_enc, signer, buy_in, password_hash, transfer_future));
     }
-    async function finalize_new_game(game_id: u32, deck: [group; 52], signer: address) {
+    async function finalize_new_game(deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, transfer_future: Future) {
+        transfer_future.await();
+
+        //let game_id: u32 = next_game_id.unwrap_or(0u32);
+        //next_game_id = game_id + 1u32;
+        let game_id: u32 = 1u32;
+
         let game: Game = Game {
             player1: signer,
             player2: 0u128 as address,
             player3: 0u128 as address,
-            buy_in: 10u64,
+            buy_in: buy_in,
+            password_hash: password_hash,
             state: 0u8,
             dealer_button: player3(),
             players_out: 0u8,
@@ -204,23 +222,36 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, game);
         Mapping::set(decks, game_id, deck);
     }
-    async transition join_game(game_id: u32, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+    async transition join_game(game_id: u32, buy_in: u64, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128) -> (Keys, Future) {
         commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
 
         let deck_enc: [group; 52] = commutative_encryption.aleo/encrypt_deck(secret, deck_shuffled);
 
         assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+
+        let password_hash: u128 = password == 0u128 ? 0u128 : BHP256::hash_to_u128(password);
+
+        let signer: address = self.signer;
         let keys: Keys = Keys {
-            owner: self.signer,
+            owner: signer,
             secret: secret,
             secret_inv: secret_inv,
         };
-        return (keys, finalize_join_game(game_id, deck, deck_enc, self.signer));
+
+        let transfer_future: Future = credits.aleo/transfer_public_as_signer(mental_poker.aleo, buy_in);
+
+        return (keys, finalize_join_game(game_id, deck, deck_enc, signer, buy_in, password_hash, transfer_future));
     }
-    async function finalize_join_game(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address) {
+    async function finalize_join_game(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, transfer_future: Future) {
+
+        transfer_future.await();
+
         let game: Game = Mapping::get(games, game_id);
         let previous_deck: [group; 52] = Mapping::get(decks, game_id);
-        assert(previous_deck == deck);
+        
+        assert_eq(previous_deck, deck);
+        assert_eq(buy_in, game.buy_in);
+        assert_eq(password_hash, game.password_hash);
 
         let player2_joining: bool = game.state == p2_join;
         assert(player2_joining || game.state == p3_join);
@@ -230,6 +261,7 @@ program mental_poker.aleo {
             player2: player2_joining ? signer : game.player2,
             player3: !player2_joining ? signer : 0u128 as address,
             buy_in: game.buy_in,
+            password_hash: game.password_hash,
             state: player2_joining ? p3_join : p1_dec_hand,
             dealer_button: game.dealer_button,
             players_out: 0u8,
@@ -419,6 +451,7 @@ program mental_poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
+            password_hash: game.password_hash,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -510,6 +543,7 @@ program mental_poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
+            password_hash: game.password_hash,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -597,6 +631,7 @@ program mental_poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
+            password_hash: game.password_hash,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -664,6 +699,7 @@ program mental_poker.aleo {
                 player2: game.player2,
                 player3: game.player3,
                 buy_in: game.buy_in,
+                password_hash: game.password_hash,
                 state: next_shuffle_state,
                 dealer_button: game.dealer_button,
                 players_out: game.players_out,
@@ -718,6 +754,7 @@ program mental_poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
+            password_hash: game.password_hash,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -818,6 +855,7 @@ program mental_poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
+            password_hash: game.password_hash,
             state: next_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -877,6 +915,7 @@ program mental_poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
+            password_hash: game.password_hash,
             state: new_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
@@ -1241,6 +1280,7 @@ program mental_poker.aleo {
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
+            password_hash: game.password_hash,
             state: next_state,
             dealer_button: new_dealer_button,
             players_out: new_players_out,
@@ -1468,6 +1508,205 @@ program mental_poker.aleo {
                                                r3 as u32;
 
         return hand_value;
+    }
+
+    async transition new_hand(game_id: u32, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+        let deck: [group; 52] = commutative_encryption.aleo/initialize_deck();
+        commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
+
+        let deck_enc: [group; 52] = commutative_encryption.aleo/encrypt_deck(secret, deck_shuffled);
+
+        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+
+        let signer: address = self.signer;
+        let keys: Keys = Keys {
+            owner: signer,
+            secret: secret,
+            secret_inv: secret_inv,
+        };
+
+        return (keys, finalize_new_hand(game_id, deck_enc, signer));
+    }
+
+    async function finalize_new_hand(game_id: u32, deck: [group; 52], signer: address) {
+        let game: Game = Mapping::get(games, game_id);
+        let chip: Chips = Mapping::get(chips, game_id);
+
+        let is_p1: bool = game.player1 == signer && game.state == p1_new_shuffle;
+        let is_p2: bool = game.player2 == signer && game.state == p2_new_shuffle;
+
+        assert(is_p1 || is_p2);
+
+        let is_p1_out: bool = is_player1(game.players_out);
+        let is_p2_out: bool = is_player2(game.players_out);
+        let is_p3_out: bool = is_player3(game.players_out);
+
+        let next_state: u8 = is_p1 ? (is_p2_out ? p3_shuffle : p2_shuffle) :
+                                     p3_shuffle;
+
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            password_hash: game.password_hash,
+            state: next_state,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_out,
+            last_bet: 0u8,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: 0u16,
+        };
+
+        Mapping::set(decks, game_id, deck);
+        Mapping::set(games, game_id, new_game);
+    }
+
+    async transition shuffle_deck(game_id: u32, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
+        commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
+
+        let deck_enc: [group; 52] = commutative_encryption.aleo/encrypt_deck(secret, deck_shuffled);
+
+        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+
+        let signer: address = self.signer;
+        let keys: Keys = Keys {
+            owner: signer,
+            secret: secret,
+            secret_inv: secret_inv,
+        };
+
+        return (keys, finalize_shuffle_deck(game_id, deck, deck_enc, signer));
+    }
+
+    async function finalize_shuffle_deck(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address) {
+        let game: Game = Mapping::get(games, game_id);
+        let previous_deck: [group; 52] = Mapping::get(decks, game_id);
+        assert(previous_deck == deck);
+
+        let is_p2: bool = game.player2 == signer && game.state == p2_shuffle;
+        let is_p3: bool = game.player3 == signer && game.state == p3_shuffle;
+
+        assert(is_p2 || is_p3);
+
+        let is_p1_out: bool = is_player1(game.players_out);
+        let is_p2_out: bool = is_player2(game.players_out);
+        
+        let is_dealer_p1: bool = is_player1(game.dealer_button);
+        let is_dealer_p2: bool = is_player2(game.dealer_button);
+        let is_dealer_p3: bool = is_player3(game.dealer_button);
+
+        let sb_player: u8 = is_dealer_p1 ? player2() :
+                            is_dealer_p2 ? player3() :
+                                           player1();
+
+        let bb_player: u8 = is_dealer_p1 ? player3() :
+                            is_dealer_p2 ? player1() :
+                                           player2();
+
+        let chip: Chips = Mapping::get(chips, game_id);
+        let new_chip: Chips = Chips {
+            player1: is_player1(sb_player) ? chip.player1 - game.sb :
+                     is_player1(bb_player) ? chip.player1 - game.bb : chip.player1,
+            player2: is_player2(sb_player) ? chip.player2 - game.sb :
+                     is_player2(bb_player) ? chip.player2 - game.bb : chip.player2,
+            player3: is_player3(sb_player) ? chip.player3 - game.sb :
+                     is_player3(bb_player) ? chip.player3 - game.bb : chip.player3,
+            player1_bet: is_player1(sb_player) ? game.sb :
+                         is_player1(bb_player) ? game.bb : 0u16,
+            player2_bet: is_player2(sb_player) ? game.sb :
+                         is_player2(bb_player) ? game.bb : 0u16,
+            player3_bet: is_player3(sb_player) ? game.sb :
+                         is_player3(bb_player) ? game.bb : 0u16,
+        };
+
+        let card: Cards = Cards {
+            player1: [new_deck[0u8], new_deck[3u8]],
+            player2: [new_deck[1u8], new_deck[4u8]],
+            player3: [new_deck[2u8], new_deck[5u8]],
+            flop: [new_deck[7u8], new_deck[8u8], new_deck[9u8]],
+            turn: new_deck[11u8],
+            river: new_deck[13u8],
+        };
+
+        let revealed: RevealedCards = RevealedCards {
+            player1: [255u8, 255u8],
+            player2: [255u8, 255u8],
+            player3: [255u8, 255u8],
+            flop: [255u8, 255u8, 255u8],
+            turn: 255u8,
+            river: 255u8,
+        };
+
+        let new_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            password_hash: game.password_hash,
+            state: p1_dec_hand,
+            dealer_button: game.dealer_button,
+            players_out: game.players_out,
+            players_folded: game.players_out,
+            last_bet: 0u8,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: game.remaining_hands,
+            hands_played: game.hands_played,
+            last_raise_size: 0u16,
+        };
+
+        Mapping::set(decks, game_id, new_deck);
+        Mapping::set(chips, game_id, new_chip);
+        Mapping::set(cards, game_id, card);
+        Mapping::set(revealed_cards, game_id, revealed);
+        Mapping::set(games, game_id, new_game);
+    }
+
+    async transition claim_prize(game_id: u32, public prize: u64) -> Future {
+        let transfer_future: Future = credits.aleo/transfer_public(self.signer, prize);
+        return finalize_claim_prize(game_id, self.signer, prize, transfer_future);
+    }
+
+    async function finalize_claim_prize(game_id: u32, signer: address, prize: u64, transfer_future: Future) {
+        let game: Game = Mapping::get(games, game_id);
+        let chip: Chips = Mapping::get(chips, game_id);
+
+        assert(game.player1 == signer || game.player2 == signer || game.player3 == signer);
+
+        let total_chips: u16 = chip.player1 + chip.player2 + chip.player3;
+        let player_chips: u16 = game.player1 == signer ? chip.player1 :
+                                game.player2 == signer ? chip.player2 : chip.player3;
+        assert_eq(player_chips, total_chips);
+
+        let expected_prize: u64 = game.buy_in * 3u64;
+        assert_eq(prize, expected_prize);
+
+        transfer_future.await();
+
+        let completed_game: Game = Game {
+            player1: game.player1,
+            player2: game.player2,
+            player3: game.player3,
+            buy_in: game.buy_in,
+            password_hash: game.password_hash,
+            state: 255u8,
+            dealer_button: game.dealer_button,
+            players_out: 7u8,
+            players_folded: 7u8,
+            last_bet: 0u8,
+            sb: game.sb,
+            bb: game.bb,
+            remaining_hands: 0u8,
+            hands_played: game.hands_played,
+            last_raise_size: 0u16,
+        };
+
+        Mapping::set(games, game_id, completed_game);
     }
 
     @noupgrade

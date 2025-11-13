@@ -689,10 +689,7 @@ program mental_poker.aleo {
                 player3_bet: 0u16,
             };
             
-            let next_shuffle_state: u8 =
-                !is_player1(game.players_out) ? p1_new_shuffle :
-                !is_player2(game.players_out) ? p2_new_shuffle :
-                p2_shuffle;
+            let next_shuffle_state: u8 = !is_player1(game.players_out) ? p1_new_shuffle : p2_new_shuffle;
             
             let new_game: Game = Game {
                 player1: game.player1,
@@ -1262,18 +1259,12 @@ program mental_poker.aleo {
             return;
         }
 
-        let new_dealer_button: u8 = is_player1(game.dealer_button) ? player2() :
-                                    is_player2(game.dealer_button) ? player3() :
-                                                                     player1();
-
         let new_remaining_hands: u8 = game.remaining_hands - 1u8;
 
         let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
                                                                         (game.sb, game.bb);
 
-        let next_state: u8 = !is_player1(new_players_out) ? p1_new_shuffle :
-                             !is_player2(new_players_out) ? p2_new_shuffle :
-                             p2_shuffle;
+        let next_state: u8 = !is_player1(new_players_out) ? p1_new_shuffle : p2_new_shuffle;
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -1282,7 +1273,7 @@ program mental_poker.aleo {
             buy_in: game.buy_in,
             password_hash: game.password_hash,
             state: next_state,
-            dealer_button: new_dealer_button,
+            dealer_button: game.dealer_button,
             players_out: new_players_out,
             players_folded: new_players_out,
             last_bet: 0u8,
@@ -1541,8 +1532,61 @@ program mental_poker.aleo {
         let is_p2_out: bool = is_player2(game.players_out);
         let is_p3_out: bool = is_player3(game.players_out);
 
-        let next_state: u8 = is_p1 ? (is_p2_out ? p3_shuffle : p2_shuffle) :
-                                     p3_shuffle;
+        let next_state: u8 = is_p1 ? (is_p2_out ? p3_shuffle : p2_shuffle) : p3_shuffle;
+
+        let new_dealer_button: u8 = is_player1(game.dealer_button) ? (!is_player2(game.players_out) ? player2() :
+                                                                      !is_player3(game.players_out) ? player3() :
+                                                                                                      player1()) :
+                                    is_player2(game.dealer_button) ? (!is_player3(game.players_out) ? player3() :
+                                                                      !is_player1(game.players_out) ? player1() :
+                                                                                                      player2()) :
+                                                                     (!is_player1(game.players_out) ? player1() :
+                                                                      !is_player2(game.players_out) ? player2() :
+                                                                                                      player3());
+
+        let is_dealer_p1: bool = is_player1(new_dealer_button);
+        let is_dealer_p2: bool = is_player2(new_dealer_button);
+
+        let sb_player: u8 = is_dealer_p1 ? player2() :
+                            is_dealer_p2 ? player3() :
+                                           player1();
+
+        let bb_player: u8 = is_dealer_p1 ? player3() :
+                            is_dealer_p2 ? player1() :
+                                           player2();
+
+        let new_chip: Chips = Chips {
+            player1: is_player1(sb_player) ? chip.player1 - game.sb :
+                     is_player1(bb_player) ? chip.player1 - game.bb : chip.player1,
+            player2: is_player2(sb_player) ? chip.player2 - game.sb :
+                     is_player2(bb_player) ? chip.player2 - game.bb : chip.player2,
+            player3: is_player3(sb_player) ? chip.player3 - game.sb :
+                     is_player3(bb_player) ? chip.player3 - game.bb : chip.player3,
+            player1_bet: is_player1(sb_player) ? game.sb :
+                         is_player1(bb_player) ? game.bb : 0u16,
+            player2_bet: is_player2(sb_player) ? game.sb :
+                         is_player2(bb_player) ? game.bb : 0u16,
+            player3_bet: is_player3(sb_player) ? game.sb :
+                         is_player3(bb_player) ? game.bb : 0u16,
+        };
+
+        let card: Cards = Cards {
+            player1: [deck[0u8], deck[3u8]],
+            player2: [deck[1u8], deck[4u8]],
+            player3: [deck[2u8], deck[5u8]],
+            flop: [deck[7u8], deck[8u8], deck[9u8]],
+            turn: deck[11u8],
+            river: deck[13u8],
+        };
+
+        let revealed: RevealedCards = RevealedCards {
+            player1: [255u8, 255u8],
+            player2: [255u8, 255u8],
+            player3: [255u8, 255u8],
+            flop: [255u8, 255u8, 255u8],
+            turn: 255u8,
+            river: 255u8,
+        };
 
         let new_game: Game = Game {
             player1: game.player1,
@@ -1551,7 +1595,7 @@ program mental_poker.aleo {
             buy_in: game.buy_in,
             password_hash: game.password_hash,
             state: next_state,
-            dealer_button: game.dealer_button,
+            dealer_button: new_dealer_button,
             players_out: game.players_out,
             players_folded: game.players_out,
             last_bet: 0u8,
@@ -1563,6 +1607,9 @@ program mental_poker.aleo {
         };
 
         Mapping::set(decks, game_id, deck);
+        Mapping::set(chips, game_id, new_chip);
+        Mapping::set(cards, game_id, card);
+        Mapping::set(revealed_cards, game_id, revealed);
         Mapping::set(games, game_id, new_game);
     }
 
@@ -1593,37 +1640,6 @@ program mental_poker.aleo {
 
         assert(is_p2 || is_p3);
 
-        let is_p1_out: bool = is_player1(game.players_out);
-        let is_p2_out: bool = is_player2(game.players_out);
-        
-        let is_dealer_p1: bool = is_player1(game.dealer_button);
-        let is_dealer_p2: bool = is_player2(game.dealer_button);
-        let is_dealer_p3: bool = is_player3(game.dealer_button);
-
-        let sb_player: u8 = is_dealer_p1 ? player2() :
-                            is_dealer_p2 ? player3() :
-                                           player1();
-
-        let bb_player: u8 = is_dealer_p1 ? player3() :
-                            is_dealer_p2 ? player1() :
-                                           player2();
-
-        let chip: Chips = Mapping::get(chips, game_id);
-        let new_chip: Chips = Chips {
-            player1: is_player1(sb_player) ? chip.player1 - game.sb :
-                     is_player1(bb_player) ? chip.player1 - game.bb : chip.player1,
-            player2: is_player2(sb_player) ? chip.player2 - game.sb :
-                     is_player2(bb_player) ? chip.player2 - game.bb : chip.player2,
-            player3: is_player3(sb_player) ? chip.player3 - game.sb :
-                     is_player3(bb_player) ? chip.player3 - game.bb : chip.player3,
-            player1_bet: is_player1(sb_player) ? game.sb :
-                         is_player1(bb_player) ? game.bb : 0u16,
-            player2_bet: is_player2(sb_player) ? game.sb :
-                         is_player2(bb_player) ? game.bb : 0u16,
-            player3_bet: is_player3(sb_player) ? game.sb :
-                         is_player3(bb_player) ? game.bb : 0u16,
-        };
-
         let card: Cards = Cards {
             player1: [new_deck[0u8], new_deck[3u8]],
             player2: [new_deck[1u8], new_deck[4u8]],
@@ -1633,22 +1649,14 @@ program mental_poker.aleo {
             river: new_deck[13u8],
         };
 
-        let revealed: RevealedCards = RevealedCards {
-            player1: [255u8, 255u8],
-            player2: [255u8, 255u8],
-            player3: [255u8, 255u8],
-            flop: [255u8, 255u8, 255u8],
-            turn: 255u8,
-            river: 255u8,
-        };
-
         let new_game: Game = Game {
             player1: game.player1,
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
             password_hash: game.password_hash,
-            state: p1_dec_hand,
+            state: !is_player1(game.players_out) ? p1_dec_hand :
+                   !is_player2(game.players_out) ? p2_dec_hand : p3_dec_hand,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
             players_folded: game.players_out,
@@ -1661,9 +1669,7 @@ program mental_poker.aleo {
         };
 
         Mapping::set(decks, game_id, new_deck);
-        Mapping::set(chips, game_id, new_chip);
         Mapping::set(cards, game_id, card);
-        Mapping::set(revealed_cards, game_id, revealed);
         Mapping::set(games, game_id, new_game);
     }
 

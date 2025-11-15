@@ -350,6 +350,155 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         Ok(())
     }
 
+    fn setup_betting_ui(
+        &self,
+        state: GameState,
+        state_changed: bool,
+        current_chips: Option<Chip>,
+        game: &mental_poker_bindings::mental_poker::Game<N>,
+        model: &mut GameModel,
+    ) {
+        if !state_changed {
+            return;
+        }
+
+        if !state.is_betting_state() || state.current_player() != Some(self.player_id) {
+            model.betting_ui = None;
+            return;
+        }
+
+        let Some(chip_data) = current_chips else {
+            return;
+        };
+
+        let player_chips = chip_data.get_chips(self.player_id);
+        let current_bet = chip_data.get_current_bet(self.player_id);
+        let highest_bet = chip_data
+            .player1_bet
+            .max(chip_data.player2_bet)
+            .max(chip_data.player3_bet);
+
+        let min_raise_size = if highest_bet == 0 || game.last_raise_size == 0 {
+            game.bb
+        } else {
+            game.last_raise_size
+        };
+
+        let call_amount = highest_bet.saturating_sub(current_bet);
+        let min_raise = (highest_bet + min_raise_size).saturating_sub(current_bet);
+
+        model.betting_ui = Some(crate::game_state::BettingUIState::new(
+            player_chips as u64,
+            call_amount as u64,
+            min_raise as u64,
+        ));
+    }
+
+    fn handle_compare_hands(
+        &mut self,
+        game_id: u32,
+        game: &mental_poker_bindings::mental_poker::Game<N>,
+        new_state: Option<GameState>,
+        model: &mut GameModel,
+    ) -> anyhow::Result<()> {
+        let player_bitmap = 1u8 << (self.player_id - 1);
+        if game.dealer_button != player_bitmap {
+            return Ok(());
+        }
+
+        model.log_action_start("Comparing hands".to_string());
+        if let Err(e) = self.poker.compare_hands(&self.account, game_id) {
+            model.log(format!("Error comparing hands: {}", e));
+            return Ok(());
+        }
+
+        model.log_action_complete();
+
+        if let Some(updated_game) = self.poker.get_games(game_id) {
+            let updated_state = GameState::from_u8(updated_game.state);
+            if updated_state != new_state {
+                if let Some(state) = updated_state {
+                    let description = describe_game_state(state);
+                    model.log(format!("State {}: {}", state, description));
+                }
+                model.current_state = updated_state;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_claim_prize(
+        &mut self,
+        game_id: u32,
+        game: &mental_poker_bindings::mental_poker::Game<N>,
+        new_state: Option<GameState>,
+        model: &mut GameModel,
+    ) -> anyhow::Result<()> {
+        let prize = game.buy_in * 3;
+        model.log_action_start(format!("Claiming prize: {} credits", prize));
+
+        if let Err(e) = self.poker.claim_prize(&self.account, game_id, prize) {
+            model.log(format!("Error claiming prize: {}", e));
+            return Ok(());
+        }
+
+        model.log_action_complete();
+        model.log(format!("Claimed {} credits", prize));
+
+        if let Some(updated_game) = self.poker.get_games(game_id) {
+            let updated_state = GameState::from_u8(updated_game.state);
+            if updated_state != new_state {
+                if let Some(state) = updated_state {
+                    let description = describe_game_state(state);
+                    model.log(format!("State {}: {}", state, description));
+                }
+                model.current_state = updated_state;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_render_data(
+        &self,
+        game_id: u32,
+        new_state: Option<GameState>,
+        model: &mut GameModel,
+    ) {
+        let current_chips = self.get_chip(game_id);
+        let revealed_cards = self.poker.get_revealed_cards(game_id);
+
+        let is_decryption_phase = matches!(
+            new_state,
+            Some(GameState::P1DecHand) | Some(GameState::P2DecHand) | Some(GameState::P3DecHand)
+        );
+
+        if !is_decryption_phase && model.fresh_hand {
+            model.fresh_hand = false;
+        }
+
+        let should_show_revealed = !model.fresh_hand || !is_decryption_phase;
+        let mut render_data = match (should_show_revealed, revealed_cards) {
+            (true, Some(revealed)) => Card {
+                flop: revealed.flop,
+                turn: revealed.turn,
+                river: revealed.river,
+                player1: revealed.player1,
+                player2: revealed.player2,
+                player3: revealed.player3,
+            },
+            _ => Card::default(),
+        };
+
+        if let Some(decrypted) = model.decrypted_hand {
+            render_data.set_cards(model.current_player_id, decrypted);
+        }
+
+        model.card = Some(render_data);
+        model.chip = current_chips;
+    }
+
     pub fn initialize_game(&mut self, model: &mut GameModel) -> anyhow::Result<()> {
         use crate::deck::initialized_deck;
 
@@ -398,105 +547,21 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         let new_state = GameState::from_u8(game.state);
         let state_changed = model.current_state != new_state;
 
-        let current_chips = self.get_chip(game_id);
-        let cards = self.poker.get_cards(game_id);
-        let revealed_cards = self.poker.get_revealed_cards(game_id);
-
-        let mut hand_decrypted = false;
-        let mut chips_compared = false;
-
-        if let Some(state) = new_state {
-            let is_compare_or_after = matches!(
-                state,
-                GameState::Compare
-                    | GameState::P1Claim
-                    | GameState::P2Claim
-                    | GameState::P3Claim
-                    | GameState::P1NewShuffle
-                    | GameState::P2NewShuffle
-            );
-
-            if is_compare_or_after && model.round_start_chips.is_some() {
-                model.round_start_chips = None;
-            }
-
-            if state_changed {
+        if state_changed {
+            if let Some(state) = new_state {
                 let description = describe_game_state(state);
                 model.log(format!("State {}: {}", state, description));
-
-                let is_hand_decrypt = matches!(
-                    state,
-                    GameState::P1DecHand | GameState::P2DecHand | GameState::P3DecHand
-                );
-                let is_preflop_betting = matches!(
-                    state,
-                    GameState::P1BetPre | GameState::P2BetPre | GameState::P3BetPre
-                );
-                let is_postflop_betting = matches!(
-                    state,
-                    GameState::P1BetFlop
-                        | GameState::P2BetFlop
-                        | GameState::P3BetFlop
-                        | GameState::P1BetTurn
-                        | GameState::P2BetTurn
-                        | GameState::P3BetTurn
-                        | GameState::P1BetRiver
-                        | GameState::P2BetRiver
-                        | GameState::P3BetRiver
-                );
-
-                if is_hand_decrypt {
-                    model.ensure_previous_chips(current_chips);
-                } else if matches!(state, GameState::P1BetPre) {
-                    model.chip_differences = None;
-                    model.ensure_previous_chips(current_chips);
-                    model.round_start_chips = current_chips;
-                } else if is_preflop_betting {
-                    if model.round_start_chips.is_none() {
-                        model.round_start_chips = current_chips;
-                    }
-                } else if is_postflop_betting {
-                    model.round_start_chips = current_chips;
-                } else if is_compare_or_after {
-                    model.round_start_chips = None;
-                }
-
-                if state.is_betting_state() && state.current_player() == Some(self.player_id) {
-                    if let Some(ref chip_data) = current_chips {
-                        use crate::game_state::BettingUIState;
-
-                        let (player_chips, current_bet) = match self.player_id {
-                            1 => (chip_data.player1, chip_data.player1_bet),
-                            2 => (chip_data.player2, chip_data.player2_bet),
-                            3 => (chip_data.player3, chip_data.player3_bet),
-                            _ => (0, 0),
-                        };
-
-                        let highest_bet = chip_data
-                            .player1_bet
-                            .max(chip_data.player2_bet)
-                            .max(chip_data.player3_bet);
-
-                        let min_raise_size = if highest_bet == 0 || game.last_raise_size == 0 {
-                            game.bb
-                        } else {
-                            game.last_raise_size
-                        };
-
-                        let min_raise_to = highest_bet + min_raise_size;
-                        let min_raise = min_raise_to - current_bet;
-                        let call_amount = highest_bet - current_bet;
-
-                        model.betting_ui = Some(BettingUIState::new(
-                            player_chips as u64,
-                            call_amount as u64,
-                            min_raise as u64,
-                        ));
-                    }
-                } else {
-                    model.betting_ui = None;
-                }
             }
+            model.current_state = new_state;
+        }
+
+        let current_chips = self.get_chip(game_id);
+        let cards = self.poker.get_cards(game_id);
+
+        let mut hand_decrypted = false;
+
+        if let Some(state) = new_state {
+            self.setup_betting_ui(state, state_changed, current_chips, &game, model);
 
             if self.keys.is_some() && state_changed {
                 let step = match (state, self.player_id) {
@@ -524,170 +589,68 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             }
 
             if state_changed && model.game_winner.is_none() {
-                let is_new_hand_state =
-                    matches!(state, GameState::P1NewShuffle | GameState::P2NewShuffle);
-
-                if is_new_hand_state {
-                    model.card = None;
-                    model.decrypted_hand = None;
-                    model.reset_chip_tracking();
-                }
-
-                let should_new_hand = matches!(
-                    (state, self.player_id),
-                    (GameState::P1NewShuffle, 1) | (GameState::P2NewShuffle, 2)
-                );
-
-                let should_shuffle_deck = matches!(
-                    (state, self.player_id),
-                    (GameState::P2Shuffle, 2) | (GameState::P3Shuffle, 3)
-                );
-
-                if should_new_hand {
-                    model.log(format!("Starting new hand (state: {})", state));
-                    self.new_shuffle(model, game_id)?;
-                } else if should_shuffle_deck {
-                    model.log(format!("Shuffling deck (state: {})", state));
-                    self.shuffle_existing_deck(model, game_id)?;
-                }
-            }
-
-            let is_past_decrypt = !matches!(
-                state,
-                GameState::P2Join
-                    | GameState::P3Join
-                    | GameState::P1DecHand
-                    | GameState::P2DecHand
-                    | GameState::P3DecHand
-                    | GameState::P1NewShuffle
-                    | GameState::P2NewShuffle
-                    | GameState::P2Shuffle
-                    | GameState::P3Shuffle
-            );
-
-            if is_past_decrypt
-                && model.decrypted_hand.is_none()
-                && let (Some(c), Some(_keys)) = (&cards, &self.keys)
-            {
-                let encrypted_hand = get_player_cards(self.player_id, c);
-                let result = decrypt_hand_local(encrypted_hand, self.secret_inv, &self.card_hashes);
-                if result != [255, 255] {
-                    model.decrypted_hand = Some(result);
-                    hand_decrypted = true;
-                }
-            }
-            let should_calculate = model.chip_differences.is_none()
-                && (state == GameState::Compare || (state_changed && is_compare_or_after));
-
-            if should_calculate {
-                if model.previous_chips.is_none() {
-                    model.previous_chips = current_chips;
-                }
-
-                if state == GameState::Compare {
-                    let player_bitmap = match self.player_id {
-                        1 => 1u8,
-                        2 => 2u8,
-                        3 => 4u8,
-                        _ => 0u8,
-                    };
-                    let is_dealer = game.dealer_button == player_bitmap;
-
-                    if is_dealer {
-                        model.log_action_start("Comparing hands".to_string());
-                        if let Err(e) = self.poker.compare_hands(&self.account, game_id) {
-                            model.log(format!("Error comparing hands: {}", e));
-                            model.chip_differences = Some([0, 0, 0]);
-                        } else {
-                            model.log_action_complete();
-                            if let Some(new_chips) = current_chips {
-                                model.calculate_chip_differences(&new_chips);
-                                chips_compared = true;
-                            }
-                        }
-                    } else if let (Some(last_poll_chips), Some(curr_chips)) =
-                        (model.chip, current_chips)
-                    {
-                        let chips_changed = last_poll_chips.player1 != curr_chips.player1
-                            || last_poll_chips.player2 != curr_chips.player2
-                            || last_poll_chips.player3 != curr_chips.player3;
-
-                        if chips_changed {
-                            model.calculate_chip_differences(&curr_chips);
-                            chips_compared = true;
-                        }
+                match (state, self.player_id) {
+                    (GameState::P1NewShuffle, 1) | (GameState::P2NewShuffle, 2) => {
+                        model.card = None;
+                        model.decrypted_hand = None;
+                        model.log(format!("Starting new hand (state: {})", state));
+                        self.new_shuffle(model, game_id)?;
                     }
-                } else if let Some(new_chips) = current_chips {
-                    model.calculate_chip_differences(&new_chips);
-                    chips_compared = true;
-                }
-                match state {
-                    GameState::P1Claim | GameState::P2Claim | GameState::P3Claim
-                        if state.current_player() == Some(self.player_id) =>
-                    {
-                        let prize = game.buy_in * 3;
-                        model.log_action_start(format!("Claiming prize: {} credits", prize));
-                        if let Err(e) = self.poker.claim_prize(&self.account, game_id, prize) {
-                            model.log(format!("Error claiming prize: {}", e));
-                        } else {
-                            model.log_action_complete();
-                        }
+                    (GameState::P1NewShuffle | GameState::P2NewShuffle, _) => {
+                        model.card = None;
+                        model.decrypted_hand = None;
+                    }
+                    (GameState::P2Shuffle, 2) | (GameState::P3Shuffle, 3) => {
+                        model.log(format!("Shuffling deck (state: {})", state));
+                        self.shuffle_existing_deck(model, game_id)?;
                     }
                     _ => {}
                 }
             }
-        }
-
-        if state_changed {
-            model.current_state = new_state;
-        }
-
-        if state_changed
-            || hand_decrypted
-            || chips_compared
-            || model.card.is_none()
-            || new_state == Some(GameState::Compare)
-        {
-            let is_decryption_phase = matches!(
-                new_state,
-                Some(GameState::P1DecHand)
-                    | Some(GameState::P2DecHand)
-                    | Some(GameState::P3DecHand)
-            );
-
-            if !is_decryption_phase && model.fresh_hand {
-                model.fresh_hand = false;
-            }
-
-            let should_ignore_revealed = model.fresh_hand && is_decryption_phase;
-
-            let mut render_data = if !should_ignore_revealed && let Some(revealed) = revealed_cards
+            if model.decrypted_hand.is_none()
+                && let (Some(c), Some(_keys)) = (&cards, &self.keys)
             {
-                Card {
-                    flop: revealed.flop,
-                    turn: revealed.turn,
-                    river: revealed.river,
-                    player1: revealed.player1,
-                    player2: revealed.player2,
-                    player3: revealed.player3,
-                }
-            } else {
-                Card {
-                    flop: [255, 255, 255],
-                    turn: 255,
-                    river: 255,
-                    player1: [255, 255],
-                    player2: [255, 255],
-                    player3: [255, 255],
-                }
-            };
+                let is_past_decrypt = !matches!(
+                    state,
+                    GameState::P2Join
+                        | GameState::P3Join
+                        | GameState::P1DecHand
+                        | GameState::P2DecHand
+                        | GameState::P3DecHand
+                        | GameState::P1NewShuffle
+                        | GameState::P2NewShuffle
+                        | GameState::P2Shuffle
+                        | GameState::P3Shuffle
+                );
 
-            if let Some(decrypted) = model.decrypted_hand {
-                render_data.set_cards(model.current_player_id, decrypted);
+                if is_past_decrypt {
+                    let encrypted_hand = get_player_cards(self.player_id, c);
+                    let result =
+                        decrypt_hand_local(encrypted_hand, self.secret_inv, &self.card_hashes);
+                    if result != [255, 255] {
+                        model.decrypted_hand = Some(result);
+                        hand_decrypted = true;
+                    }
+                }
             }
 
-            model.card = Some(render_data);
-            model.chip = current_chips;
+            match state {
+                GameState::Compare => {
+                    self.handle_compare_hands(game_id, &game, new_state, model)?;
+                }
+                GameState::P1Claim | GameState::P2Claim | GameState::P3Claim
+                    if state.current_player() == Some(self.player_id) =>
+                {
+                    self.handle_claim_prize(game_id, &game, new_state, model)?;
+                }
+                _ => {}
+            }
+        }
+
+        let should_update_render = state_changed || hand_decrypted || model.card.is_none();
+
+        if should_update_render {
+            self.update_render_data(game_id, new_state, model);
         }
 
         model.update_eliminated_players(game.players_out);
@@ -734,6 +697,19 @@ impl Card {
     }
 }
 
+impl Default for Card {
+    fn default() -> Self {
+        Self {
+            flop: [255, 255, 255],
+            turn: 255,
+            river: 255,
+            player1: [255, 255],
+            player2: [255, 255],
+            player3: [255, 255],
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Chip {
     pub player1: u16,
@@ -762,20 +738,6 @@ impl Chip {
             3 => self.player3_bet,
             _ => 0,
         }
-    }
-
-    pub fn get_round_bet(&self, player_id: u8, round_start: Option<&Chip>) -> u16 {
-        if let Some(start) = round_start {
-            let start_chips = start.get_chips(player_id);
-            let current_chips = self.get_chips(player_id);
-            start_chips.saturating_sub(current_chips)
-        } else {
-            self.get_current_bet(player_id)
-        }
-    }
-
-    pub fn get_chip_diff(&self, player_id: u8, diffs: Option<[i32; 3]>) -> Option<i32> {
-        diffs.map(|d| d[(player_id - 1) as usize])
     }
 }
 
@@ -990,15 +952,9 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
     }
 
     fn compare_hands(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
-        model.ensure_previous_chips(self.get_chip(game_id));
-
         model.log_action_start("Comparing hands".to_string());
         self.poker.compare_hands(&self.account, game_id)?;
         model.log_action_complete();
-
-        if let Some(new_chips) = self.get_chip(game_id) {
-            model.calculate_chip_differences(&new_chips);
-        }
 
         Ok(())
     }
@@ -1061,7 +1017,6 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
 
         self.keys = Some(keys);
         model.decrypted_hand = None;
-        model.reset_chip_tracking();
         model.fresh_hand = true;
 
         Ok(())
@@ -2085,13 +2040,13 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
     let current_player = model.current_player_id;
     let (opponent1, opponent2) = get_opponents(current_player);
 
-    let chip_diff_1 = chips.get_chip_diff(opponent1, model.chip_differences);
-    let chip_diff_2 = chips.get_chip_diff(opponent2, model.chip_differences);
-    let chip_diff_current = chips.get_chip_diff(current_player, model.chip_differences);
+    let current_bet_1 = chips.get_current_bet(opponent1);
+    let current_bet_2 = chips.get_current_bet(opponent2);
+    let current_bet_current = chips.get_current_bet(current_player);
 
-    let current_bet_1 = chips.get_round_bet(opponent1, model.round_start_chips.as_ref());
-    let current_bet_2 = chips.get_round_bet(opponent2, model.round_start_chips.as_ref());
-    let current_bet_current = chips.get_round_bet(current_player, model.round_start_chips.as_ref());
+    let chip_diff_1 = None;
+    let chip_diff_2 = None;
+    let chip_diff_current = None;
 
     let is_opponent1_eliminated = model.is_player_eliminated(opponent1);
     let is_opponent2_eliminated = model.is_player_eliminated(opponent2);

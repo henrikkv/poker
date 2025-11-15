@@ -821,29 +821,53 @@ program mental_poker.aleo {
         let should_skip_betting: bool =
             (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8;
 
+        let first_active_showdown: u8 = is_p1_inactive ? (is_p2_inactive ? p3_showdown : p2_showdown) : p1_showdown;
+
         let next_state: u8 =
             is_p1_turn ? (!is_player2(game.players_out) ? p2_dec_turn : p3_dec_turn) :
             is_p2_turn ? (!is_player3(game.players_out) ? p3_dec_turn :
-               should_skip_betting ? p1_dec_river :
-           is_player1(game.dealer_button) ?
-                         (!is_p2_inactive ? p2_bet_turn : !is_p3_inactive ? p3_bet_turn : p1_bet_turn) :
-           is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn : !is_p1_inactive ? p1_bet_turn : p2_bet_turn) :
-                                        (!is_p1_inactive ? p1_bet_turn : !is_p2_inactive ? p2_bet_turn : p3_bet_turn)) :
+                         should_skip_betting ? p1_dec_river :
+                         is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_turn :
+                                                           !is_p3_inactive ? p3_bet_turn :
+                                                                             p1_bet_turn) :
+                         is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn :
+                                                           !is_p1_inactive ? p1_bet_turn :
+                                                                             p2_bet_turn) :
+                                                          (!is_p1_inactive ? p1_bet_turn :
+                                                           !is_p2_inactive ? p2_bet_turn :
+                                                                             p3_bet_turn)) :
             is_p3_turn ? (should_skip_betting ? p1_dec_river :
-            is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_turn : !is_p3_inactive ? p3_bet_turn : p1_bet_turn) :
-            is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn : !is_p1_inactive ? p1_bet_turn : p2_bet_turn) :
-                                         (!is_p1_inactive ? p1_bet_turn : !is_p2_inactive ? p2_bet_turn : p3_bet_turn)) :
+                         is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_turn :
+                                                           !is_p3_inactive ? p3_bet_turn :
+                                                                             p1_bet_turn) :
+                         is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn :
+                                                           !is_p1_inactive ? p1_bet_turn :
+                                                                             p2_bet_turn) :
+                                                          (!is_p1_inactive ? p1_bet_turn :
+                                                           !is_p2_inactive ? p2_bet_turn :
+                                                                             p3_bet_turn)) :
             is_p1_river ? (!is_player2(game.players_out) ? p2_dec_river : p3_dec_river) :
-            is_p2_river ? (!is_player3(game.players_out)  ? p3_dec_river :
-                      should_skip_betting ? p1_showdown :
-           is_player1(game.dealer_button) ?
-                         (!is_p2_inactive ? p2_bet_river : !is_p3_inactive ? p3_bet_river : p1_bet_river) :
-           is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river : !is_p1_inactive ? p1_bet_river : p2_bet_river) :
-                                            (!is_p1_inactive ? p1_bet_river : !is_p2_inactive ? p2_bet_river : p3_bet_river)) :
-               should_skip_betting ? p1_showdown :
-            is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_river : !is_p3_inactive ? p3_bet_river : p1_bet_river) :
-            is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river : !is_p1_inactive ? p1_bet_river : p2_bet_river) :
-                                             (!is_p1_inactive ? p1_bet_river : !is_p2_inactive ? p2_bet_river : p3_bet_river);
+            is_p2_river ? (!is_player3(game.players_out) ? p3_dec_river :
+                          should_skip_betting ? first_active_showdown :
+                          is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_river :
+                                                            !is_p3_inactive ? p3_bet_river :
+                                                                              p1_bet_river) :
+                          is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river :
+                                                            !is_p1_inactive ? p1_bet_river :
+                                                                              p2_bet_river) :
+                                                           (!is_p1_inactive ? p1_bet_river :
+                                                            !is_p2_inactive ? p2_bet_river :
+                                                                              p3_bet_river)) :
+                          should_skip_betting ? first_active_showdown :
+                          is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_river :
+                                                            !is_p3_inactive ? p3_bet_river :
+                                                                              p1_bet_river) :
+                          is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river :
+                                                            !is_p1_inactive ? p1_bet_river :
+                                                                              p2_bet_river) :
+                                                           (!is_p1_inactive ? p1_bet_river :
+                                                            !is_p2_inactive ? p2_bet_river :
+                                                                              p3_bet_river);
 
         let new_last_bet: u8 = 0u8;
 
@@ -1566,14 +1590,21 @@ program mental_poker.aleo {
 
         let is_dealer_p1: bool = is_player1(new_dealer_button);
         let is_dealer_p2: bool = is_player2(new_dealer_button);
+        let is_dealer_p3: bool = is_player3(new_dealer_button);
 
-        let sb_player: u8 = is_dealer_p1 ? player2() :
+        let is_heads_up: bool = is_p1_out || is_p2_out || is_p3_out;
+
+        let sb_player: u8 = is_heads_up ? new_dealer_button :
+                           (is_dealer_p1 ? player2() :
                             is_dealer_p2 ? player3() :
-                                           player1();
+                                           player1());
 
-        let bb_player: u8 = is_dealer_p1 ? player3() :
-                            is_dealer_p2 ? player1() :
-                                           player2();
+        let bb_player: u8 = is_heads_up ? (is_dealer_p1 ? (!is_p2_out ? player2() : player3()) :
+                                           is_dealer_p2 ? (!is_p3_out ? player3() : player1()) :
+                                                          (!is_p1_out ? player1() : player2())) :
+                            (is_dealer_p1 ? player3() :
+                             is_dealer_p2 ? player1() :
+                                            player2());
 
         let new_chip: Chips = Chips {
             player1: is_player1(sb_player) ? chip.player1 - game.sb :

@@ -1255,7 +1255,27 @@ program mental_poker.aleo {
 
         let game_over: bool = new_players_out == 6u8 || new_players_out == 5u8 || new_players_out == 3u8;
         if (game_over) {
+            let end_state: u8 = !is_player1(new_players_out) ? p1_claim :
+                                !is_player2(new_players_out) ? p2_claim : p3_claim;
+            let end_game: Game = Game {
+                player1: game.player1,
+                player2: game.player2,
+                player3: game.player3,
+                buy_in: game.buy_in,
+                password_hash: game.password_hash,
+                state: end_state,
+                dealer_button: game.dealer_button,
+                players_out: new_players_out,
+                players_folded: new_players_out,
+                last_bet: 0u8,
+                sb: game.sb,
+                bb: game.bb,
+                remaining_hands: game.remaining_hands,
+                hands_played: game.hands_played + 1u8,
+                last_raise_size: 0u16,
+            };
             Mapping::set(chips, game_id, new_chip);
+            Mapping::set(games, game_id, end_game);
             return;
         }
 

@@ -621,6 +621,20 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
                     model.calculate_chip_differences(&new_chips);
                     chips_compared = true;
                 }
+                match state {
+                    GameState::P1Claim | GameState::P2Claim | GameState::P3Claim
+                        if state.current_player() == Some(self.player_id) =>
+                    {
+                        let prize = game.buy_in * 3;
+                        model.log_action_start(format!("Claiming prize: {} credits", prize));
+                        if let Err(e) = self.poker.claim_prize(&self.account, game_id, prize) {
+                            model.log(format!("Error claiming prize: {}", e));
+                        } else {
+                            model.log_action_complete();
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
 
@@ -679,7 +693,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         model.update_eliminated_players(game.players_out);
 
         if let Some(winner) = model.check_for_winner()
-            && model.game_winner == Some(winner)
+            && model.game_winner.is_none()
         {
             model.log(format!("Player {} wins!", winner));
         }
@@ -2018,27 +2032,6 @@ fn render_in_game(frame: &mut Frame, model: &GameModel, area: Rect) {
     let block = Block::default().title(title).borders(Borders::ALL);
     let inner = block.inner(area);
     frame.render_widget(block, area);
-
-    if let Some(winner) = model.game_winner {
-        let winner_text = if winner == model.current_player_id {
-            format!(
-                "You won
-                 Game ID: {}\n\n\
-                 Press 'q' to quit",
-                game_id
-            )
-        } else {
-            format!(
-                " Player {} wins the game.\n\n\
-                 Game ID: {}\n\n\
-                 Press 'q' to quit",
-                winner, game_id
-            )
-        };
-
-        render_status(frame, &winner_text, inner);
-        return;
-    }
 
     if model.current_player_id == 0 || !model.game_initialized {
         let content = if let Some(state) = model.current_state {

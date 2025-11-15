@@ -1649,14 +1649,18 @@ program mental_poker.aleo {
             river: new_deck[13u8],
         };
 
+        let new_state: u8 = is_p2 ? (!is_player3(game.players_out) ? p3_shuffle : p1_dec_hand) :
+                                     (!is_player1(game.players_out) ? p1_dec_hand :
+                                      !is_player2(game.players_out) ? p2_dec_hand :
+                                                                      p3_dec_hand);
+
         let new_game: Game = Game {
             player1: game.player1,
             player2: game.player2,
             player3: game.player3,
             buy_in: game.buy_in,
             password_hash: game.password_hash,
-            state: !is_player1(game.players_out) ? p1_dec_hand :
-                   !is_player2(game.players_out) ? p2_dec_hand : p3_dec_hand,
+            state: new_state,
             dealer_button: game.dealer_button,
             players_out: game.players_out,
             players_folded: game.players_out,

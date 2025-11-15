@@ -2587,18 +2587,23 @@ finalize shuffle_deck:
     cast r2[2u32] r2[5u32] into r16 as [group; 2u32];
     cast r2[7u32] r2[8u32] r2[9u32] into r17 as [group; 3u32];
     cast r14 r15 r16 r17 r2[11u32] r2[13u32] into r18 as Cards;
-    and r4.players_out 1u8 into r19;
+    and r4.players_out 4u8 into r19;
     is.neq r19 0u8 into r20;
     not r20 into r21;
-    and r4.players_out 2u8 into r22;
-    is.neq r22 0u8 into r23;
-    not r23 into r24;
-    ternary r24 3u8 4u8 into r25;
-    ternary r21 2u8 r25 into r26;
-    cast r4.player1 r4.player2 r4.player3 r4.buy_in r4.password_hash r26 r4.dealer_button r4.players_out r4.players_out 0u8 r4.sb r4.bb r4.remaining_hands r4.hands_played 0u16 into r27 as Game;
+    ternary r21 33u8 2u8 into r22;
+    and r4.players_out 1u8 into r23;
+    is.neq r23 0u8 into r24;
+    not r24 into r25;
+    and r4.players_out 2u8 into r26;
+    is.neq r26 0u8 into r27;
+    not r27 into r28;
+    ternary r28 3u8 4u8 into r29;
+    ternary r25 2u8 r29 into r30;
+    ternary r9 r22 r30 into r31;
+    cast r4.player1 r4.player2 r4.player3 r4.buy_in r4.password_hash r31 r4.dealer_button r4.players_out r4.players_out 0u8 r4.sb r4.bb r4.remaining_hands r4.hands_played 0u16 into r32 as Game;
     set r2 into decks[r0];
     set r18 into cards[r0];
-    set r27 into games[r0];
+    set r32 into games[r0];
 
 function claim_prize:
     input r0 as u32.private;

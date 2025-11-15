@@ -523,6 +523,35 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
                 }
             }
 
+            if state_changed && model.game_winner.is_none() {
+                let is_new_hand_state =
+                    matches!(state, GameState::P1NewShuffle | GameState::P2NewShuffle);
+
+                if is_new_hand_state {
+                    model.card = None;
+                    model.decrypted_hand = None;
+                    model.reset_chip_tracking();
+                }
+
+                let should_new_hand = matches!(
+                    (state, self.player_id),
+                    (GameState::P1NewShuffle, 1) | (GameState::P2NewShuffle, 2)
+                );
+
+                let should_shuffle_deck = matches!(
+                    (state, self.player_id),
+                    (GameState::P2Shuffle, 2) | (GameState::P3Shuffle, 3)
+                );
+
+                if should_new_hand {
+                    model.log(format!("Starting new hand (state: {})", state));
+                    self.new_shuffle(model, game_id)?;
+                } else if should_shuffle_deck {
+                    model.log(format!("Shuffling deck (state: {})", state));
+                    self.shuffle_existing_deck(model, game_id)?;
+                }
+            }
+
             let is_past_decrypt = !matches!(
                 state,
                 GameState::P2Join
@@ -530,6 +559,10 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
                     | GameState::P1DecHand
                     | GameState::P2DecHand
                     | GameState::P3DecHand
+                    | GameState::P1NewShuffle
+                    | GameState::P2NewShuffle
+                    | GameState::P2Shuffle
+                    | GameState::P3Shuffle
             );
 
             if is_past_decrypt
@@ -601,7 +634,21 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             || model.card.is_none()
             || new_state == Some(GameState::Compare)
         {
-            let mut render_data = if let Some(revealed) = revealed_cards {
+            let is_decryption_phase = matches!(
+                new_state,
+                Some(GameState::P1DecHand)
+                    | Some(GameState::P2DecHand)
+                    | Some(GameState::P3DecHand)
+            );
+
+            if !is_decryption_phase && model.fresh_hand {
+                model.fresh_hand = false;
+            }
+
+            let should_ignore_revealed = model.fresh_hand && is_decryption_phase;
+
+            let mut render_data = if !should_ignore_revealed && let Some(revealed) = revealed_cards
+            {
                 Card {
                     flop: revealed.flop,
                     turn: revealed.turn,
@@ -627,6 +674,14 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
 
             model.card = Some(render_data);
             model.chip = current_chips;
+        }
+
+        model.update_eliminated_players(game.players_out);
+
+        if let Some(winner) = model.check_for_winner()
+            && model.game_winner == Some(winner)
+        {
+            model.log(format!("Player {} wins!", winner));
         }
 
         model.last_poll_time = Instant::now();
@@ -730,6 +785,8 @@ pub trait GameHandle {
     fn compare_hands(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
     fn search_for_player_game(&self, model: &mut GameModel) -> Option<u32>;
     fn try_set_player_id(&mut self, game_id: u32) -> anyhow::Result<()>;
+    fn new_shuffle(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn shuffle_existing_deck(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
 }
 
 impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHandle
@@ -970,6 +1027,55 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
 
         Ok(())
     }
+
+    fn new_shuffle(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+        use crate::deck::initialized_deck;
+
+        let initial_deck = initialized_deck();
+        let shuffled_deck = shuffle_deck(initial_deck);
+        model.log_action_complete();
+
+        model.log_action_start("Starting new hand".to_string());
+        let (keys, _) = self.poker.new_hand(
+            &self.account,
+            game_id,
+            shuffled_deck,
+            self.secret,
+            self.secret_inv,
+        )?;
+        model.log_action_complete();
+
+        self.keys = Some(keys);
+        model.decrypted_hand = None;
+        model.reset_chip_tracking();
+        model.fresh_hand = true;
+
+        Ok(())
+    }
+
+    fn shuffle_existing_deck(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+        let deck = self.poker.get_decks(game_id).unwrap();
+        model.log_action_complete();
+
+        model.log_action_start("Shuffling deck".to_string());
+        let shuffled_deck = shuffle_deck(deck);
+        model.log_action_complete();
+
+        let (keys, _) = self.poker.shuffle_deck(
+            &self.account,
+            game_id,
+            deck,
+            shuffled_deck,
+            self.secret,
+            self.secret_inv,
+        )?;
+        model.log_action_complete();
+
+        self.keys = Some(keys);
+        model.decrypted_hand = None;
+
+        Ok(())
+    }
 }
 
 pub fn new_interpreter_game(account_index: u16) -> anyhow::Result<Box<dyn GameHandle>> {
@@ -1007,6 +1113,7 @@ pub enum GameMessage {
     GameStatePolled(Result<(), String>),
     BetPlaced(Result<(), String>),
     HandsCompared(Result<(), String>),
+    NewShuffleComplete(Result<(), String>),
 }
 
 #[derive(Debug, Clone)]
@@ -1021,6 +1128,7 @@ pub enum GameCommand {
         amount: u64,
     },
     CompareHands(u32),
+    NewShuffle(u32),
 }
 
 pub struct Game {
@@ -1315,6 +1423,20 @@ impl Game {
                 }
                 None
             }
+
+            GameMessage::NewShuffleComplete(result) => {
+                match result {
+                    Ok(()) => {
+                        if let Some(game_id) = self.model.game_id {
+                            self.pending_command = Some(GameCommand::PollGameState(game_id));
+                        }
+                    }
+                    Err(e) => {
+                        self.model.log(format!("Error shuffling new hand: {}", e));
+                    }
+                }
+                None
+            }
         }
     }
 
@@ -1411,6 +1533,14 @@ impl Game {
                     .compare_hands(&mut self.model, game_id)
                     .map_err(|e| e.to_string());
                 Some(GameMessage::HandsCompared(result))
+            }
+
+            GameCommand::NewShuffle(game_id) => {
+                let result = self
+                    .handle
+                    .new_shuffle(&mut self.model, game_id)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::NewShuffleComplete(result))
             }
         }
     }
@@ -1572,6 +1702,7 @@ struct PlayerWidget {
     chip_diff: Option<i32>,
     current_bet: u16,
     is_current_player: bool,
+    is_eliminated: bool,
 }
 
 impl PlayerWidget {
@@ -1582,6 +1713,7 @@ impl PlayerWidget {
         chip_diff: Option<i32>,
         current_bet: u16,
         is_current_player: bool,
+        is_eliminated: bool,
     ) -> Self {
         Self {
             player_id,
@@ -1590,13 +1722,20 @@ impl PlayerWidget {
             chip_diff,
             current_bet,
             is_current_player,
+            is_eliminated,
         }
     }
 }
 
 impl Widget for PlayerWidget {
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer) {
-        let block = Block::default().borders(Borders::ALL);
+        let block_style = if self.is_eliminated {
+            Style::default().fg(Color::DarkGray)
+        } else {
+            Style::default()
+        };
+
+        let block = Block::default().borders(Borders::ALL).style(block_style);
         let inner = block.inner(area);
         block.render(area, buf);
 
@@ -1621,7 +1760,9 @@ impl Widget for PlayerWidget {
             line_y += 1;
         }
 
-        let player_name_text = if let Some(diff) = self.chip_diff {
+        let player_name_text = if self.is_eliminated {
+            format!("P{} (OUT)", self.player_id)
+        } else if let Some(diff) = self.chip_diff {
             if diff > 0 {
                 format!("P{} +{}", self.player_id, diff)
             } else if diff < 0 {
@@ -1633,7 +1774,15 @@ impl Widget for PlayerWidget {
             format!("P{}", self.player_id)
         };
 
-        let player_name = Line::from(player_name_text).alignment(Alignment::Center);
+        let player_name_style = if self.is_eliminated {
+            Style::default().fg(Color::DarkGray)
+        } else {
+            Style::default()
+        };
+
+        let player_name = Line::from(player_name_text)
+            .alignment(Alignment::Center)
+            .style(player_name_style);
         player_name.render(
             Rect {
                 x: inner.x,
@@ -1661,7 +1810,16 @@ impl Widget for PlayerWidget {
         );
         line_y += 1;
 
-        let chips_line = Line::from(format!("Chips: {}", self.chips)).alignment(Alignment::Center);
+        let chips_text = format!("Chips: {}", self.chips);
+        let chips_style = if self.is_eliminated {
+            Style::default().fg(Color::DarkGray)
+        } else {
+            Style::default()
+        };
+
+        let chips_line = Line::from(chips_text)
+            .alignment(Alignment::Center)
+            .style(chips_style);
         chips_line.render(
             Rect {
                 x: inner.x,
@@ -1861,6 +2019,27 @@ fn render_in_game(frame: &mut Frame, model: &GameModel, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
+    if let Some(winner) = model.game_winner {
+        let winner_text = if winner == model.current_player_id {
+            format!(
+                "You won
+                 Game ID: {}\n\n\
+                 Press 'q' to quit",
+                game_id
+            )
+        } else {
+            format!(
+                " Player {} wins the game.\n\n\
+                 Game ID: {}\n\n\
+                 Press 'q' to quit",
+                winner, game_id
+            )
+        };
+
+        render_status(frame, &winner_text, inner);
+        return;
+    }
+
     if model.current_player_id == 0 || !model.game_initialized {
         let content = if let Some(state) = model.current_state {
             let description = describe_game_state(state);
@@ -1921,6 +2100,10 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
     let current_bet_2 = chips.get_round_bet(opponent2, model.round_start_chips.as_ref());
     let current_bet_current = chips.get_round_bet(current_player, model.round_start_chips.as_ref());
 
+    let is_opponent1_eliminated = model.is_player_eliminated(opponent1);
+    let is_opponent2_eliminated = model.is_player_eliminated(opponent2);
+    let is_current_eliminated = model.is_player_eliminated(current_player);
+
     let vertical_layout = create_table_layout().split(area);
     let top_layout = create_opponents_layout().split(vertical_layout[0]);
 
@@ -1932,6 +2115,7 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
             chip_diff_1,
             current_bet_1,
             false,
+            is_opponent1_eliminated,
         ),
         top_layout[0],
     );
@@ -1943,6 +2127,7 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
             chip_diff_2,
             current_bet_2,
             false,
+            is_opponent2_eliminated,
         ),
         top_layout[1],
     );
@@ -1986,6 +2171,7 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
                 chip_diff_current,
                 current_bet_current,
                 true,
+                is_current_eliminated,
             ),
             player_area,
         );
@@ -2007,6 +2193,7 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
                 chip_diff_current,
                 current_bet_current,
                 true,
+                is_current_eliminated,
             ),
             player_area,
         );

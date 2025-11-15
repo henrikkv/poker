@@ -202,6 +202,10 @@ pub struct GameModel {
     pub round_start_chips: Option<crate::game::Chip>,
 
     pub last_known_game_id: u32,
+
+    pub eliminated_players: [bool; 3],
+    pub game_winner: Option<u8>,
+    pub fresh_hand: bool,
 }
 
 impl GameModel {
@@ -230,6 +234,9 @@ impl GameModel {
             chip_differences: None,
             round_start_chips: None,
             last_known_game_id: 0,
+            eliminated_players: [false, false, false],
+            game_winner: None,
+            fresh_hand: true,
         };
         model.log(format!("Starting poker with {}", network_type.name()));
         model
@@ -280,6 +287,34 @@ impl GameModel {
     pub fn ensure_previous_chips(&mut self, current_chips: Option<crate::game::Chip>) {
         if self.previous_chips.is_none() {
             self.previous_chips = current_chips;
+        }
+    }
+
+    pub fn update_eliminated_players(&mut self, players_out_bitmap: u8) {
+        self.eliminated_players[0] = (players_out_bitmap & 1u8) != 0;
+        self.eliminated_players[1] = (players_out_bitmap & 2u8) != 0;
+        self.eliminated_players[2] = (players_out_bitmap & 4u8) != 0;
+    }
+
+    pub fn is_player_eliminated(&self, player_id: u8) -> bool {
+        if (1..=3).contains(&player_id) {
+            self.eliminated_players[(player_id - 1) as usize]
+        } else {
+            false
+        }
+    }
+
+    pub fn check_for_winner(&mut self) -> Option<u8> {
+        let active_players: Vec<u8> = (1..=3)
+            .filter(|&player_id| !self.is_player_eliminated(player_id))
+            .collect();
+
+        if active_players.len() == 1 {
+            let winner = active_players[0];
+            self.game_winner = Some(winner);
+            Some(winner)
+        } else {
+            None
         }
     }
 }

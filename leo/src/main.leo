@@ -821,7 +821,22 @@ program mental_poker.aleo {
         let should_skip_betting: bool =
             (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8;
 
-        let first_active_showdown: u8 = is_p1_inactive ? (is_p2_inactive ? p3_showdown : p2_showdown) : p1_showdown;
+        let is_p1_out: bool = is_player1(game.players_out);
+        let is_p2_out: bool = is_player2(game.players_out);
+        let is_p3_out: bool = is_player3(game.players_out);
+
+        let is_p1_folded: bool = is_player1(game.players_folded);
+        let is_p2_folded: bool = is_player2(game.players_folded);
+        let is_p3_folded: bool = is_player3(game.players_folded);
+
+        let is_p1_live_for_showdown: bool = !is_p1_out && !is_p1_folded;
+        let is_p2_live_for_showdown: bool = !is_p2_out && !is_p2_folded;
+        let is_p3_live_for_showdown: bool = !is_p3_out && !is_p3_folded;
+
+        let first_active_showdown: u8 =
+            is_p1_live_for_showdown ? p1_showdown :
+            is_p2_live_for_showdown ? p2_showdown :
+            p3_showdown;
 
         let next_state: u8 =
             is_p1_turn ? (!is_player2(game.players_out) ? p2_dec_turn : p3_dec_turn) :
@@ -1229,36 +1244,74 @@ program mental_poker.aleo {
         let side_pot_1: u16 = level1 == level2 ? 0u16 : (level2 - level1) * contributors_to_side1 as u16;
         let side_pot_2: u16 = level2 == level3 ? 0u16 : (level3 - level2) * contributors_to_side2 as u16;
 
-        let p1_wins: bool = p1_active && p1_hand_value >= p2_hand_value && p1_hand_value >= p3_hand_value;
-        let p2_wins: bool = p2_active && p2_hand_value >= p1_hand_value && p2_hand_value >= p3_hand_value;
-        let p3_wins: bool = p3_active && p3_hand_value >= p1_hand_value && p3_hand_value >= p2_hand_value;
+        let p1_in_main: bool = p1_active && chip.player1_bet >= level1;
+        let p2_in_main: bool = p2_active && chip.player2_bet >= level1;
+        let p3_in_main: bool = p3_active && chip.player3_bet >= level1;
 
-        let num_winners_main: u8 = (p1_wins as u8) + (p2_wins as u8) + (p3_wins as u8);
-        let p1_from_main: u16 = p1_wins ? main_pot / num_winners_main as u16 : 0u16;
-        let p2_from_main: u16 = p2_wins ? main_pot / num_winners_main as u16 : 0u16;
-        let p3_from_main: u16 = p3_wins ? main_pot / num_winners_main as u16 : 0u16;
+        let p1_main_value: u32 = p1_in_main ? p1_hand_value : 0u32;
+        let p2_main_value: u32 = p2_in_main ? p2_hand_value : 0u32;
+        let p3_main_value: u32 = p3_in_main ? p3_hand_value : 0u32;
 
-        let p1_wins_side1: bool = p1_active && chip.player1_bet >= level2;
-        let p2_wins_side1: bool = p2_active && chip.player2_bet >= level2;
-        let p3_wins_side1: bool = p3_active && chip.player3_bet >= level2;
-        let num_winners_side1: u8 = (p1_wins && p1_wins_side1) as u8 +
-                                    (p2_wins && p2_wins_side1) as u8 +
-                                    (p3_wins && p3_wins_side1) as u8;
+        let tmp_max_main_1: u32 = p1_main_value >= p2_main_value ? p1_main_value : p2_main_value;
+        let best_main_value: u32 = tmp_max_main_1 >= p3_main_value ? tmp_max_main_1 : p3_main_value;
 
-        let p1_from_side1: u16 = p1_wins && p1_wins_side1 && num_winners_side1 > 0u8 ? side_pot_1 / num_winners_side1 as u16 : 0u16;
-        let p2_from_side1: u16 = p2_wins && p2_wins_side1 && num_winners_side1 > 0u8 ? side_pot_1 / num_winners_side1 as u16 : 0u16;
-        let p3_from_side1: u16 = p3_wins && p3_wins_side1 && num_winners_side1 > 0u8 ? side_pot_1 / num_winners_side1 as u16 : 0u16;
+        let p1_is_main_winner: bool = p1_in_main && p1_main_value == best_main_value;
+        let p2_is_main_winner: bool = p2_in_main && p2_main_value == best_main_value;
+        let p3_is_main_winner: bool = p3_in_main && p3_main_value == best_main_value;
 
-        let p1_wins_side2: bool = p1_active && chip.player1_bet >= level3;
-        let p2_wins_side2: bool = p2_active && chip.player2_bet >= level3;
-        let p3_wins_side2: bool = p3_active && chip.player3_bet >= level3;
-        let num_winners_side2: u8 = (p1_wins && p1_wins_side2) as u8 +
-                                    (p2_wins && p2_wins_side2) as u8 +
-                                    (p3_wins && p3_wins_side2) as u8;
+        let num_main_winners: u8 = (p1_is_main_winner as u8) +
+                                   (p2_is_main_winner as u8) +
+                                   (p3_is_main_winner as u8);
 
-        let p1_from_side2: u16 = p1_wins && p1_wins_side2 && num_winners_side2 > 0u8 ? side_pot_2 / num_winners_side2 as u16 : 0u16;
-        let p2_from_side2: u16 = p2_wins && p2_wins_side2 && num_winners_side2 > 0u8 ? side_pot_2 / num_winners_side2 as u16 : 0u16;
-        let p3_from_side2: u16 = p3_wins && p3_wins_side2 && num_winners_side2 > 0u8 ? side_pot_2 / num_winners_side2 as u16 : 0u16;
+        let p1_from_main: u16 = p1_is_main_winner && num_main_winners > 0u8 ? main_pot / num_main_winners as u16 : 0u16;
+        let p2_from_main: u16 = p2_is_main_winner && num_main_winners > 0u8 ? main_pot / num_main_winners as u16 : 0u16;
+        let p3_from_main: u16 = p3_is_main_winner && num_main_winners > 0u8 ? main_pot / num_main_winners as u16 : 0u16;
+
+        let p1_in_side1: bool = p1_active && chip.player1_bet >= level2;
+        let p2_in_side1: bool = p2_active && chip.player2_bet >= level2;
+        let p3_in_side1: bool = p3_active && chip.player3_bet >= level2;
+
+        let p1_side1_value: u32 = p1_in_side1 ? p1_hand_value : 0u32;
+        let p2_side1_value: u32 = p2_in_side1 ? p2_hand_value : 0u32;
+        let p3_side1_value: u32 = p3_in_side1 ? p3_hand_value : 0u32;
+
+        let tmp_max_side1_1: u32 = p1_side1_value >= p2_side1_value ? p1_side1_value : p2_side1_value;
+        let best_side1_value: u32 = tmp_max_side1_1 >= p3_side1_value ? tmp_max_side1_1 : p3_side1_value;
+
+        let p1_is_side1_winner: bool = p1_in_side1 && p1_side1_value == best_side1_value;
+        let p2_is_side1_winner: bool = p2_in_side1 && p2_side1_value == best_side1_value;
+        let p3_is_side1_winner: bool = p3_in_side1 && p3_side1_value == best_side1_value;
+
+        let num_side1_winners: u8 = (p1_is_side1_winner as u8) +
+                                    (p2_is_side1_winner as u8) +
+                                    (p3_is_side1_winner as u8);
+
+        let p1_from_side1: u16 = p1_is_side1_winner && num_side1_winners > 0u8 ? side_pot_1 / num_side1_winners as u16 : 0u16;
+        let p2_from_side1: u16 = p2_is_side1_winner && num_side1_winners > 0u8 ? side_pot_1 / num_side1_winners as u16 : 0u16;
+        let p3_from_side1: u16 = p3_is_side1_winner && num_side1_winners > 0u8 ? side_pot_1 / num_side1_winners as u16 : 0u16;
+
+        let p1_in_side2: bool = p1_active && chip.player1_bet >= level3;
+        let p2_in_side2: bool = p2_active && chip.player2_bet >= level3;
+        let p3_in_side2: bool = p3_active && chip.player3_bet >= level3;
+
+        let p1_side2_value: u32 = p1_in_side2 ? p1_hand_value : 0u32;
+        let p2_side2_value: u32 = p2_in_side2 ? p2_hand_value : 0u32;
+        let p3_side2_value: u32 = p3_in_side2 ? p3_hand_value : 0u32;
+
+        let tmp_max_side2_1: u32 = p1_side2_value >= p2_side2_value ? p1_side2_value : p2_side2_value;
+        let best_side2_value: u32 = tmp_max_side2_1 >= p3_side2_value ? tmp_max_side2_1 : p3_side2_value;
+
+        let p1_is_side2_winner: bool = p1_in_side2 && p1_side2_value == best_side2_value;
+        let p2_is_side2_winner: bool = p2_in_side2 && p2_side2_value == best_side2_value;
+        let p3_is_side2_winner: bool = p3_in_side2 && p3_side2_value == best_side2_value;
+
+        let num_side2_winners: u8 = (p1_is_side2_winner as u8) +
+                                    (p2_is_side2_winner as u8) +
+                                    (p3_is_side2_winner as u8);
+
+        let p1_from_side2: u16 = p1_is_side2_winner && num_side2_winners > 0u8 ? side_pot_2 / num_side2_winners as u16 : 0u16;
+        let p2_from_side2: u16 = p2_is_side2_winner && num_side2_winners > 0u8 ? side_pot_2 / num_side2_winners as u16 : 0u16;
+        let p3_from_side2: u16 = p3_is_side2_winner && num_side2_winners > 0u8 ? side_pot_2 / num_side2_winners as u16 : 0u16;
 
         let p1_share: u16 = p1_from_main + p1_from_side1 + p1_from_side2;
         let p2_share: u16 = p2_from_main + p2_from_side1 + p2_from_side2;

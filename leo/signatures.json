@@ -1,8 +1,8 @@
 {
   "program_name": "mental_poker",
   "imports": [
-    "commutative_encryption",
-    "credits"
+    "credits",
+    "commutative_encryption"
   ],
   "records": [
     {

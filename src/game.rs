@@ -460,36 +460,11 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         Ok(())
     }
 
-    fn update_render_data(
-        &self,
-        game_id: u32,
-        new_state: Option<GameState>,
-        model: &mut GameModel,
-    ) {
+    fn update_render_data(&self, game_id: u32, model: &mut GameModel) {
         let current_chips = self.get_chip(game_id);
         let revealed_cards = self.poker.get_revealed_cards(game_id);
 
-        let is_decryption_phase = matches!(
-            new_state,
-            Some(GameState::P1DecHand) | Some(GameState::P2DecHand) | Some(GameState::P3DecHand)
-        );
-
-        if !is_decryption_phase && model.fresh_hand {
-            model.fresh_hand = false;
-        }
-
-        let should_show_revealed = !model.fresh_hand || !is_decryption_phase;
-        let mut render_data = match (should_show_revealed, revealed_cards) {
-            (true, Some(revealed)) => Card {
-                flop: revealed.flop,
-                turn: revealed.turn,
-                river: revealed.river,
-                player1: revealed.player1,
-                player2: revealed.player2,
-                player3: revealed.player3,
-            },
-            _ => Card::default(),
-        };
+        let mut render_data = card_from_revealed(revealed_cards);
 
         if let Some(decrypted) = model.decrypted_hand {
             render_data.set_cards(model.current_player_id, decrypted);
@@ -545,7 +520,8 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             .ok_or_else(|| anyhow::anyhow!("Game {} not found", game_id))?;
 
         let new_state = GameState::from_u8(game.state);
-        let state_changed = model.current_state != new_state;
+        let previous_state = model.current_state;
+        let state_changed = previous_state != new_state;
 
         if state_changed {
             if let Some(state) = new_state {
@@ -650,7 +626,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         let should_update_render = state_changed || hand_decrypted || model.card.is_none();
 
         if should_update_render {
-            self.update_render_data(game_id, new_state, model);
+            self.update_render_data(game_id, model);
         }
 
         model.update_eliminated_players(game.players_out);
@@ -694,6 +670,21 @@ impl Card {
             3 => self.player3 = cards,
             _ => {}
         }
+    }
+}
+
+fn card_from_revealed<N: Network>(revealed: Option<RevealedCards<N>>) -> Card {
+    if let Some(r) = revealed {
+        Card {
+            flop: r.flop,
+            turn: r.turn,
+            river: r.river,
+            player1: r.player1,
+            player2: r.player2,
+            player3: r.player3,
+        }
+    } else {
+        Card::default()
     }
 }
 
@@ -781,25 +772,8 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
     }
 
     fn get_card(&self, game_id: u32, current_player_id: u8, model: &GameModel) -> Option<Card> {
-        let mut render_data = if let Some(revealed) = self.poker.get_revealed_cards(game_id) {
-            Card {
-                flop: revealed.flop,
-                turn: revealed.turn,
-                river: revealed.river,
-                player1: revealed.player1,
-                player2: revealed.player2,
-                player3: revealed.player3,
-            }
-        } else {
-            Card {
-                flop: [255, 255, 255],
-                turn: 255,
-                river: 255,
-                player1: [255, 255],
-                player2: [255, 255],
-                player3: [255, 255],
-            }
-        };
+        let revealed = self.poker.get_revealed_cards(game_id);
+        let mut render_data = card_from_revealed(revealed);
 
         if let Some(decrypted) = model.decrypted_hand {
             render_data.set_cards(current_player_id, decrypted);
@@ -1017,7 +991,6 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
 
         self.keys = Some(keys);
         model.decrypted_hand = None;
-        model.fresh_hand = true;
 
         Ok(())
     }
@@ -1668,29 +1641,15 @@ struct PlayerWidget {
     player_id: u8,
     cards: [u8; 2],
     chips: u16,
-    chip_diff: Option<i32>,
-    current_bet: u16,
-    is_current_player: bool,
     is_eliminated: bool,
 }
 
 impl PlayerWidget {
-    fn new(
-        player_id: u8,
-        cards: [u8; 2],
-        chips: u16,
-        chip_diff: Option<i32>,
-        current_bet: u16,
-        is_current_player: bool,
-        is_eliminated: bool,
-    ) -> Self {
+    fn new(player_id: u8, cards: [u8; 2], chips: u16, is_eliminated: bool) -> Self {
         Self {
             player_id,
             cards,
             chips,
-            chip_diff,
-            current_bet,
-            is_current_player,
             is_eliminated,
         }
     }
@@ -1714,31 +1673,8 @@ impl Widget for PlayerWidget {
 
         let mut line_y = inner.y;
 
-        if self.is_current_player && self.current_bet > 0 {
-            let bet_line =
-                Line::from(format!("Bet: {}", self.current_bet)).alignment(Alignment::Center);
-            bet_line.render(
-                Rect {
-                    x: inner.x,
-                    y: line_y,
-                    width: inner.width,
-                    height: 1,
-                },
-                buf,
-            );
-            line_y += 1;
-        }
-
         let player_name_text = if self.is_eliminated {
             format!("P{} (OUT)", self.player_id)
-        } else if let Some(diff) = self.chip_diff {
-            if diff > 0 {
-                format!("P{} +{}", self.player_id, diff)
-            } else if diff < 0 {
-                format!("P{} {}", self.player_id, diff)
-            } else {
-                format!("P{}", self.player_id)
-            }
         } else {
             format!("P{}", self.player_id)
         };
@@ -1798,21 +1734,6 @@ impl Widget for PlayerWidget {
             },
             buf,
         );
-        line_y += 1;
-
-        if !self.is_current_player && self.current_bet > 0 {
-            let bet_line =
-                Line::from(format!("Bet: {}", self.current_bet)).alignment(Alignment::Center);
-            bet_line.render(
-                Rect {
-                    x: inner.x,
-                    y: line_y,
-                    width: inner.width,
-                    height: 1,
-                },
-                buf,
-            );
-        }
     }
 }
 
@@ -2018,51 +1939,42 @@ fn render_in_game(frame: &mut Frame, model: &GameModel, area: Rect) {
     render_game_table(frame, inner, model);
 }
 
-fn create_table_layout() -> Layout {
-    Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(6),
-            Constraint::Length(3),
-            Constraint::Min(6),
-        ])
-}
-
-fn create_opponents_layout() -> Layout {
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-}
-
 fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
     let cards = model.card.unwrap();
     let chips = model.chip.unwrap();
     let current_player = model.current_player_id;
     let (opponent1, opponent2) = get_opponents(current_player);
+    let state = model.current_state;
 
+    let is_betting_round = matches!(state, Some(s) if s.is_betting_state());
     let current_bet_1 = chips.get_current_bet(opponent1);
     let current_bet_2 = chips.get_current_bet(opponent2);
     let current_bet_current = chips.get_current_bet(current_player);
-
-    let chip_diff_1 = None;
-    let chip_diff_2 = None;
-    let chip_diff_current = None;
 
     let is_opponent1_eliminated = model.is_player_eliminated(opponent1);
     let is_opponent2_eliminated = model.is_player_eliminated(opponent2);
     let is_current_eliminated = model.is_player_eliminated(current_player);
 
-    let vertical_layout = create_table_layout().split(area);
-    let top_layout = create_opponents_layout().split(vertical_layout[0]);
+    let vertical_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(6),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(3),
+            Constraint::Min(7),
+        ])
+        .split(area);
+    let top_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(vertical_layout[0]);
 
     frame.render_widget(
         PlayerWidget::new(
             opponent1,
             cards.get_cards(opponent1),
             chips.get_chips(opponent1),
-            chip_diff_1,
-            current_bet_1,
-            false,
             is_opponent1_eliminated,
         ),
         top_layout[0],
@@ -2072,80 +1984,90 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
             opponent2,
             cards.get_cards(opponent2),
             chips.get_chips(opponent2),
-            chip_diff_2,
-            current_bet_2,
-            false,
             is_opponent2_eliminated,
         ),
         top_layout[1],
     );
 
+    let opponents_bet_area = vertical_layout[1];
+    if is_betting_round {
+        let opponents_bet_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(opponents_bet_area);
+
+        if current_bet_1 > 0 {
+            let bet_text = format!("Bet: {}", current_bet_1);
+            let bet_paragraph = Paragraph::new(bet_text).alignment(Alignment::Center);
+            frame.render_widget(bet_paragraph, opponents_bet_layout[0]);
+        }
+
+        if current_bet_2 > 0 {
+            let bet_text = format!("Bet: {}", current_bet_2);
+            let bet_paragraph = Paragraph::new(bet_text).alignment(Alignment::Center);
+            frame.render_widget(bet_paragraph, opponents_bet_layout[1]);
+        }
+    }
+
+    let community_area = vertical_layout[3];
+
     frame.render_widget(
         CommunityWidget::new(cards.flop, cards.turn, cards.river, chips.pot),
-        vertical_layout[1],
+        community_area,
     );
 
-    let bottom_area = vertical_layout[2];
+    let bottom_area = vertical_layout[4];
 
     let player_widget_height = 6;
     let betting_button_height = 3;
+    let reserved_height = 1 + betting_button_height + player_widget_height;
 
-    if let Some(betting_ui) = &model.betting_ui {
-        let player_y_offset = bottom_area.height.saturating_sub(player_widget_height);
-        let player_area = Rect {
-            x: bottom_area.x,
-            y: bottom_area.y + player_y_offset,
-            width: bottom_area.width,
-            height: player_widget_height,
-        };
+    let anchor_y = bottom_area
+        .y
+        .saturating_add(bottom_area.height.saturating_sub(reserved_height));
 
-        let betting_y_offset = bottom_area
-            .height
-            .saturating_sub(player_widget_height + betting_button_height);
-        let betting_area = Rect {
-            x: bottom_area.x,
-            y: bottom_area.y + betting_y_offset,
-            width: bottom_area.width,
-            height: betting_button_height,
-        };
+    let bet_area = Rect {
+        x: bottom_area.x,
+        y: anchor_y,
+        width: bottom_area.width,
+        height: 1,
+    };
 
-        frame.render_widget(BettingWidget::new(betting_ui), betting_area);
+    let betting_area = Rect {
+        x: bottom_area.x,
+        y: anchor_y + 1,
+        width: bottom_area.width,
+        height: betting_button_height,
+    };
 
-        frame.render_widget(
-            PlayerWidget::new(
-                current_player,
-                cards.get_cards(current_player),
-                chips.get_chips(current_player),
-                chip_diff_current,
-                current_bet_current,
-                true,
-                is_current_eliminated,
-            ),
-            player_area,
-        );
+    let player_area = Rect {
+        x: bottom_area.x,
+        y: anchor_y + 1 + betting_button_height,
+        width: bottom_area.width,
+        height: player_widget_height,
+    };
+
+    if is_betting_round && current_bet_current > 0 {
+        let bet_text = format!("Bet: {}", current_bet_current);
+        let bet_paragraph = Paragraph::new(bet_text).alignment(Alignment::Center);
+        frame.render_widget(bet_paragraph, bet_area);
     } else {
-        let y_offset = bottom_area.height.saturating_sub(player_widget_height);
-
-        let player_area = Rect {
-            x: bottom_area.x,
-            y: bottom_area.y + y_offset,
-            width: bottom_area.width,
-            height: player_widget_height,
-        };
-
-        frame.render_widget(
-            PlayerWidget::new(
-                current_player,
-                cards.get_cards(current_player),
-                chips.get_chips(current_player),
-                chip_diff_current,
-                current_bet_current,
-                true,
-                is_current_eliminated,
-            ),
-            player_area,
-        );
+        frame.render_widget(Paragraph::new(""), bet_area);
     }
+    if let Some(betting_ui) = &model.betting_ui {
+        frame.render_widget(BettingWidget::new(betting_ui), betting_area);
+    } else {
+        frame.render_widget(Paragraph::new(""), betting_area);
+    }
+    frame.render_widget(
+        PlayerWidget::new(
+            current_player,
+            cards.get_cards(current_player),
+            chips.get_chips(current_player),
+            is_current_eliminated,
+        ),
+        player_area,
+    );
 }
 
 pub fn handle_game_key(key: KeyEvent) -> Option<GameMessage> {

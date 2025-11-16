@@ -363,15 +363,18 @@ program mental_poker.aleo {
                                         (is_p2 && is_player2(game.last_bet)) ||
                                         (is_p3 && is_player3(game.last_bet));
 
-        let p1_matched: bool = is_p1_inactive || (is_p1 ? new_amount == highest_bet : chip.player1_bet == highest_bet);
-        let p2_matched: bool = is_p2_inactive || (is_p2 ? new_amount == highest_bet : chip.player2_bet == highest_bet);
-        let p3_matched: bool = is_p3_inactive || (is_p3 ? new_amount == highest_bet : chip.player3_bet == highest_bet);
+        let p1_matched: bool = is_p1_inactive ||
+                               (is_p1 ? (new_amount == highest_bet || (is_going_allin && !reopens_action)) : chip.player1_bet == highest_bet);
+        let p2_matched: bool = is_p2_inactive ||
+                               (is_p2 ? (new_amount == highest_bet || (is_going_allin && !reopens_action)) : chip.player2_bet == highest_bet);
+        let p3_matched: bool = is_p3_inactive ||
+                               (is_p3 ? (new_amount == highest_bet || (is_going_allin && !reopens_action)) : chip.player3_bet == highest_bet);
 
-        let all_matched: bool = p1_matched && p2_matched && p3_matched;
+        let all_players_matched: bool = p1_matched && p2_matched && p3_matched;
 
-        let others_matched: bool = is_p1 ? (p2_matched && p3_matched) :
-                                   is_p2 ? (p1_matched && p3_matched) :
-                                           (p1_matched && p2_matched);
+        let other_players_matched: bool = is_p1 ? (p2_matched && p3_matched) :
+                                          is_p2 ? (p1_matched && p3_matched) :
+                                                  (p1_matched && p2_matched);
 
         let is_preflop_round: bool = game.state >= p1_bet_pre && game.state <= p3_bet_pre;
         let big_blind_has_option: bool = is_preflop_round && current_bet == game.bb && highest_bet == game.bb;
@@ -410,9 +413,9 @@ program mental_poker.aleo {
 
         let is_first_postflop_action: bool = !is_preflop_round && game.last_bet == 0u8;
 
-        let action_returns_to_last_raiser: bool = next_player_is_last_raiser && all_matched && !(is_preflop_round && highest_bet == game.bb);
+        let action_returns_to_last_raiser: bool = next_player_is_last_raiser && all_players_matched && !(is_preflop_round && highest_bet == game.bb);
 
-        let last_raiser_completed_action: bool = is_current_last_bet && others_matched && !reopens_action;
+        let last_raiser_completed_action: bool = is_current_last_bet && other_players_matched && !reopens_action;
 
         let last_raiser_is_inactive: bool = (is_player1(game.last_bet) && is_p1_inactive) ||
                                              (is_player2(game.last_bet) && is_p2_inactive) ||
@@ -420,7 +423,7 @@ program mental_poker.aleo {
 
         let betting_round_should_end: bool = action_returns_to_last_raiser ||
                                               last_raiser_completed_action ||
-                                              (last_raiser_is_inactive && all_matched);
+                                              (last_raiser_is_inactive && all_players_matched);
 
         let next_state: u8 = betting_round_should_end ? next_round_state : next_player_state;
 
@@ -800,19 +803,6 @@ program mental_poker.aleo {
             river: is_river ? card_dec : old_card.river,
         };
 
-        if (is_p3_turn || is_p3_river) {
-        let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
-        let new_revealed: RevealedCards = RevealedCards {
-            player1: revealed.player1,
-            player2: revealed.player2,
-            player3: revealed.player3,
-            flop: revealed.flop,
-                turn: is_p3_turn ? card_u8 : revealed.turn,
-                river: is_p3_river ? card_u8 : revealed.river,
-        };
-        Mapping::set(revealed_cards, game_id, new_revealed);
-        }
-
         let chip: Chips = Mapping::get(chips, game_id);
         let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded);
         let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded);
@@ -832,6 +822,26 @@ program mental_poker.aleo {
         let is_p1_live_for_showdown: bool = !is_p1_out && !is_p1_folded;
         let is_p2_live_for_showdown: bool = !is_p2_out && !is_p2_folded;
         let is_p3_live_for_showdown: bool = !is_p3_out && !is_p3_folded;
+
+        let board_revealer: u8 = is_p3_live_for_showdown ? player3() :
+                                 is_p2_live_for_showdown ? player2() : player1();
+
+        let is_board_revealer: bool = (board_revealer == player1() && is_p1) ||
+                                      (board_revealer == player2() && is_p2) ||
+                                      (board_revealer == player3() && is_p3);
+
+        if (is_board_revealer) {
+            let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
+            let new_revealed: RevealedCards = RevealedCards {
+                player1: revealed.player1,
+                player2: revealed.player2,
+                player3: revealed.player3,
+                flop: revealed.flop,
+                turn: is_river ? revealed.turn : card_u8,
+                river: is_river ? card_u8 : revealed.river,
+            };
+            Mapping::set(revealed_cards, game_id, new_revealed);
+        }
 
         let first_active_showdown: u8 =
             is_p1_live_for_showdown ? p1_showdown :
@@ -1659,19 +1669,24 @@ program mental_poker.aleo {
                              is_dealer_p2 ? player1() :
                                             player2());
 
+        let p1_blind_to_post: u16 = is_player1(sb_player) ? game.sb :
+                                    is_player1(bb_player) ? game.bb : 0u16;
+        let p2_blind_to_post: u16 = is_player2(sb_player) ? game.sb :
+                                    is_player2(bb_player) ? game.bb : 0u16;
+        let p3_blind_to_post: u16 = is_player3(sb_player) ? game.sb :
+                                    is_player3(bb_player) ? game.bb : 0u16;
+
+        let p1_blind: u16 = p1_blind_to_post > chip.player1 ? chip.player1 : p1_blind_to_post;
+        let p2_blind: u16 = p2_blind_to_post > chip.player2 ? chip.player2 : p2_blind_to_post;
+        let p3_blind: u16 = p3_blind_to_post > chip.player3 ? chip.player3 : p3_blind_to_post;
+
         let new_chip: Chips = Chips {
-            player1: is_player1(sb_player) ? chip.player1 - game.sb :
-                     is_player1(bb_player) ? chip.player1 - game.bb : chip.player1,
-            player2: is_player2(sb_player) ? chip.player2 - game.sb :
-                     is_player2(bb_player) ? chip.player2 - game.bb : chip.player2,
-            player3: is_player3(sb_player) ? chip.player3 - game.sb :
-                     is_player3(bb_player) ? chip.player3 - game.bb : chip.player3,
-            player1_bet: is_player1(sb_player) ? game.sb :
-                         is_player1(bb_player) ? game.bb : 0u16,
-            player2_bet: is_player2(sb_player) ? game.sb :
-                         is_player2(bb_player) ? game.bb : 0u16,
-            player3_bet: is_player3(sb_player) ? game.sb :
-                         is_player3(bb_player) ? game.bb : 0u16,
+            player1: chip.player1 - p1_blind,
+            player2: chip.player2 - p2_blind,
+            player3: chip.player3 - p3_blind,
+            player1_bet: p1_blind,
+            player2_bet: p2_blind,
+            player3_bet: p3_blind,
         };
 
         let card: Cards = Cards {

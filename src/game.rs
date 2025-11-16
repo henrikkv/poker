@@ -371,6 +371,11 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             return;
         };
 
+        if model.is_player_eliminated(self.player_id) || chip_data.get_chips(self.player_id) == 0 {
+            model.betting_ui = None;
+            return;
+        }
+
         let player_chips = chip_data.get_chips(self.player_id);
         let current_bet = chip_data.get_current_bet(self.player_id);
         let highest_bet = chip_data
@@ -564,20 +569,26 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
                 }
             }
 
-            if state_changed && model.game_winner.is_none() {
+            if model.game_winner.is_none() {
                 match (state, self.player_id) {
                     (GameState::P1NewShuffle, 1) | (GameState::P2NewShuffle, 2) => {
-                        model.card = None;
-                        model.decrypted_hand = None;
-                        model.log(format!("Starting new hand (state: {})", state));
+                        if state_changed {
+                            model.card = None;
+                            model.decrypted_hand = None;
+                            model.log(format!("Starting new hand (state: {})", state));
+                        }
                         self.new_shuffle(model, game_id)?;
                     }
                     (GameState::P1NewShuffle | GameState::P2NewShuffle, _) => {
-                        model.card = None;
-                        model.decrypted_hand = None;
+                        if state_changed {
+                            model.card = None;
+                            model.decrypted_hand = None;
+                        }
                     }
                     (GameState::P2Shuffle, 2) | (GameState::P3Shuffle, 3) => {
-                        model.log(format!("Shuffling deck (state: {})", state));
+                        if state_changed {
+                            model.log(format!("Shuffling deck (state: {})", state));
+                        }
                         self.shuffle_existing_deck(model, game_id)?;
                     }
                     _ => {}

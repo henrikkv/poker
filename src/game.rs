@@ -1563,7 +1563,7 @@ impl Widget for CommunityWidget {
             format_card_span(self.flop[1]),
             Span::raw(" "),
             format_card_span(self.flop[2]),
-            Span::raw("  "),
+            Span::raw(" "),
             format_card_span(self.turn),
             Span::raw(" "),
             format_card_span(self.river),

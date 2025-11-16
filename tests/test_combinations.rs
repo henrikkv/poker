@@ -580,3 +580,27 @@ fn test_flush_tie_same_top_five() {
         },
     );
 }
+
+#[test]
+fn test_sidepot() {
+    run_test(
+        GameSetup {
+            game_id: 20,
+            players_out: 0,
+            players_folded: 0,
+            initial_chips: (0, 0, 0),
+            initial_bets: (10, 70, 200),
+        },
+        Cards {
+            p1_cards: [card("SA"), card("SK")],
+            p2_cards: [card("H10"), card("D9")],
+            p3_cards: [card("H2"), card("H3")],
+            flop: [card("SQ"), card("S9"), card("S7")],
+            turn: card("C8"),
+            river: card("H6"),
+        },
+        Expectation {
+            winner_chips: Some((30, 120, 130)),
+        },
+    );
+}

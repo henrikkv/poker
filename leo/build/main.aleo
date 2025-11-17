@@ -48,6 +48,10 @@ struct RevealedCards:
     turn as u8;
     river as u8;
 
+mapping next_game_id:
+    key as u32.public;
+    value as u32.public;
+
 mapping games:
     key as u32.public;
     value as Game.public;
@@ -67,10 +71,6 @@ mapping cards:
 mapping revealed_cards:
     key as u32.public;
     value as RevealedCards.public;
-
-mapping next_game_id__:
-    key as boolean.public;
-    value as u32.public;
 
 function create_game:
     input r0 as u64.private;
@@ -99,9 +99,12 @@ finalize create_game:
     input r3 as u128.public;
     input r4 as credits.aleo/transfer_public_as_signer.future;
     await r4;
-    cast r1 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc r2 r3 0u8 4u8 0u8 0u8 0u8 5u16 10u16 10u8 0u8 0u16 into r5 as Game;
-    set r5 into games[1u32];
-    set r0 into decks[1u32];
+    get.or_use next_game_id[0u32] 0u32 into r5;
+    add r5 1u32 into r6;
+    set r6 into next_game_id[0u32];
+    cast r1 aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq3ljyzc r2 r3 0u8 4u8 0u8 0u8 0u8 5u16 10u16 10u8 0u8 0u16 into r7 as Game;
+    set r7 into games[r5];
+    set r0 into decks[r5];
 
 function join_game:
     input r0 as u32.private;

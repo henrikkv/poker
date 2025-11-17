@@ -220,6 +220,11 @@
   ],
   "mappings": [
     {
+      "name": "next_game_id",
+      "key_type": "u32",
+      "value_type": "u32"
+    },
+    {
       "name": "games",
       "key_type": "u32",
       "value_type": "Game"

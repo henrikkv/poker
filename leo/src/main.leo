@@ -3,7 +3,7 @@ import credits.aleo;
 
 program mental_poker.aleo {
 
-    storage next_game_id: u32;
+    mapping next_game_id: u32 => u32;
 
     mapping games: u32 => Game;
     mapping decks: u32 => [group; 52];
@@ -197,10 +197,10 @@ program mental_poker.aleo {
     }
     async function finalize_new_game(deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, transfer_future: Future) {
         transfer_future.await();
-
-        //let game_id: u32 = next_game_id.unwrap_or(0u32);
-        //next_game_id = game_id + 1u32;
-        let game_id: u32 = 1u32;
+        
+        let game_id = Mapping::get_or_use(next_game_id, 0u32, 0u32);
+        let next_id =  game_id + 1u32;
+        Mapping::set(next_game_id, 0u32, next_id);
 
         let game: Game = Game {
             player1: signer,

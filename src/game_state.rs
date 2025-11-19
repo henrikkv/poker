@@ -201,6 +201,7 @@ pub struct GameModel {
 
     pub eliminated_players: [bool; 3],
     pub game_winner: Option<u8>,
+    pub dealer_button: u8,
 }
 
 impl GameModel {
@@ -228,6 +229,7 @@ impl GameModel {
             last_known_game_id: 0,
             eliminated_players: [false, false, false],
             game_winner: None,
+            dealer_button: 0,
         };
         model.log(format!("Starting poker with {}", network_type.name()));
         model

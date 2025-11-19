@@ -477,6 +477,10 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
 
         model.card = Some(render_data);
         model.chip = current_chips;
+
+        if let Some(game) = self.poker.get_games(game_id) {
+            model.dealer_button = game.dealer_button;
+        }
     }
 
     pub fn initialize_game(&mut self, model: &mut GameModel) -> anyhow::Result<()> {
@@ -1653,15 +1657,23 @@ struct PlayerWidget {
     cards: [u8; 2],
     chips: u16,
     is_eliminated: bool,
+    dealer_button: u8,
 }
 
 impl PlayerWidget {
-    fn new(player_id: u8, cards: [u8; 2], chips: u16, is_eliminated: bool) -> Self {
+    fn new(
+        player_id: u8,
+        cards: [u8; 2],
+        chips: u16,
+        is_eliminated: bool,
+        dealer_button: u8,
+    ) -> Self {
         Self {
             player_id,
             cards,
             chips,
             is_eliminated,
+            dealer_button,
         }
     }
 }
@@ -1745,6 +1757,16 @@ impl Widget for PlayerWidget {
             },
             buf,
         );
+
+        let player_bit = 1u8 << (self.player_id - 1);
+        let is_dealer = (self.dealer_button & player_bit) != 0;
+
+        if is_dealer && inner.width > 0 && inner.height > 0 {
+            let dealer_x = inner.x + inner.width - 1;
+            let dealer_y = inner.y + inner.height - 1;
+            let dealer_style = Style::default().fg(Color::Black).bg(Color::White);
+            buf.set_string(dealer_x, dealer_y, "D", dealer_style);
+        }
     }
 }
 
@@ -1987,6 +2009,7 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
             cards.get_cards(opponent1),
             chips.get_chips(opponent1),
             is_opponent1_eliminated,
+            model.dealer_button,
         ),
         top_layout[0],
     );
@@ -1996,6 +2019,7 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
             cards.get_cards(opponent2),
             chips.get_chips(opponent2),
             is_opponent2_eliminated,
+            model.dealer_button,
         ),
         top_layout[1],
     );
@@ -2076,6 +2100,7 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
             cards.get_cards(current_player),
             chips.get_chips(current_player),
             is_current_eliminated,
+            model.dealer_button,
         ),
         player_area,
     );

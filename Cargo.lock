@@ -2198,6 +2198,7 @@ dependencies = [
  "commutative_encryption_bindings",
  "credits_bindings",
  "crossterm",
+ "dotenvy",
  "env_logger",
  "leo-bindings",
  "log",

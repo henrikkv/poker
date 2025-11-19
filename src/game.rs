@@ -11,8 +11,9 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph, Widget},
 };
-use snarkvm::prelude::{Group, Inverse, Network, Scalar, TestRng, Uniform};
+use snarkvm::prelude::{Group, Inverse, Network, Scalar, TestRng, TestnetV0, Uniform};
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::Instant;
 
 use crate::cards::{
@@ -1046,6 +1047,17 @@ pub fn new_interpreter_game(account_index: u16) -> anyhow::Result<Box<dyn GameHa
 
 pub fn new_testnet_game(account_index: u16, endpoint: &str) -> anyhow::Result<Box<dyn GameHandle>> {
     let account = get_dev_account(account_index).unwrap();
+    let poker = MentalPokerTestnet::new(&account, endpoint)?;
+    let encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
+    let game = PokerGame::new(account, endpoint.to_string(), poker, encryption, 0)?;
+    Ok(Box::new(game))
+}
+
+pub fn new_game_from_private_key(
+    private_key: &str,
+    endpoint: &str,
+) -> anyhow::Result<Box<dyn GameHandle>> {
+    let account: Account<TestnetV0> = Account::from_str(private_key)?;
     let poker = MentalPokerTestnet::new(&account, endpoint)?;
     let encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
     let game = PokerGame::new(account, endpoint.to_string(), poker, encryption, 0)?;

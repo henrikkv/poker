@@ -3,4 +3,4 @@
 *.prover
 *.verifier
 /target
-.logsP*
+.logs*

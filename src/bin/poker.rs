@@ -1,10 +1,12 @@
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use crossterm::{
     event::{self, Event},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use poker::game::{DEFAULT_ENDPOINT, Game, GameMessage, handle_game_key, new_testnet_game};
+use poker::game::{
+    Game, GameMessage, handle_game_key, new_game_from_private_key, new_testnet_game,
+};
 use poker::game_state::NetworkType;
 use ratatui::{
     Terminal,
@@ -19,30 +21,30 @@ use std::time::Duration;
 #[command(name = "poker")]
 #[command(about = "Mental Poker on Aleo", long_about = None)]
 struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    Testnet {
-        #[arg(short, long, default_value = DEFAULT_ENDPOINT)]
-        endpoint: String,
-    },
-    Mainnet {
-        #[arg(short, long)]
-        endpoint: String,
-    },
+    #[arg(short, long)]
+    index: Option<u16>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok();
     let cli = Cli::parse();
 
-    let account_index = std::env::var("ACCOUNT_INDEX")
-        .ok()
-        .and_then(|s| s.parse::<u16>().ok())
-        .unwrap_or(0u16);
-    init_file_logger(account_index)?;
+    let endpoint = std::env::var("ENDPOINT").expect("ENDPOINT environment variable must be set");
+    let network = std::env::var("NETWORK").expect("NETWORK environment variable must be set");
+
+    let network_type = match network.to_lowercase().as_str() {
+        "testnet" => NetworkType::Testnet,
+        "mainnet" => NetworkType::Mainnet,
+        _ => {
+            eprintln!(
+                "Invalid NETWORK value: '{}'. Must be 'testnet' or 'mainnet'",
+                network
+            );
+            std::process::exit(1);
+        }
+    };
+
+    init_file_logger(cli.index)?;
 
     let original_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
@@ -51,12 +53,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         original_hook(panic_info);
     }));
 
-    let (network_type, endpoint) = match cli.command {
-        Commands::Testnet { endpoint } => (NetworkType::Testnet, endpoint),
-        Commands::Mainnet { endpoint } => (NetworkType::Mainnet, endpoint),
+    let handle = if let Some(index) = cli.index {
+        new_testnet_game(index, &endpoint)?
+    } else {
+        let private_key =
+            std::env::var("PRIVATE_KEY").expect("PRIVATE_KEY environment variable must be set");
+        new_game_from_private_key(&private_key, &endpoint)?
     };
-
-    let handle = create_game_handle(network_type, account_index, &endpoint)?;
     let mut game = Game::new(handle, network_type);
 
     let mut terminal = setup_terminal()?;
@@ -89,11 +92,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn init_file_logger(account_index: u16) -> Result<(), Box<dyn std::error::Error>> {
+fn init_file_logger(account_index: Option<u16>) -> Result<(), Box<dyn std::error::Error>> {
     use std::fs::File;
     use std::io::Write;
 
-    let log_file_name = format!(".logsP{}", account_index + 1);
+    let log_file_name = if let Some(index) = account_index {
+        format!(".logsP{}", index + 1)
+    } else {
+        ".logs".to_string()
+    };
     let log_file = File::create(&log_file_name)?;
 
     env_logger::Builder::from_env(env_logger::Env::default().filter_or("RUST_LOG", "info"))
@@ -107,22 +114,6 @@ fn init_file_logger(account_index: u16) -> Result<(), Box<dyn std::error::Error>
         .try_init()?;
 
     Ok(())
-}
-
-fn create_game_handle(
-    network_type: NetworkType,
-    account_index: u16,
-    endpoint: &str,
-) -> Result<Box<dyn poker::game::GameHandle>, Box<dyn std::error::Error>> {
-    match network_type {
-        NetworkType::Testnet | NetworkType::Mainnet => {
-            Ok(new_testnet_game(account_index, endpoint)?)
-        }
-        NetworkType::Interpreter => {
-            eprintln!("Interpreter mode only available in test mode");
-            std::process::exit(1);
-        }
-    }
 }
 
 fn setup_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>, Box<dyn std::error::Error>> {

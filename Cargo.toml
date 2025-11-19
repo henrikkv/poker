@@ -18,6 +18,7 @@ anyhow = "1.0.100"
 log = "0.4"
 env_logger = "0.11"
 clap = { version = "4.5", features = ["derive"] }
+dotenvy = "0.15"
 
 [[bin]]
 name = "poker"

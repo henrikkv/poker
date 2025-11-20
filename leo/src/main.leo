@@ -425,6 +425,53 @@ program mental_poker.aleo {
                                               last_raiser_completed_action ||
                                               (last_raiser_is_inactive && all_players_matched);
 
+        let is_p1_inactive_after_bet: bool = (is_p1 && new_remaining == 0u16) || is_p1_inactive;
+        let is_p2_inactive_after_bet: bool = (is_p2 && new_remaining == 0u16) || is_p2_inactive;
+        let is_p3_inactive_after_bet: bool = (is_p3 && new_remaining == 0u16) || is_p3_inactive;
+
+        let active_count: u8 = (!is_p1_inactive_after_bet as u8) +
+                               (!is_p2_inactive_after_bet as u8) +
+                               (!is_p3_inactive_after_bet as u8);
+
+        if (active_count == 1u8) {
+            let pot_size: u16 = (is_p1 ? new_amount : chip.player1_bet) +
+                                (is_p2 ? new_amount : chip.player2_bet) +
+                                (is_p3 ? new_amount : chip.player3_bet);
+
+            let new_chips: Chips = Chips {
+                player1: !is_p1_inactive_after_bet ? (is_p1 ? new_remaining : chip.player1) + pot_size : (is_p1 ? new_remaining : chip.player1),
+                player2: !is_p2_inactive_after_bet ? (is_p2 ? new_remaining : chip.player2) + pot_size : (is_p2 ? new_remaining : chip.player2),
+                player3: !is_p3_inactive_after_bet ? (is_p3 ? new_remaining : chip.player3) + pot_size : (is_p3 ? new_remaining : chip.player3),
+                player1_bet: 0u16,
+                player2_bet: 0u16,
+                player3_bet: 0u16,
+            };
+
+            let next_shuffle_state: u8 = !is_player1(game.players_out) ? p1_new_shuffle : p2_new_shuffle;
+
+            let new_game: Game = Game {
+                player1: game.player1,
+                player2: game.player2,
+                player3: game.player3,
+                buy_in: game.buy_in,
+                password_hash: game.password_hash,
+                state: next_shuffle_state,
+                dealer_button: game.dealer_button,
+                players_out: game.players_out,
+                players_folded: game.players_folded,
+                last_bet: 0u8,
+                sb: game.sb,
+                bb: game.bb,
+                remaining_hands: game.remaining_hands,
+                hands_played: game.hands_played,
+                last_raise_size: 0u16,
+            };
+
+            Mapping::set(chips, game_id, new_chips);
+            Mapping::set(games, game_id, new_game);
+            return;
+        }
+
         let next_state: u8 = betting_round_should_end ? next_round_state : next_player_state;
 
         let current_player: u8 = is_p1 ? player1() :

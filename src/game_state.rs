@@ -216,7 +216,7 @@ impl GameModel {
             selected_menu_option: MenuOption::CreateGame,
             game_id_input: String::new(),
             password_input: String::new(),
-            buy_in_input: "1000".to_string(),
+            buy_in_input: "100".to_string(),
             create_game_field: CreateGameField::BuyIn,
             join_game_field: JoinGameField::GameId,
             logs: Vec::new(),

@@ -1,5 +1,6 @@
 use anyhow;
 use commutative_encryption_bindings::commutative_encryption::*;
+use credits_bindings::credits::*;
 use crossterm::event::{KeyCode, KeyEvent};
 use leo_bindings::utils::*;
 use mental_poker_bindings::mental_poker::*;
@@ -25,6 +26,34 @@ use crate::game_state::{
 };
 
 pub const DEFAULT_ENDPOINT: &str = "http://localhost:3030";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Credits(pub u64);
+
+impl std::fmt::Display for Credits {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let credits = self.0 as f64 / 1_000_000f64;
+        if credits.fract() == 0.0 {
+            write!(f, "{:.0}", credits)
+        } else {
+            let formatted = format!("{:.6}", credits);
+            let trimmed = formatted.trim_end_matches('0').trim_end_matches('.');
+            write!(f, "{}", trimmed)
+        }
+    }
+}
+
+impl From<u64> for Credits {
+    fn from(microcredits: u64) -> Self {
+        Credits(microcredits)
+    }
+}
+
+impl From<Credits> for u64 {
+    fn from(credits: Credits) -> Self {
+        credits.0
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameState {
@@ -224,23 +253,32 @@ fn shuffle_deck<N: Network>(deck: [Group<N>; 52]) -> [Group<N>; 52] {
     cards.try_into().unwrap()
 }
 
-pub struct PokerGame<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> {
+pub struct PokerGame<
+    N: Network,
+    P: MentalPokerAleo<N>,
+    C: CreditsAleo<N>,
+    E: CommutativeEncryptionAleo<N>,
+> {
     pub account: Account<N>,
     pub endpoint: String,
     pub secret: Scalar<N>,
     pub secret_inv: Scalar<N>,
     pub poker: P,
+    pub credits: C,
     pub encryption: E,
     pub player_id: u8,
     pub keys: Option<Keys<N>>,
     pub card_hashes: HashMap<Group<N>, u8>,
 }
 
-impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGame<N, P, E> {
+impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryptionAleo<N>>
+    PokerGame<N, P, C, E>
+{
     pub fn new(
         account: Account<N>,
         endpoint: String,
         poker: P,
+        credits: C,
         encryption: E,
         player_id: u8,
     ) -> anyhow::Result<Self> {
@@ -260,6 +298,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             secret,
             secret_inv,
             poker,
+            credits,
             encryption,
             player_id,
             keys: None,
@@ -442,7 +481,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         model: &mut GameModel,
     ) -> anyhow::Result<()> {
         let prize = game.buy_in * 3;
-        model.log_action_start(format!("Claiming prize: {} credits", prize));
+        model.log_action_start(format!("Claiming prize: {} credits", Credits::from(prize)));
 
         if let Err(e) = self.poker.claim_prize(&self.account, game_id, prize) {
             model.log(format!("Error claiming prize: {}", e));
@@ -450,7 +489,7 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
         }
 
         model.log_action_complete();
-        model.log(format!("Claimed {} credits", prize));
+        model.log(format!("Claimed {} credits", Credits::from(prize)));
 
         if let Some(updated_game) = self.poker.get_games(game_id) {
             let updated_state = GameState::from_u8(updated_game.state);
@@ -501,7 +540,22 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> PokerGa
             model.password_input.parse::<u128>().unwrap_or(0u128)
         };
 
-        let buy_in = model.buy_in_input.parse::<u64>().unwrap_or(1000u64);
+        let buy_in_credits = model.buy_in_input.parse::<f64>().unwrap_or(100.0).max(0.0);
+        let buy_in = (buy_in_credits * 1_000_000.0).round() as u64;
+
+        let balance = self
+            .credits
+            .get_account(self.account.address())
+            .ok_or_else(|| anyhow::anyhow!("Unable to fetch account balance"))?;
+        model.log_action_complete();
+
+        if balance < buy_in {
+            anyhow::bail!(
+                "Insufficient balance. Need {} credits but have {} credits",
+                Credits::from(buy_in),
+                Credits::from(balance)
+            );
+        }
 
         model.log_action_start("Creating game".to_string());
         let (keys, _) = self.poker.create_game(
@@ -772,8 +826,8 @@ pub trait GameHandle {
     fn shuffle_existing_deck(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
 }
 
-impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHandle
-    for PokerGame<N, P, E>
+impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryptionAleo<N>>
+    GameHandle for PokerGame<N, P, C, E>
 {
     fn check_game_exists(&self, game_id: u32) -> bool {
         self.poker.get_games(game_id).is_some()
@@ -850,6 +904,20 @@ impl<N: Network, P: MentalPokerAleo<N>, E: CommutativeEncryptionAleo<N>> GameHan
             .get_games(game_id)
             .ok_or_else(|| anyhow::anyhow!("Game {} not found", game_id))?;
         let buy_in = game.buy_in;
+
+        let balance = self
+            .credits
+            .get_account(self.account.address())
+            .ok_or_else(|| anyhow::anyhow!("Unable to fetch account balance"))?;
+        model.log_action_complete();
+
+        if balance < buy_in {
+            anyhow::bail!(
+                "Insufficient balance. Need {} credits but have {} credits",
+                Credits::from(buy_in),
+                Credits::from(balance)
+            );
+        }
 
         model.log_action_start(format!("Joining game {}", game_id));
         let (keys, _) = self.poker.join_game(
@@ -1040,16 +1108,18 @@ pub fn new_interpreter_game(account_index: u16) -> anyhow::Result<Box<dyn GameHa
     let account = get_dev_account(account_index).unwrap();
     let endpoint = DEFAULT_ENDPOINT;
     let poker = MentalPokerInterpreter::new(&account, endpoint)?;
+    let credits = CreditsInterpreter::new(&account, endpoint)?;
     let encryption = CommutativeEncryptionInterpreter::new(&account, endpoint)?;
-    let game = PokerGame::new(account, endpoint.to_string(), poker, encryption, 0)?;
+    let game = PokerGame::new(account, endpoint.to_string(), poker, credits, encryption, 0)?;
     Ok(Box::new(game))
 }
 
 pub fn new_testnet_game(account_index: u16, endpoint: &str) -> anyhow::Result<Box<dyn GameHandle>> {
     let account = get_dev_account(account_index).unwrap();
     let poker = MentalPokerTestnet::new(&account, endpoint)?;
+    let credits = CreditsTestnet::new(&account, endpoint)?;
     let encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
-    let game = PokerGame::new(account, endpoint.to_string(), poker, encryption, 0)?;
+    let game = PokerGame::new(account, endpoint.to_string(), poker, credits, encryption, 0)?;
     Ok(Box::new(game))
 }
 
@@ -1059,8 +1129,9 @@ pub fn new_game_from_private_key(
 ) -> anyhow::Result<Box<dyn GameHandle>> {
     let account: Account<TestnetV0> = Account::from_str(private_key)?;
     let poker = MentalPokerTestnet::new(&account, endpoint)?;
+    let credits = CreditsTestnet::new(&account, endpoint)?;
     let encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
-    let game = PokerGame::new(account, endpoint.to_string(), poker, encryption, 0)?;
+    let game = PokerGame::new(account, endpoint.to_string(), poker, credits, encryption, 0)?;
     Ok(Box::new(game))
 }
 
@@ -1131,20 +1202,27 @@ impl Game {
                             }
                         }
                     }
-                    Screen::CreateGame => {
-                        if c.is_ascii_digit() {
-                            match self.model.create_game_field {
-                                CreateGameField::BuyIn => {
-                                    if self.model.buy_in_input.len() < 10 {
+                    Screen::CreateGame => match self.model.create_game_field {
+                        CreateGameField::BuyIn => {
+                            if c.is_ascii_digit() {
+                                if let Some(dot_pos) = self.model.buy_in_input.find('.') {
+                                    let decimals = self.model.buy_in_input.len() - dot_pos - 1;
+                                    if decimals < 6 {
                                         self.model.buy_in_input.push(c);
                                     }
+                                } else {
+                                    self.model.buy_in_input.push(c);
                                 }
-                                CreateGameField::Password => {
-                                    self.model.password_input.push(c);
-                                }
+                            } else if c == '.' && !self.model.buy_in_input.contains('.') {
+                                self.model.buy_in_input.push(c);
                             }
                         }
-                    }
+                        CreateGameField::Password => {
+                            if c.is_ascii_digit() {
+                                self.model.password_input.push(c);
+                            }
+                        }
+                    },
                     _ => {}
                 }
                 None
@@ -1178,7 +1256,7 @@ impl Game {
                     Screen::Menu => match self.model.selected_menu_option {
                         MenuOption::CreateGame => {
                             self.model.screen = Screen::CreateGame;
-                            self.model.buy_in_input = "1000".to_string();
+                            self.model.buy_in_input = "100".to_string();
                             self.model.password_input.clear();
                             self.model.create_game_field = CreateGameField::BuyIn;
                         }

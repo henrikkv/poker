@@ -429,19 +429,23 @@ program mental_poker.aleo {
         let is_p2_inactive_after_bet: bool = (is_p2 && new_remaining == 0u16) || is_p2_inactive;
         let is_p3_inactive_after_bet: bool = (is_p3 && new_remaining == 0u16) || is_p3_inactive;
 
-        let active_count: u8 = (!is_p1_inactive_after_bet as u8) +
-                               (!is_p2_inactive_after_bet as u8) +
-                               (!is_p3_inactive_after_bet as u8);
+        let is_p1_folded_or_out: bool = is_player1(game.players_folded) || is_player1(game.players_out);
+        let is_p2_folded_or_out: bool = is_player2(game.players_folded) || is_player2(game.players_out);
+        let is_p3_folded_or_out: bool = is_player3(game.players_folded) || is_player3(game.players_out);
 
-        if (active_count == 1u8) {
+        let players_in_hand_count: u8 = (!is_p1_folded_or_out as u8) +
+                                         (!is_p2_folded_or_out as u8) +
+                                         (!is_p3_folded_or_out as u8);
+
+        if (players_in_hand_count == 1u8) {
             let pot_size: u16 = (is_p1 ? new_amount : chip.player1_bet) +
                                 (is_p2 ? new_amount : chip.player2_bet) +
                                 (is_p3 ? new_amount : chip.player3_bet);
 
             let new_chips: Chips = Chips {
-                player1: !is_p1_inactive_after_bet ? (is_p1 ? new_remaining : chip.player1) + pot_size : (is_p1 ? new_remaining : chip.player1),
-                player2: !is_p2_inactive_after_bet ? (is_p2 ? new_remaining : chip.player2) + pot_size : (is_p2 ? new_remaining : chip.player2),
-                player3: !is_p3_inactive_after_bet ? (is_p3 ? new_remaining : chip.player3) + pot_size : (is_p3 ? new_remaining : chip.player3),
+                player1: !is_p1_folded_or_out ? (is_p1 ? new_remaining : chip.player1) + pot_size : (is_p1 ? new_remaining : chip.player1),
+                player2: !is_p2_folded_or_out ? (is_p2 ? new_remaining : chip.player2) + pot_size : (is_p2 ? new_remaining : chip.player2),
+                player3: !is_p3_folded_or_out ? (is_p3 ? new_remaining : chip.player3) + pot_size : (is_p3 ? new_remaining : chip.player3),
                 player1_bet: 0u16,
                 player2_bet: 0u16,
                 player3_bet: 0u16,

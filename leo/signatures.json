@@ -1,8 +1,8 @@
 {
   "program_name": "mental_poker",
   "imports": [
-    "commutative_encryption",
-    "credits"
+    "credits",
+    "commutative_encryption"
   ],
   "records": [
     {
@@ -89,6 +89,11 @@
         {
           "name": "bb",
           "type": "u16",
+          "mode": "None"
+        },
+        {
+          "name": "blind_frequency",
+          "type": "u8",
           "mode": "None"
         },
         {
@@ -277,6 +282,11 @@
         {
           "name": "password",
           "type": "u128",
+          "mode": "None"
+        },
+        {
+          "name": "blind_frequency",
+          "type": "u8",
           "mode": "None"
         }
       ],

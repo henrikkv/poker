@@ -132,11 +132,12 @@ program mental_poker.aleo {
         players_out: u8,     // Players who have left the game and do not need to decrypt cards
         players_folded: u8,  // Players who folded or are out for current round
         last_bet: u8,
-        sb: u16,             
-        bb: u16,             
-        remaining_hands: u8,  // Hands until blinds increase
-        hands_played: u8,     
-        last_raise_size: u16,  // Add this field to track minimum raise size
+        sb: u16,
+        bb: u16,
+        blind_frequency: u8,
+        remaining_hands: u8,
+        hands_played: u8,
+        last_raise_size: u16,
     }
     inline player1() -> u8 { return 1u8; }
     inline player2() -> u8 { return 2u8; }
@@ -173,7 +174,7 @@ program mental_poker.aleo {
         secret: scalar,
         secret_inv: scalar,
     }
-    async transition create_game(buy_in: u64, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128) -> (Keys, Future) {
+    async transition create_game(buy_in: u64, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128, blind_frequency: u8) -> (Keys, Future) {
         let deck: [group; 52] = commutative_encryption.aleo/initialize_deck();
         commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
 
@@ -193,9 +194,9 @@ program mental_poker.aleo {
 
         let transfer_future: Future = credits.aleo/transfer_public_as_signer(mental_poker.aleo, buy_in);
 
-        return (keys, finalize_new_game(deck_enc, signer, buy_in, password_hash, transfer_future));
+        return (keys, finalize_new_game(deck_enc, signer, buy_in, password_hash, blind_frequency, transfer_future));
     }
-    async function finalize_new_game(deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, transfer_future: Future) {
+    async function finalize_new_game(deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, blind_frequency: u8, transfer_future: Future) {
         transfer_future.await();
         
         let game_id = Mapping::get_or_use(next_game_id, 0u32, 0u32);
@@ -215,7 +216,8 @@ program mental_poker.aleo {
             last_bet: 0u8,
             sb: 5u16,
             bb: 10u16,
-            remaining_hands: 10u8, // Increase blinds every 10 hands
+            blind_frequency: blind_frequency,
+            remaining_hands: blind_frequency,
             hands_played: 0u8,
             last_raise_size: 0u16,
         };
@@ -269,6 +271,7 @@ program mental_poker.aleo {
             last_bet: 0u8,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: game.remaining_hands,
             hands_played: 0u8,
             last_raise_size: 0u16,
@@ -453,6 +456,10 @@ program mental_poker.aleo {
 
             let next_shuffle_state: u8 = !is_player1(game.players_out) ? p1_new_shuffle : p2_new_shuffle;
 
+            let new_remaining_hands: u8 = game.remaining_hands - 1u8;
+            let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
+                                                                            (game.sb, game.bb);
+
             let new_game: Game = Game {
                 player1: game.player1,
                 player2: game.player2,
@@ -464,10 +471,11 @@ program mental_poker.aleo {
                 players_out: game.players_out,
                 players_folded: game.players_folded,
                 last_bet: 0u8,
-                sb: game.sb,
-                bb: game.bb,
-                remaining_hands: game.remaining_hands,
-                hands_played: game.hands_played,
+                sb: new_sb,
+                bb: new_bb,
+                blind_frequency: game.blind_frequency,
+                remaining_hands: new_remaining_hands == 0u8 ? game.blind_frequency : new_remaining_hands,
+                hands_played: game.hands_played + 1u8,
                 last_raise_size: 0u16,
             };
 
@@ -513,6 +521,7 @@ program mental_poker.aleo {
             last_bet: new_last_bet,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: game.remaining_hands,
             hands_played: game.hands_played,
             last_raise_size: new_last_raise_size,
@@ -605,6 +614,7 @@ program mental_poker.aleo {
             last_bet: new_last_bet,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: game.remaining_hands,
             hands_played: game.hands_played,
             last_raise_size: game.last_raise_size,
@@ -693,6 +703,7 @@ program mental_poker.aleo {
             last_bet: new_last_bet,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: game.remaining_hands,
             hands_played: game.hands_played,
             last_raise_size: is_p3 ? 0u16 : game.last_raise_size,
@@ -744,7 +755,11 @@ program mental_poker.aleo {
             };
             
             let next_shuffle_state: u8 = !is_player1(game.players_out) ? p1_new_shuffle : p2_new_shuffle;
-            
+
+            let new_remaining_hands: u8 = game.remaining_hands - 1u8;
+            let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
+                                                                            (game.sb, game.bb);
+
             let new_game: Game = Game {
                 player1: game.player1,
                 player2: game.player2,
@@ -756,13 +771,14 @@ program mental_poker.aleo {
                 players_out: game.players_out,
                 players_folded: new_players_folded,
                 last_bet: 0u8,
-                sb: game.sb,
-                bb: game.bb,
-                remaining_hands: game.remaining_hands,
-                hands_played: game.hands_played,
+                sb: new_sb,
+                bb: new_bb,
+                blind_frequency: game.blind_frequency,
+                remaining_hands: new_remaining_hands == 0u8 ? game.blind_frequency : new_remaining_hands,
+                hands_played: game.hands_played + 1u8,
                 last_raise_size: 0u16,
             };
-            
+
             Mapping::set(chips, game_id, new_chip);
             Mapping::set(games, game_id, new_game);
             return;
@@ -813,6 +829,7 @@ program mental_poker.aleo {
             last_bet: should_end_betting ? 0u8 : game.last_bet,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: game.remaining_hands,
             hands_played: game.hands_played,
             last_raise_size: should_end_betting ? 0u16 : game.last_raise_size,
@@ -960,6 +977,7 @@ program mental_poker.aleo {
             last_bet: new_last_bet,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: game.remaining_hands,
             hands_played: game.hands_played,
             last_raise_size: (is_p3_turn || is_p3_river) ? 0u16 : game.last_raise_size,
@@ -1020,6 +1038,7 @@ program mental_poker.aleo {
             last_bet: game.last_bet,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: game.remaining_hands,
             hands_played: game.hands_played,
             last_raise_size: game.last_raise_size,
@@ -1408,6 +1427,7 @@ program mental_poker.aleo {
                 last_bet: 0u8,
                 sb: game.sb,
                 bb: game.bb,
+                blind_frequency: game.blind_frequency,
                 remaining_hands: game.remaining_hands,
                 hands_played: game.hands_played + 1u8,
                 last_raise_size: 0u16,
@@ -1437,7 +1457,8 @@ program mental_poker.aleo {
             last_bet: 0u8,
             sb: new_sb,
             bb: new_bb,
-            remaining_hands: new_remaining_hands == 0u8 ? 10u8 : new_remaining_hands,
+            blind_frequency: game.blind_frequency,
+            remaining_hands: new_remaining_hands == 0u8 ? game.blind_frequency : new_remaining_hands,
             hands_played: game.hands_played + 1u8,
             last_raise_size: 0u16,
         };
@@ -1771,6 +1792,7 @@ program mental_poker.aleo {
             last_bet: 0u8,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: game.remaining_hands,
             hands_played: game.hands_played,
             last_raise_size: 0u16,
@@ -1837,6 +1859,7 @@ program mental_poker.aleo {
             last_bet: 0u8,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: game.remaining_hands,
             hands_played: game.hands_played,
             last_raise_size: 0u16,
@@ -1881,6 +1904,7 @@ program mental_poker.aleo {
             last_bet: 0u8,
             sb: game.sb,
             bb: game.bb,
+            blind_frequency: game.blind_frequency,
             remaining_hands: 0u8,
             hands_played: game.hands_played,
             last_raise_size: 0u16,

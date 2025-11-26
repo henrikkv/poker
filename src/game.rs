@@ -565,6 +565,7 @@ impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncrypt
             self.secret,
             self.secret_inv,
             password,
+            model.blind_frequency,
         )?;
         model.log_action_complete();
 
@@ -1217,6 +1218,7 @@ impl Game {
                                 self.model.buy_in_input.push(c);
                             }
                         }
+                        CreateGameField::BlindFrequency => {}
                         CreateGameField::Password => {
                             if c.is_ascii_digit() {
                                 self.model.password_input.push(c);
@@ -1242,6 +1244,7 @@ impl Game {
                         CreateGameField::BuyIn => {
                             self.model.buy_in_input.pop();
                         }
+                        CreateGameField::BlindFrequency => {}
                         CreateGameField::Password => {
                             self.model.password_input.pop();
                         }
@@ -1257,6 +1260,7 @@ impl Game {
                         MenuOption::CreateGame => {
                             self.model.screen = Screen::CreateGame;
                             self.model.buy_in_input = "100".to_string();
+                            self.model.blind_frequency = 3;
                             self.model.password_input.clear();
                             self.model.create_game_field = CreateGameField::BuyIn;
                         }
@@ -1366,6 +1370,14 @@ impl Game {
                     Screen::Menu => {
                         self.model.selected_menu_option = self.model.selected_menu_option.prev();
                     }
+                    Screen::CreateGame => {
+                        if matches!(
+                            self.model.create_game_field,
+                            CreateGameField::BlindFrequency
+                        ) {
+                            self.model.increase_blind_frequency();
+                        }
+                    }
                     _ => {
                         if let Some(betting_ui) = &mut self.model.betting_ui {
                             betting_ui.increase_raise();
@@ -1379,6 +1391,14 @@ impl Game {
                 match self.model.screen {
                     Screen::Menu => {
                         self.model.selected_menu_option = self.model.selected_menu_option.next();
+                    }
+                    Screen::CreateGame => {
+                        if matches!(
+                            self.model.create_game_field,
+                            CreateGameField::BlindFrequency
+                        ) {
+                            self.model.decrease_blind_frequency();
+                        }
                     }
                     _ => {
                         if let Some(betting_ui) = &mut self.model.betting_ui {
@@ -1910,7 +1930,7 @@ fn render_create_game(frame: &mut Frame, model: &GameModel, area: Rect) {
         "*".repeat(model.password_input.len())
     };
 
-    let button_width = inner.width / 2;
+    let button_width = inner.width / 3;
     let center_y = inner.y + inner.height / 2;
 
     // Render Buy-in field
@@ -1934,6 +1954,26 @@ fn render_create_game(frame: &mut Frame, model: &GameModel, area: Rect) {
         .style(buy_in_style);
     buy_in_line.render(buy_in_area, frame.buffer_mut());
 
+    let blind_freq_selected = matches!(model.create_game_field, CreateGameField::BlindFrequency);
+    let blind_freq_style = if blind_freq_selected {
+        Style::default().fg(Color::Black).bg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::White)
+    };
+
+    let blind_freq_area = Rect {
+        x: inner.x + button_width,
+        y: center_y,
+        width: button_width,
+        height: 1,
+    };
+
+    let blind_freq_text = format!("Blind Freq: {}", model.blind_frequency);
+    let blind_freq_line = Line::from(blind_freq_text)
+        .alignment(Alignment::Center)
+        .style(blind_freq_style);
+    blind_freq_line.render(blind_freq_area, frame.buffer_mut());
+
     // Render Password field
     let password_selected = matches!(model.create_game_field, CreateGameField::Password);
     let password_style = if password_selected {
@@ -1943,7 +1983,7 @@ fn render_create_game(frame: &mut Frame, model: &GameModel, area: Rect) {
     };
 
     let password_area = Rect {
-        x: inner.x + button_width,
+        x: inner.x + button_width * 2,
         y: center_y,
         width: button_width,
         height: 1,

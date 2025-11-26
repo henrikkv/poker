@@ -36,13 +36,15 @@ pub enum Screen {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CreateGameField {
     BuyIn,
+    BlindFrequency,
     Password,
 }
 
 impl CreateGameField {
     pub fn next(&self) -> Self {
         match self {
-            CreateGameField::BuyIn => CreateGameField::Password,
+            CreateGameField::BuyIn => CreateGameField::BlindFrequency,
+            CreateGameField::BlindFrequency => CreateGameField::Password,
             CreateGameField::Password => CreateGameField::BuyIn,
         }
     }
@@ -183,6 +185,7 @@ pub struct GameModel {
     pub game_id_input: String,
     pub password_input: String,
     pub buy_in_input: String,
+    pub blind_frequency: u8,
     pub create_game_field: CreateGameField,
     pub join_game_field: JoinGameField,
     pub logs: Vec<String>,
@@ -217,6 +220,7 @@ impl GameModel {
             game_id_input: String::new(),
             password_input: String::new(),
             buy_in_input: "100".to_string(),
+            blind_frequency: 3,
             create_game_field: CreateGameField::BuyIn,
             join_game_field: JoinGameField::GameId,
             logs: Vec::new(),
@@ -289,6 +293,14 @@ impl GameModel {
         } else {
             None
         }
+    }
+
+    pub fn increase_blind_frequency(&mut self) {
+        self.blind_frequency = (self.blind_frequency + 1).min(99);
+    }
+
+    pub fn decrease_blind_frequency(&mut self) {
+        self.blind_frequency = (self.blind_frequency.saturating_sub(1)).max(1);
     }
 }
 

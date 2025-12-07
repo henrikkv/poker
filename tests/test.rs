@@ -159,6 +159,7 @@ fn gameplay<
             secret_alice,
             secret_alice_inv,
             0u128,
+            3u8,
         )
         .unwrap();
     dbg!(&alice_keys);
@@ -336,6 +337,7 @@ fn test_all_in() {
         10u16,
         10u8,
         0u8,
+        3u8,
         0u16,
     );
     set_games(0, game).unwrap();

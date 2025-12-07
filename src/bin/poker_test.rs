@@ -138,6 +138,8 @@ impl TestModel {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok();
+
     let cli = Cli::parse();
 
     let original_hook = panic::take_hook();
@@ -149,7 +151,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (network_type, endpoint) = match cli.command {
         Commands::Interpreter => (NetworkType::Interpreter, DEFAULT_ENDPOINT.to_string()),
-        Commands::Testnet { endpoint } => (NetworkType::Testnet, endpoint),
+        Commands::Testnet { endpoint } => {
+            let endpoint = if endpoint == DEFAULT_ENDPOINT {
+                std::env::var("ENDPOINT").unwrap_or(endpoint)
+            } else {
+                endpoint
+            };
+            (NetworkType::Testnet, endpoint)
+        }
     };
 
     let mut model = TestModel::new(network_type, &endpoint)?;

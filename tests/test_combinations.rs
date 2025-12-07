@@ -85,6 +85,7 @@ fn run_test(setup: GameSetup, cards: Cards, expectation: Expectation) {
         20u16,
         10u8,
         0u8,
+        3u8,
         0u16,
     );
     set_games(setup.game_id, game).unwrap();

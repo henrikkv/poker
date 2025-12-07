@@ -543,10 +543,10 @@ impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncrypt
         let buy_in_credits = model.buy_in_input.parse::<f64>().unwrap_or(100.0).max(0.0);
         let buy_in = (buy_in_credits * 1_000_000.0).round() as u64;
 
-        let balance = self
-            .credits
-            .get_account(self.account.address())
-            .ok_or_else(|| anyhow::anyhow!("Unable to fetch account balance"))?;
+        let address = self.account.address();
+        let balance = self.credits.get_account(address).ok_or_else(|| {
+            anyhow::anyhow!("Unable to fetch account balance for address {}", address)
+        })?;
         model.log_action_complete();
 
         if balance < buy_in {
@@ -810,6 +810,7 @@ pub trait GameHandle {
     fn get_card(&self, game_id: u32, current_player_id: u8, model: &GameModel) -> Option<Card>;
     fn get_chip(&self, game_id: u32) -> Option<Chip>;
     fn check_address_conflict(&self, game_id: u32) -> bool;
+    fn get_player_id_from_address(&self, game_id: u32) -> Option<u8>;
     fn initialize_game(&mut self, model: &mut GameModel) -> anyhow::Result<()>;
     fn join_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
     fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
@@ -876,6 +877,21 @@ impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncrypt
         let my_address = self.account.address();
 
         my_address == game.player1 || my_address == game.player2 || my_address == game.player3
+    }
+
+    fn get_player_id_from_address(&self, game_id: u32) -> Option<u8> {
+        let game = self.poker.get_games(game_id)?;
+        let my_address = self.account.address();
+
+        if my_address == game.player1 {
+            Some(1)
+        } else if my_address == game.player2 {
+            Some(2)
+        } else if my_address == game.player3 {
+            Some(3)
+        } else {
+            None
+        }
     }
 
     fn initialize_game(&mut self, model: &mut GameModel) -> anyhow::Result<()> {
@@ -1107,7 +1123,7 @@ impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncrypt
 
 pub fn new_interpreter_game(account_index: u16) -> anyhow::Result<Box<dyn GameHandle>> {
     let account = get_dev_account(account_index).unwrap();
-    let endpoint = DEFAULT_ENDPOINT;
+    let endpoint = "https://api.explorer.provable.com/v2";
     let poker = MentalPokerInterpreter::new(&account, endpoint)?;
     let credits = CreditsInterpreter::new(&account, endpoint)?;
     let encryption = CommutativeEncryptionInterpreter::new(&account, endpoint)?;
@@ -1116,10 +1132,37 @@ pub fn new_interpreter_game(account_index: u16) -> anyhow::Result<Box<dyn GameHa
 }
 
 pub fn new_testnet_game(account_index: u16, endpoint: &str) -> anyhow::Result<Box<dyn GameHandle>> {
-    let account = get_dev_account(account_index).unwrap();
-    let poker = MentalPokerTestnet::new(&account, endpoint)?;
-    let credits = CreditsTestnet::new(&account, endpoint)?;
-    let encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
+    dotenvy::dotenv().ok();
+
+    let account = match account_index {
+        0 => std::env::var("PRIVATE_KEY_P1")
+            .ok()
+            .and_then(|pk| Account::from_str(&pk).ok())
+            .unwrap_or_else(|| get_dev_account(0).unwrap()),
+        1 => std::env::var("PRIVATE_KEY_P2")
+            .ok()
+            .and_then(|pk| Account::from_str(&pk).ok())
+            .unwrap_or_else(|| get_dev_account(1).unwrap()),
+        2 => std::env::var("PRIVATE_KEY_P3")
+            .ok()
+            .and_then(|pk| Account::from_str(&pk).ok())
+            .unwrap_or_else(|| get_dev_account(2).unwrap()),
+        _ => get_dev_account(account_index).unwrap(),
+    };
+    let mut poker = MentalPokerTestnet::new(&account, endpoint)?;
+    let mut credits = CreditsTestnet::new(&account, endpoint)?;
+    let mut encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
+
+    if let Ok(config) = leo_bindings::DelegatedProvingConfig::from_env() {
+        poker = poker
+            .configure_delegation(config.clone())
+            .enable_delegation();
+        credits = credits
+            .configure_delegation(config.clone())
+            .enable_delegation();
+        encryption = encryption.configure_delegation(config).enable_delegation();
+    }
+
     let game = PokerGame::new(account, endpoint.to_string(), poker, credits, encryption, 0)?;
     Ok(Box::new(game))
 }
@@ -1128,10 +1171,24 @@ pub fn new_game_from_private_key(
     private_key: &str,
     endpoint: &str,
 ) -> anyhow::Result<Box<dyn GameHandle>> {
+    dotenvy::dotenv().ok();
+
     let account: Account<TestnetV0> = Account::from_str(private_key)?;
-    let poker = MentalPokerTestnet::new(&account, endpoint)?;
-    let credits = CreditsTestnet::new(&account, endpoint)?;
-    let encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
+
+    let mut poker = MentalPokerTestnet::new(&account, endpoint)?;
+    let mut credits = CreditsTestnet::new(&account, endpoint)?;
+    let mut encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
+
+    if let Ok(config) = leo_bindings::DelegatedProvingConfig::from_env() {
+        poker = poker
+            .configure_delegation(config.clone())
+            .enable_delegation();
+        credits = credits
+            .configure_delegation(config.clone())
+            .enable_delegation();
+        encryption = encryption.configure_delegation(config).enable_delegation();
+    }
+
     let game = PokerGame::new(account, endpoint.to_string(), poker, credits, encryption, 0)?;
     Ok(Box::new(game))
 }

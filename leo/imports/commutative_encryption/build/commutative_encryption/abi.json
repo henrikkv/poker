@@ -1,0 +1,198 @@
+{
+  "program": "commutative_encryption.aleo",
+  "structs": [],
+  "records": [],
+  "mappings": [],
+  "storage_variables": [],
+  "functions": [
+    {
+      "name": "encrypt_deck",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decrypt_deck",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ]
+    },
+    {
+      "name": "decrypt_card",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Group"
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Group"
+            },
+            "mode": "Private"
+          }
+        }
+      ]
+    },
+    {
+      "name": "to_u8",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Group"
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U8"
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_deck",
+      "inputs": [],
+      "outputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ]
+    },
+    {
+      "name": "verify_permutation",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": []
+    }
+  ]
+}

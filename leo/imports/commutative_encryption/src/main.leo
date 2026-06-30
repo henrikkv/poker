@@ -1,24 +1,24 @@
 program commutative_encryption.aleo {
 
-    transition encrypt_deck(secret: scalar, deck: [group; 52]) -> [group; 52] {
+    fn encrypt_deck(secret: scalar, deck: [group; 52]) -> [group; 52] {
         for i: u8 in 0u8..52u8 {
             deck[i] = deck[i] * secret;
         }
         return deck;
     }
 
-    transition decrypt_deck(secret_inv: scalar, deck: [group; 52]) -> [group; 52] {
+    fn decrypt_deck(secret_inv: scalar, deck: [group; 52]) -> [group; 52] {
         for i: u8 in 0u8..52u8 {
             deck[i] = deck[i] * secret_inv;
         }
         return deck;
     }
 
-    transition decrypt_card(secret_inv: scalar, card: group) -> group {
+    fn decrypt_card(secret_inv: scalar, card: group) -> group {
         return card * secret_inv;
     }
 
-    transition to_u8(g: group) -> u8 {
+    fn to_u8(g: group) -> u8 {
         return g == Poseidon2::hash_to_group(0u8) ? 0u8 :
                g == Poseidon2::hash_to_group(1u8) ? 1u8 :
                g == Poseidon2::hash_to_group(2u8) ? 2u8 :
@@ -73,7 +73,7 @@ program commutative_encryption.aleo {
                g == Poseidon2::hash_to_group(51u8) ? 51u8 : 255u8;
     }
 
-    transition initialize_deck() -> [group; 52] {
+    fn initialize_deck() -> [group; 52] {
         let deck: [group; 52] = [0group; 52];
         for i: u8 in 0u8..52u8 {
             deck[i] = Poseidon2::hash_to_group(i);
@@ -81,7 +81,7 @@ program commutative_encryption.aleo {
         return deck;
     }
 
-    transition verify_permutation(deck_a: [group; 52], deck_b: [group; 52]) {
+    fn verify_permutation(deck_a: [group; 52], deck_b: [group; 52]) {
         let product_a: field = 1field;
         for i: u8 in 0u8..52u8 {
             product_a *= deck_a[i] as field;
@@ -95,5 +95,5 @@ program commutative_encryption.aleo {
     }
 
     @noupgrade
-    async constructor() {}
+    constructor() {}
 }

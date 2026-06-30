@@ -3,7 +3,8 @@ registry/
 Cargo.lock
 
 build/*
-!build/
-!build/main.aleo
+!build/*/
+build/imports/*
+!build/imports/*.abi.json
 
 outputs/

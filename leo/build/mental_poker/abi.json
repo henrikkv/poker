@@ -1,0 +1,1029 @@
+{
+  "program": "mental_poker.aleo",
+  "structs": [
+    {
+      "path": [
+        "Game"
+      ],
+      "fields": [
+        {
+          "name": "player1",
+          "ty": {
+            "Primitive": "Address"
+          }
+        },
+        {
+          "name": "player2",
+          "ty": {
+            "Primitive": "Address"
+          }
+        },
+        {
+          "name": "player3",
+          "ty": {
+            "Primitive": "Address"
+          }
+        },
+        {
+          "name": "buy_in",
+          "ty": {
+            "Primitive": {
+              "UInt": "U64"
+            }
+          }
+        },
+        {
+          "name": "password_hash",
+          "ty": {
+            "Primitive": {
+              "UInt": "U128"
+            }
+          }
+        },
+        {
+          "name": "state",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        },
+        {
+          "name": "dealer_button",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        },
+        {
+          "name": "players_out",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        },
+        {
+          "name": "players_folded",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        },
+        {
+          "name": "last_bet",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        },
+        {
+          "name": "sb",
+          "ty": {
+            "Primitive": {
+              "UInt": "U16"
+            }
+          }
+        },
+        {
+          "name": "bb",
+          "ty": {
+            "Primitive": {
+              "UInt": "U16"
+            }
+          }
+        },
+        {
+          "name": "blind_frequency",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        },
+        {
+          "name": "remaining_hands",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        },
+        {
+          "name": "hands_played",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        },
+        {
+          "name": "last_raise_size",
+          "ty": {
+            "Primitive": {
+              "UInt": "U16"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "Chips"
+      ],
+      "fields": [
+        {
+          "name": "player1",
+          "ty": {
+            "Primitive": {
+              "UInt": "U16"
+            }
+          }
+        },
+        {
+          "name": "player2",
+          "ty": {
+            "Primitive": {
+              "UInt": "U16"
+            }
+          }
+        },
+        {
+          "name": "player3",
+          "ty": {
+            "Primitive": {
+              "UInt": "U16"
+            }
+          }
+        },
+        {
+          "name": "player1_bet",
+          "ty": {
+            "Primitive": {
+              "UInt": "U16"
+            }
+          }
+        },
+        {
+          "name": "player2_bet",
+          "ty": {
+            "Primitive": {
+              "UInt": "U16"
+            }
+          }
+        },
+        {
+          "name": "player3_bet",
+          "ty": {
+            "Primitive": {
+              "UInt": "U16"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "Cards"
+      ],
+      "fields": [
+        {
+          "name": "player1",
+          "ty": {
+            "Array": {
+              "element": {
+                "Primitive": "Group"
+              },
+              "length": 2
+            }
+          }
+        },
+        {
+          "name": "player2",
+          "ty": {
+            "Array": {
+              "element": {
+                "Primitive": "Group"
+              },
+              "length": 2
+            }
+          }
+        },
+        {
+          "name": "player3",
+          "ty": {
+            "Array": {
+              "element": {
+                "Primitive": "Group"
+              },
+              "length": 2
+            }
+          }
+        },
+        {
+          "name": "flop",
+          "ty": {
+            "Array": {
+              "element": {
+                "Primitive": "Group"
+              },
+              "length": 3
+            }
+          }
+        },
+        {
+          "name": "turn",
+          "ty": {
+            "Primitive": "Group"
+          }
+        },
+        {
+          "name": "river",
+          "ty": {
+            "Primitive": "Group"
+          }
+        }
+      ]
+    },
+    {
+      "path": [
+        "RevealedCards"
+      ],
+      "fields": [
+        {
+          "name": "player1",
+          "ty": {
+            "Array": {
+              "element": {
+                "Primitive": {
+                  "UInt": "U8"
+                }
+              },
+              "length": 2
+            }
+          }
+        },
+        {
+          "name": "player2",
+          "ty": {
+            "Array": {
+              "element": {
+                "Primitive": {
+                  "UInt": "U8"
+                }
+              },
+              "length": 2
+            }
+          }
+        },
+        {
+          "name": "player3",
+          "ty": {
+            "Array": {
+              "element": {
+                "Primitive": {
+                  "UInt": "U8"
+                }
+              },
+              "length": 2
+            }
+          }
+        },
+        {
+          "name": "flop",
+          "ty": {
+            "Array": {
+              "element": {
+                "Primitive": {
+                  "UInt": "U8"
+                }
+              },
+              "length": 3
+            }
+          }
+        },
+        {
+          "name": "turn",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        },
+        {
+          "name": "river",
+          "ty": {
+            "Primitive": {
+              "UInt": "U8"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "records": [
+    {
+      "path": [
+        "Keys"
+      ],
+      "fields": [
+        {
+          "name": "owner",
+          "ty": {
+            "Primitive": "Address"
+          },
+          "mode": "Private"
+        },
+        {
+          "name": "secret",
+          "ty": {
+            "Primitive": "Scalar"
+          },
+          "mode": "Private"
+        },
+        {
+          "name": "secret_inv",
+          "ty": {
+            "Primitive": "Scalar"
+          },
+          "mode": "Private"
+        }
+      ]
+    }
+  ],
+  "mappings": [
+    {
+      "name": "next_game_id",
+      "key": {
+        "Primitive": {
+          "UInt": "U32"
+        }
+      },
+      "value": {
+        "Primitive": {
+          "UInt": "U32"
+        }
+      }
+    },
+    {
+      "name": "games",
+      "key": {
+        "Primitive": {
+          "UInt": "U32"
+        }
+      },
+      "value": {
+        "Struct": {
+          "path": [
+            "Game"
+          ],
+          "program": "mental_poker.aleo"
+        }
+      }
+    },
+    {
+      "name": "decks",
+      "key": {
+        "Primitive": {
+          "UInt": "U32"
+        }
+      },
+      "value": {
+        "Array": {
+          "element": {
+            "Primitive": "Group"
+          },
+          "length": 52
+        }
+      }
+    },
+    {
+      "name": "chips",
+      "key": {
+        "Primitive": {
+          "UInt": "U32"
+        }
+      },
+      "value": {
+        "Struct": {
+          "path": [
+            "Chips"
+          ],
+          "program": "mental_poker.aleo"
+        }
+      }
+    },
+    {
+      "name": "cards",
+      "key": {
+        "Primitive": {
+          "UInt": "U32"
+        }
+      },
+      "value": {
+        "Struct": {
+          "path": [
+            "Cards"
+          ],
+          "program": "mental_poker.aleo"
+        }
+      }
+    },
+    {
+      "name": "revealed_cards",
+      "key": {
+        "Primitive": {
+          "UInt": "U32"
+        }
+      },
+      "value": {
+        "Struct": {
+          "path": [
+            "RevealedCards"
+          ],
+          "program": "mental_poker.aleo"
+        }
+      }
+    }
+  ],
+  "storage_variables": [],
+  "functions": [
+    {
+      "name": "create_game",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U64"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U128"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U8"
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        },
+        "Final"
+      ]
+    },
+    {
+      "name": "join_game",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U64"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U128"
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        },
+        "Final"
+      ]
+    },
+    {
+      "name": "bet",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U16"
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        "Final"
+      ]
+    },
+    {
+      "name": "decrypt_hands",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 2
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 2
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        },
+        "Final"
+      ]
+    },
+    {
+      "name": "decrypt_flop",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 3
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        },
+        "Final"
+      ]
+    },
+    {
+      "name": "fold",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        "Final"
+      ]
+    },
+    {
+      "name": "decrypt_turn_river",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Group"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        },
+        "Final"
+      ]
+    },
+    {
+      "name": "showdown",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 2
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        },
+        "Final"
+      ]
+    },
+    {
+      "name": "compare_hands",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        "Final"
+      ]
+    },
+    {
+      "name": "new_hand",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        },
+        "Final"
+      ]
+    },
+    {
+      "name": "shuffle_deck",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Array": {
+                "element": {
+                  "Primitive": "Group"
+                },
+                "length": 52
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": "Scalar"
+            },
+            "mode": "Private"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "Record": {
+            "path": [
+              "Keys"
+            ],
+            "program": "mental_poker.aleo"
+          }
+        },
+        "Final"
+      ]
+    },
+    {
+      "name": "claim_prize",
+      "inputs": [
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U32"
+              }
+            },
+            "mode": "Private"
+          }
+        },
+        {
+          "Plaintext": {
+            "ty": {
+              "Primitive": {
+                "UInt": "U64"
+              }
+            },
+            "mode": "Public"
+          }
+        }
+      ],
+      "outputs": [
+        "Final"
+      ]
+    }
+  ]
+}

@@ -1,35 +1,16 @@
-[workspace]
-members = [".", "imports/*"]
-
-[workspace.dependencies]
-leo-bindings = { git = "https://github.com/henrikkv/leo-bindings" }
-rand = "0.8"
-snarkvm = "4.3.1"
-log = "0.4"
-
-# BEGIN IMPORTS
-credits_bindings = { git = "https://github.com/henrikkv/leo-bindings" }
-# END IMPORTS
 
 [package]
 name = "mental_poker_bindings"
 version = "0.1.0"
 edition = "2024"
-
 [lib]
 name = "mental_poker_bindings"
 path = "lib.rs"
 
 [dependencies]
-leo-bindings.workspace = true
-rand.workspace = true
-snarkvm.workspace = true
-log.workspace = true
-
+leo-bindings = { git = "https://github.com/henrikkv/leo-bindings" }
 commutative_encryption_bindings = { path = "./imports/commutative_encryption" }
 
-credits_bindings.workspace = true
-
-[build-dependencies]
-leo-bindings-core = { git = "https://github.com/henrikkv/leo-bindings" }
-serde_json = "1"
+# BEGIN IMPORTS
+# credits_bindings = { git = "https://github.com/henrikkv/leo-bindings" }
+# END IMPORTS

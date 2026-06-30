@@ -1,6 +1,166 @@
 import commutative_encryption.aleo;
 import credits.aleo;
 
+const p2_join: u8 = 0u8;
+const p3_join: u8 = 1u8;
+const p1_dec_hand: u8 = 2u8;
+const p2_dec_hand: u8 = 3u8;
+const p3_dec_hand: u8 = 4u8;
+
+const p1_bet_pre: u8 = 5u8;
+const p2_bet_pre: u8 = 6u8;
+const p3_bet_pre: u8 = 7u8;
+
+const p1_dec_flop: u8 = 8u8;
+const p2_dec_flop: u8 = 9u8;
+const p3_dec_flop: u8 = 10u8;
+
+const p1_bet_flop: u8 = 11u8;
+const p2_bet_flop: u8 = 12u8;
+const p3_bet_flop: u8 = 13u8;
+
+const p1_dec_turn: u8 = 14u8;
+const p2_dec_turn: u8 = 15u8;
+const p3_dec_turn: u8 = 16u8;
+
+const p1_bet_turn: u8 = 17u8;
+const p2_bet_turn: u8 = 18u8;
+const p3_bet_turn: u8 = 19u8;
+
+const p1_dec_river: u8 = 20u8;
+const p2_dec_river: u8 = 21u8;
+const p3_dec_river: u8 = 22u8;
+
+const p1_bet_river: u8 = 23u8;
+const p2_bet_river: u8 = 24u8;
+const p3_bet_river: u8 = 25u8;
+
+const p1_showdown: u8 = 26u8;
+const p2_showdown: u8 = 27u8;
+const p3_showdown: u8 = 28u8;
+
+const compare: u8 = 29u8;
+
+const p1_new_shuffle: u8 = 30u8;
+const p2_new_shuffle: u8 = 31u8;
+const p2_shuffle: u8 = 32u8;
+const p3_shuffle: u8 = 33u8;
+
+const p1_claim: u8 = 34u8;
+const p2_claim: u8 = 35u8;
+const p3_claim: u8 = 36u8;
+
+const HAND_HIGH_CARD: u32 =      1 << 28u32;
+const HAND_PAIR: u32 =           2 << 28u32;
+const HAND_TWO_PAIR: u32 =       3 << 28u32;
+const HAND_TRIPS: u32 =          4 << 28u32;
+const HAND_STRAIGHT: u32 =       5 << 28u32;
+const HAND_FLUSH: u32 =          6 << 28u32;
+const HAND_FULL_HOUSE: u32 =     7 << 28u32;
+const HAND_QUADS: u32 =          8 << 28u32;
+const HAND_STRAIGHT_FLUSH: u32 = 9 << 28u32;
+
+struct Game {
+    player1: address,
+    player2: address,
+    player3: address,
+    buy_in: u64,
+    password_hash: u128,
+    // 0: Waiting for player2 to join
+    // 1: Waiting for player3 to join
+
+    // 2: Waiting for player1 to decrypt hands
+    // 3: Waiting for player2 to decrypt hands
+    // 4: Waiting for player3 to decrypt hands
+
+    // 5: Waiting for player1 to bet
+    // 6: Waiting for player2 to bet
+    // 7: Waiting for player3 to bet
+
+    // 8: Waiting for player1 to decrypt flop
+    // 9: Waiting for player2 to decrypt flop
+    // 10: Waiting for player3 to decrypt flop
+
+    // 11: Waiting for player1 to bet
+    // 12: Waiting for player2 to bet
+    // 13: Waiting for player3 to bet
+
+    // 14: Waiting for player1 to decrypt turn
+    // 15: Waiting for player2 to decrypt turn
+    // 16: Waiting for player3 to decrypt turn
+
+    // 17: Waiting for player1 to bet
+    // 18: Waiting for player2 to bet
+    // 19: Waiting for player3 to bet
+
+    // 20: Waiting for player1 to decrypt river
+    // 21: Waiting for player2 to decrypt river
+    // 22: Waiting for player3 to decrypt river
+
+    // 23: Waiting for player1 to bet
+    // 24: Waiting for player2 to bet
+    // 25: Waiting for player3 to bet
+
+    // 26: Player1 Showdown
+    // 27: Player2 Showdown
+    // 28: Player3 Showdown
+
+    // 29: Compare hands and determine winner
+
+    // 30: Waiting for player1 to create a new deck and shuffle
+    // 31: Waiting for player2 to create a new deck and shuffle
+    // 32: Waiting for player2 to shuffle
+    // 33: Waiting for player3 to shuffle
+
+    // 34: Waiting for Player1 to claim prize
+    // 35: Waiting for Player2 to claim prize
+    // 36: Waiting for Player3 to claim prize
+
+    state: u8,
+    // bitmaps
+    dealer_button: u8,
+    players_out: u8,     // Players who have left the game and do not need to decrypt cards
+    players_folded: u8,  // Players who folded or are out for current round
+    last_bet: u8,
+    sb: u16,
+    bb: u16,
+    blind_frequency: u8,
+    remaining_hands: u8,
+    hands_played: u8,
+    last_raise_size: u16,
+}
+
+fn player1() -> u8 { return 1u8; }
+fn player2() -> u8 { return 2u8; }
+fn player3() -> u8 { return 4u8; }
+fn is_player1(bitmap: u8) -> bool { return bitmap & 1u8 != 0u8; }
+fn is_player2(bitmap: u8) -> bool { return bitmap & 2u8 != 0u8; }
+fn is_player3(bitmap: u8) -> bool { return bitmap & 4u8 != 0u8; }
+struct Chips {
+    player1: u16,
+    player2: u16,
+    player3: u16,
+    player1_bet: u16,
+    player2_bet: u16,
+    player3_bet: u16,
+}
+struct Cards {
+    player1: [group; 2],
+    player2: [group; 2],
+    player3: [group; 2],
+    flop: [group; 3],
+    turn: group,
+    river: group,
+}
+struct RevealedCards {
+    player1: [u8; 2],
+    player2: [u8; 2],
+    player3: [u8; 2],
+    flop: [u8; 3],
+    turn: u8,
+    river: u8,
+}
+
 program mental_poker.aleo {
 
     mapping next_game_id: u32 => u32;
@@ -11,177 +171,19 @@ program mental_poker.aleo {
     mapping cards: u32 => Cards;
     mapping revealed_cards: u32 => RevealedCards;
 
-    const p2_join: u8 = 0u8;
-    const p3_join: u8 = 1u8;
-    const p1_dec_hand: u8 = 2u8;
-    const p2_dec_hand: u8 = 3u8;
-    const p3_dec_hand: u8 = 4u8;
-
-    const p1_bet_pre: u8 = 5u8;
-    const p2_bet_pre: u8 = 6u8;
-    const p3_bet_pre: u8 = 7u8;
-
-    const p1_dec_flop: u8 = 8u8;
-    const p2_dec_flop: u8 = 9u8;
-    const p3_dec_flop: u8 = 10u8;
-
-    const p1_bet_flop: u8 = 11u8;
-    const p2_bet_flop: u8 = 12u8;
-    const p3_bet_flop: u8 = 13u8;
-
-    const p1_dec_turn: u8 = 14u8;
-    const p2_dec_turn: u8 = 15u8;
-    const p3_dec_turn: u8 = 16u8;
-
-    const p1_bet_turn: u8 = 17u8;
-    const p2_bet_turn: u8 = 18u8;
-    const p3_bet_turn: u8 = 19u8;
-
-    const p1_dec_river: u8 = 20u8;
-    const p2_dec_river: u8 = 21u8;
-    const p3_dec_river: u8 = 22u8;
-
-    const p1_bet_river: u8 = 23u8;
-    const p2_bet_river: u8 = 24u8;
-    const p3_bet_river: u8 = 25u8;
-
-    const p1_showdown: u8 = 26u8;
-    const p2_showdown: u8 = 27u8;
-    const p3_showdown: u8 = 28u8;
-
-    const compare: u8 = 29u8;
-
-    const p1_new_shuffle: u8 = 30u8;
-    const p2_new_shuffle: u8 = 31u8;
-    const p2_shuffle: u8 = 32u8;
-    const p3_shuffle: u8 = 33u8;
-
-    const p1_claim: u8 = 34u8;
-    const p2_claim: u8 = 35u8;
-    const p3_claim: u8 = 36u8;
-
-    const HAND_HIGH_CARD: u32 =      1 << 28u32;
-    const HAND_PAIR: u32 =           2 << 28u32;
-    const HAND_TWO_PAIR: u32 =       3 << 28u32;
-    const HAND_TRIPS: u32 =          4 << 28u32;
-    const HAND_STRAIGHT: u32 =       5 << 28u32;
-    const HAND_FLUSH: u32 =          6 << 28u32;
-    const HAND_FULL_HOUSE: u32 =     7 << 28u32;
-    const HAND_QUADS: u32 =          8 << 28u32;
-    const HAND_STRAIGHT_FLUSH: u32 = 9 << 28u32;
-
-    struct Game {
-        player1: address,
-        player2: address,
-        player3: address,
-        buy_in: u64,
-        password_hash: u128,
-        // 0: Waiting for player2 to join
-        // 1: Waiting for player3 to join
-
-        // 2: Waiting for player1 to decrypt hands
-        // 3: Waiting for player2 to decrypt hands
-        // 4: Waiting for player3 to decrypt hands
-
-        // 5: Waiting for player1 to bet
-        // 6: Waiting for player2 to bet
-        // 7: Waiting for player3 to bet
-
-        // 8: Waiting for player1 to decrypt flop
-        // 9: Waiting for player2 to decrypt flop
-        // 10: Waiting for player3 to decrypt flop
-
-        // 11: Waiting for player1 to bet
-        // 12: Waiting for player2 to bet
-        // 13: Waiting for player3 to bet
-
-        // 14: Waiting for player1 to decrypt turn
-        // 15: Waiting for player2 to decrypt turn
-        // 16: Waiting for player3 to decrypt turn
-
-        // 17: Waiting for player1 to bet
-        // 18: Waiting for player2 to bet
-        // 19: Waiting for player3 to bet
-
-        // 20: Waiting for player1 to decrypt river
-        // 21: Waiting for player2 to decrypt river
-        // 22: Waiting for player3 to decrypt river
-
-        // 23: Waiting for player1 to bet
-        // 24: Waiting for player2 to bet
-        // 25: Waiting for player3 to bet
-
-        // 26: Player1 Showdown
-        // 27: Player2 Showdown
-        // 28: Player3 Showdown
-
-        // 29: Compare hands and determine winner
-
-        // 30: Waiting for player1 to create a new deck and shuffle
-        // 31: Waiting for player2 to create a new deck and shuffle
-        // 32: Waiting for player2 to shuffle
-        // 33: Waiting for player3 to shuffle
-
-        // 34: Waiting for Player1 to claim prize
-        // 35: Waiting for Player2 to claim prize
-        // 36: Waiting for Player3 to claim prize
-
-        state: u8,
-        // bitmaps
-        dealer_button: u8,
-        players_out: u8,     // Players who have left the game and do not need to decrypt cards
-        players_folded: u8,  // Players who folded or are out for current round
-        last_bet: u8,
-        sb: u16,
-        bb: u16,
-        blind_frequency: u8,
-        remaining_hands: u8,
-        hands_played: u8,
-        last_raise_size: u16,
-    }
-    inline player1() -> u8 { return 1u8; }
-    inline player2() -> u8 { return 2u8; }
-    inline player3() -> u8 { return 4u8; }
-    inline is_player1(bitmap: u8) -> bool { return bitmap & 1u8 != 0u8; }
-    inline is_player2(bitmap: u8) -> bool { return bitmap & 2u8 != 0u8; }
-    inline is_player3(bitmap: u8) -> bool { return bitmap & 4u8 != 0u8; }
-    struct Chips {
-        player1: u16,
-        player2: u16,
-        player3: u16,
-        player1_bet: u16,
-        player2_bet: u16,
-        player3_bet: u16,
-    }
-    struct Cards {
-        player1: [group; 2],
-        player2: [group; 2],
-        player3: [group; 2],
-        flop: [group; 3],
-        turn: group,
-        river: group,
-    }
-    struct RevealedCards {
-        player1: [u8; 2],
-        player2: [u8; 2],
-        player3: [u8; 2],
-        flop: [u8; 3],
-        turn: u8,
-        river: u8,
-    }
     record Keys {
         owner: address,
         secret: scalar,
         secret_inv: scalar,
     }
-    async transition create_game(buy_in: u64, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128, blind_frequency: u8) -> (Keys, Future) {
-        let deck: [group; 52] = commutative_encryption.aleo/initialize_deck();
-        commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
+    fn create_game(buy_in: u64, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128, blind_frequency: u8) -> (Keys, Final) {
+        let deck: [group; 52] = commutative_encryption.aleo::initialize_deck();
+        commutative_encryption.aleo::verify_permutation(deck, deck_shuffled);
 
-        let deck_enc: [group; 52] = commutative_encryption.aleo/encrypt_deck(secret, deck_shuffled);
+        let deck_enc: [group; 52] = commutative_encryption.aleo::encrypt_deck(secret, deck_shuffled);
 
         // Check if decryption key is correct
-        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+        assert_eq(commutative_encryption.aleo::decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
 
         let password_hash: u128 = password == 0u128 ? 0u128 : BHP256::hash_to_u128(password);
 
@@ -192,12 +194,12 @@ program mental_poker.aleo {
             secret_inv: secret_inv,
         };
 
-        let transfer_future: Future = credits.aleo/transfer_public_as_signer(mental_poker.aleo, buy_in);
+        let transfer_future: Final = credits.aleo::transfer_public_as_signer(mental_poker.aleo, buy_in);
 
-        return (keys, finalize_new_game(deck_enc, signer, buy_in, password_hash, blind_frequency, transfer_future));
+        return (keys, final { finalize_new_game(deck_enc, signer, buy_in, password_hash, blind_frequency, transfer_future); });
     }
-    async function finalize_new_game(deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, blind_frequency: u8, transfer_future: Future) {
-        transfer_future.await();
+    final fn finalize_new_game(deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, blind_frequency: u8, transfer_future: Final) {
+        transfer_future.run();
         
         let game_id = Mapping::get_or_use(next_game_id, 0u32, 0u32);
         let next_id =  game_id + 1u32;
@@ -224,12 +226,12 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, game);
         Mapping::set(decks, game_id, deck);
     }
-    async transition join_game(game_id: u32, buy_in: u64, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128) -> (Keys, Future) {
-        commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
+    fn join_game(game_id: u32, buy_in: u64, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128) -> (Keys, Final) {
+        commutative_encryption.aleo::verify_permutation(deck, deck_shuffled);
 
-        let deck_enc: [group; 52] = commutative_encryption.aleo/encrypt_deck(secret, deck_shuffled);
+        let deck_enc: [group; 52] = commutative_encryption.aleo::encrypt_deck(secret, deck_shuffled);
 
-        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+        assert_eq(commutative_encryption.aleo::decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
 
         let password_hash: u128 = password == 0u128 ? 0u128 : BHP256::hash_to_u128(password);
 
@@ -240,13 +242,13 @@ program mental_poker.aleo {
             secret_inv: secret_inv,
         };
 
-        let transfer_future: Future = credits.aleo/transfer_public_as_signer(mental_poker.aleo, buy_in);
+        let transfer_future: Final = credits.aleo::transfer_public_as_signer(mental_poker.aleo, buy_in);
 
-        return (keys, finalize_join_game(game_id, deck, deck_enc, signer, buy_in, password_hash, transfer_future));
+        return (keys, final { finalize_join_game(game_id, deck, deck_enc, signer, buy_in, password_hash, transfer_future); });
     }
-    async function finalize_join_game(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, transfer_future: Future) {
+    final fn finalize_join_game(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, transfer_future: Final) {
 
-        transfer_future.await();
+        transfer_future.run();
 
         let game: Game = Mapping::get(games, game_id);
         let previous_deck: [group; 52] = Mapping::get(decks, game_id);
@@ -313,10 +315,11 @@ program mental_poker.aleo {
             Mapping::set(revealed_cards, game_id, revealed);
         }
     }
-    async transition bet(game_id: u32, amount: u16) -> Future {
-        return finalize_bet(game_id, amount, self.signer);
+    fn bet(game_id: u32, amount: u16) -> Final {
+        let signer: address = self.signer;
+        return final { finalize_bet(game_id, amount, signer); };
     }
-    async function finalize_bet(game_id: u32, amount: u16, signer: address) {
+    final fn finalize_bet(game_id: u32, amount: u16, signer: address) {
         let game: Game = Mapping::get(games, game_id);
         let chip: Chips = Mapping::get(chips, game_id);
 
@@ -530,19 +533,20 @@ program mental_poker.aleo {
         Mapping::set(chips, game_id, new_chips);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_hands(game_id: u32, other1: [group; 2], other2: [group; 2], keys: Keys) -> (Keys, Future) {
+    fn decrypt_hands(game_id: u32, other1: [group; 2], other2: [group; 2], keys: Keys) -> (Keys, Final) {
 
-        let other1_card0_dec: group = commutative_encryption.aleo/decrypt_card(keys.secret_inv, other1[0u8]);
-        let other1_card1_dec: group = commutative_encryption.aleo/decrypt_card(keys.secret_inv, other1[1u8]);
-        let other2_card0_dec: group = commutative_encryption.aleo/decrypt_card(keys.secret_inv, other2[0u8]);
-        let other2_card1_dec: group = commutative_encryption.aleo/decrypt_card(keys.secret_inv, other2[1u8]);
+        let other1_card0_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, other1[0u8]);
+        let other1_card1_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, other1[1u8]);
+        let other2_card0_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, other2[0u8]);
+        let other2_card1_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, other2[1u8]);
         
         let new_other1: [group; 2] = [other1_card0_dec, other1_card1_dec];
         let new_other2: [group; 2] = [other2_card0_dec, other2_card1_dec];
         
-        return (keys, finalize_decrypt_hands(game_id, other1, other2, new_other1, new_other2, self.signer));
+        let signer: address = self.signer;
+        return (keys, final { finalize_decrypt_hands(game_id, other1, other2, new_other1, new_other2, signer); });
     }
-    async function finalize_decrypt_hands(game_id: u32, other1: [group; 2], other2: [group; 2], new_other1: [group; 2], new_other2: [group; 2], signer: address) {
+    final fn finalize_decrypt_hands(game_id: u32, other1: [group; 2], other2: [group; 2], new_other1: [group; 2], new_other2: [group; 2], signer: address) {
 
         let old_card: Cards = Mapping::get(cards, game_id);
         let game: Game = Mapping::get(games, game_id);
@@ -623,21 +627,22 @@ program mental_poker.aleo {
         Mapping::set(cards, game_id, final_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_flop(game_id: u32, flop: [group; 3], keys: Keys) -> (Keys, Future) {
-        let flop0: group = commutative_encryption.aleo/decrypt_card(keys.secret_inv, flop[0u8]);
-        let flop1: group = commutative_encryption.aleo/decrypt_card(keys.secret_inv, flop[1u8]);
-        let flop2: group = commutative_encryption.aleo/decrypt_card(keys.secret_inv, flop[2u8]);
+    fn decrypt_flop(game_id: u32, flop: [group; 3], keys: Keys) -> (Keys, Final) {
+        let flop0: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, flop[0u8]);
+        let flop1: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, flop[1u8]);
+        let flop2: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, flop[2u8]);
         
         let flop_dec: [group; 3] = [flop0, flop1, flop2];
 
-        let flop0_u8: u8 = commutative_encryption.aleo/to_u8(flop0);
-        let flop1_u8: u8 = commutative_encryption.aleo/to_u8(flop1);
-        let flop2_u8: u8 = commutative_encryption.aleo/to_u8(flop2);
+        let flop0_u8: u8 = commutative_encryption.aleo::to_u8(flop0);
+        let flop1_u8: u8 = commutative_encryption.aleo::to_u8(flop1);
+        let flop2_u8: u8 = commutative_encryption.aleo::to_u8(flop2);
         let flop_u8: [u8; 3] = [flop0_u8, flop1_u8, flop2_u8];
 
-        return (keys, finalize_decrypt_flop(game_id, flop, flop_dec, flop_u8, self.signer));
+        let signer: address = self.signer;
+        return (keys, final { finalize_decrypt_flop(game_id, flop, flop_dec, flop_u8, signer); });
     }
-    async function finalize_decrypt_flop(game_id: u32, flop: [group; 3], flop_dec: [group; 3], flop_u8: [u8; 3], signer: address) {
+    final fn finalize_decrypt_flop(game_id: u32, flop: [group; 3], flop_dec: [group; 3], flop_u8: [u8; 3], signer: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
         let game: Game = Mapping::get(games, game_id);
         
@@ -712,11 +717,12 @@ program mental_poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition fold(game_id: u32) -> Future {
-        return finalize_fold(game_id, self.signer);
+    fn fold(game_id: u32) -> Final {
+        let signer: address = self.signer;
+        return final { finalize_fold(game_id, signer); };
     }
     
-    async function finalize_fold(game_id: u32, signer: address) {
+    final fn finalize_fold(game_id: u32, signer: address) {
         let game: Game = Mapping::get(games, game_id);
         let chip: Chips = Mapping::get(chips, game_id);
         
@@ -837,12 +843,13 @@ program mental_poker.aleo {
         
         Mapping::set(games, game_id, new_game);
     }
-    async transition decrypt_turn_river(game_id: u32, card: group, keys: Keys) -> (Keys, Future) {
-        let card_dec: group = commutative_encryption.aleo/decrypt_card(keys.secret_inv, card);
-        let card_u8: u8 = commutative_encryption.aleo/to_u8(card_dec);
-        return (keys, finalize_decrypt_turn_river(game_id, card, card_dec, card_u8, self.signer));
+    fn decrypt_turn_river(game_id: u32, card: group, keys: Keys) -> (Keys, Final) {
+        let card_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, card);
+        let card_u8: u8 = commutative_encryption.aleo::to_u8(card_dec);
+        let signer: address = self.signer;
+        return (keys, final { finalize_decrypt_turn_river(game_id, card, card_dec, card_u8, signer); });
     }
-    async function finalize_decrypt_turn_river(game_id: u32, card: group, card_dec: group, card_u8: u8, signer: address) {
+    final fn finalize_decrypt_turn_river(game_id: u32, card: group, card_dec: group, card_u8: u8, signer: address) {
         let old_card: Cards = Mapping::get(cards, game_id);
         let game: Game = Mapping::get(games, game_id);
 
@@ -986,13 +993,14 @@ program mental_poker.aleo {
         Mapping::set(cards, game_id, new_card);
         Mapping::set(games, game_id, new_game);
     }
-    async transition showdown(game_id: u32, hand: [group; 2], keys: Keys) -> (Keys, Future) {
-        let c0: u8 = commutative_encryption.aleo/to_u8(commutative_encryption.aleo/decrypt_card(keys.secret_inv, hand[0u8]));
-        let c1: u8 = commutative_encryption.aleo/to_u8(commutative_encryption.aleo/decrypt_card(keys.secret_inv, hand[1u8]));
+    fn showdown(game_id: u32, hand: [group; 2], keys: Keys) -> (Keys, Final) {
+        let c0: u8 = commutative_encryption.aleo::to_u8(commutative_encryption.aleo::decrypt_card(keys.secret_inv, hand[0u8]));
+        let c1: u8 = commutative_encryption.aleo::to_u8(commutative_encryption.aleo::decrypt_card(keys.secret_inv, hand[1u8]));
 
-        return (keys, finalize_showdown(game_id, self.signer, hand, [c0, c1]));
+        let signer: address = self.signer;
+        return (keys, final { finalize_showdown(game_id, signer, hand, [c0, c1]); });
     }
-    async function finalize_showdown(game_id: u32, signer: address, hand: [group; 2], hand_u8: [u8; 2]) {
+    final fn finalize_showdown(game_id: u32, signer: address, hand: [group; 2], hand_u8: [u8; 2]) {
         let old_card: Cards = Mapping::get(cards, game_id);
         let game: Game = Mapping::get(games, game_id);
 
@@ -1048,10 +1056,11 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
 
-    async transition compare_hands(game_id: u32) -> Future {
-        return finalize_compare_hands(game_id, self.signer);
+    fn compare_hands(game_id: u32) -> Final {
+        let signer: address = self.signer;
+        return final { finalize_compare_hands(game_id, signer); };
     }
-    async function finalize_compare_hands(game_id: u32, signer: address) {
+    final fn finalize_compare_hands(game_id: u32, signer: address) {
         let game: Game = Mapping::get(games, game_id);
         assert_eq(game.state, compare);
 
@@ -1467,226 +1476,14 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
 
-    inline evaluate_hand(
-        s1: u8, r1: u8,
-        s2: u8, r2: u8,
-        s3: u8, r3: u8,
-        s4: u8, r4: u8,
-        s5: u8, r5: u8,
-        s6: u8, r6: u8,
-        s7: u8, r7: u8
-    ) -> u32 {
 
-        let eq_12: bool = r1 == r2;
-        let eq_23: bool = r2 == r3;
-        let eq_34: bool = r3 == r4;
-        let eq_45: bool = r4 == r5;
-        let eq_56: bool = r5 == r6;
-        let eq_67: bool = r6 == r7;
+    fn new_hand(game_id: u32, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Final) {
+        let deck: [group; 52] = commutative_encryption.aleo::initialize_deck();
+        commutative_encryption.aleo::verify_permutation(deck, deck_shuffled);
 
-        // Four of a kind
-        let quad_1234: bool = eq_12 && eq_23 && eq_34;
-        let quad_2345: bool = eq_23 && eq_34 && eq_45;
-        let quad_3456: bool = eq_34 && eq_45 && eq_56;
-        let quad_4567: bool = eq_45 && eq_56 && eq_67;
-        let has_quads: bool = quad_1234 || quad_2345 || quad_3456 || quad_4567;
-        let quad_rank: u8 =   quad_4567 ? r7 :
-                              quad_3456 ? r6 :
-                              quad_2345 ? r5 :
-                                          r4;
-        let quad_kicker: u8 = quad_4567 ? r3 : r7;
+        let deck_enc: [group; 52] = commutative_encryption.aleo::encrypt_deck(secret, deck_shuffled);
 
-        // Three of a kind
-        let trip_123: bool = eq_12 && eq_23;
-        let trip_234: bool = eq_23 && eq_34;
-        let trip_345: bool = eq_34 && eq_45;
-        let trip_456: bool = eq_45 && eq_56;
-        let trip_567: bool = eq_56 && eq_67;
-        let has_trips: bool = trip_123 || trip_234 || trip_345 || trip_456 || trip_567;
-        let trip_rank: u8 = trip_567 ? r7 :
-                            trip_456 ? r6 :
-                            trip_345 ? r5 :
-                            trip_234 ? r4 :
-                            r3;
-
-        // Pair
-        let pair_12: bool = eq_12 && !trip_123;
-        let pair_23: bool = eq_23 && !trip_123 && !trip_234;
-        let pair_34: bool = eq_34 && !trip_234 && !trip_345;
-        let pair_45: bool = eq_45 && !trip_345 && !trip_456;
-        let pair_56: bool = eq_56 && !trip_456 && !trip_567;
-        let pair_67: bool = eq_67 && !trip_567;
-        let has_pair: bool = pair_12 || pair_23 || pair_34 || pair_45 || pair_56 || pair_67;
-        let pair_rank: u8 = pair_67 ? r7 :
-                            pair_56 ? r6 :
-                            pair_45 ? r5 :
-                            pair_34 ? r4 :
-                            pair_23 ? r3 :
-                                      r2;
-
-        let has_fh: bool = has_trips && has_pair;
-        let trips_only: bool = has_trips && !has_pair;
-        let pair_only: bool = has_pair && !has_trips;
-
-        // Flush
-        let suit0_count: u8 = (s1 == 0u8) as u8 +
-                              (s2 == 0u8) as u8 +
-                              (s3 == 0u8) as u8 +
-                              (s4 == 0u8) as u8 +
-                              (s5 == 0u8) as u8 +
-                              (s6 == 0u8) as u8 +
-                              (s7 == 0u8) as u8;
-
-        let suit1_count: u8 = (s1 == 1u8) as u8 +
-                              (s2 == 1u8) as u8 +
-                              (s3 == 1u8) as u8 +
-                              (s4 == 1u8) as u8 +
-                              (s5 == 1u8) as u8 +
-                              (s6 == 1u8) as u8 +
-                              (s7 == 1u8) as u8;
-
-        let suit2_count: u8 = (s1 == 2u8) as u8 +
-                              (s2 == 2u8) as u8 +
-                              (s3 == 2u8) as u8 +
-                              (s4 == 2u8) as u8 +
-                              (s5 == 2u8) as u8 +
-                              (s6 == 2u8) as u8 +
-                              (s7 == 2u8) as u8;
-
-        let suit3_count: u8 = (s1 == 3u8) as u8 +
-                              (s2 == 3u8) as u8 +
-                              (s3 == 3u8) as u8 +
-                              (s4 == 3u8) as u8 +
-                              (s5 == 3u8) as u8 +
-                              (s6 == 3u8) as u8 +
-                              (s7 == 3u8) as u8;
-
-        let suit0_flush: bool = suit0_count >= 5u8;
-        let suit1_flush: bool = suit1_count >= 5u8;
-        let suit2_flush: bool = suit2_count >= 5u8;
-        let suit3_flush: bool = suit3_count >= 5u8;
- 
-        let has_flush: bool = suit0_flush || suit1_flush || suit2_flush || suit3_flush;
-        let flush_suit: u8 = suit3_flush ? 3u8 :
-                             suit2_flush ? 2u8 :
-                             suit1_flush ? 1u8 :
-                                           0u8;
-        let flush_count: u8 = suit3_flush ? suit3_count :
-                              suit2_flush ? suit2_count :
-                              suit1_flush ? suit1_count :
-                                            suit0_count;
-
-       let hand_bitfield: u32 = (1u32 << r1 as u32) |
-                                (1u32 << r2 as u32) |
-                                (1u32 << r3 as u32) |
-                                (1u32 << r4 as u32) |
-                                (1u32 << r5 as u32) |
-                                (1u32 << r6 as u32) |
-                                (1u32 << r7 as u32);
-
-        let flush_bitfield: u32 = (s1 == flush_suit ? 1u32 << r1 as u32 : 0u32) |
-                                  (s2 == flush_suit ? 1u32 << r2 as u32 : 0u32) |
-                                  (s3 == flush_suit ? 1u32 << r3 as u32 : 0u32) |
-                                  (s4 == flush_suit ? 1u32 << r4 as u32 : 0u32) |
-                                  (s5 == flush_suit ? 1u32 << r5 as u32 : 0u32) |
-                                  (s6 == flush_suit ? 1u32 << r6 as u32 : 0u32) |
-                                  (s7 == flush_suit ? 1u32 << r7 as u32 : 0u32);
-
-        // Combine bitfield and make a space for the low ace bit
-        let combined_bitfield: u32 = ((flush_bitfield << 16u32) | hand_bitfield) << 1u32;
-
-        // Copy aces from bit 13 to bit 0, and from bit 29 to bit 16
-        let ace_low_bits: u32 = (combined_bitfield >> 13u32) & ((1u32 << 16u32) | 1u32);
-        let bitfield: u32 = combined_bitfield | ace_low_bits;
-
-        let straight_high: u32 = bitfield &
-                                 bitfield >> 1u32 &
-                                 bitfield >> 2u32 &
-                                 bitfield >> 3u32 &
-                                 bitfield >> 4u32;
-
-        // Clear trailing bits to ignore lower straights
-        straight_high = (straight_high & (straight_high >> 1u32)) ^ straight_high;
-
-        // Only keep sf bits
-        let sf_high: u32 = straight_high >> 16u32;
-
-        let has_straight: bool = straight_high != 0u32;
-        let has_sf: bool = sf_high != 0u32;
-
-        // Only keep the five highest cards in a flush
-        flush_bitfield = flush_count == 7u8 ? flush_bitfield & (flush_bitfield - 1u32) : flush_bitfield;
-        flush_bitfield = flush_count >= 6u8 ? flush_bitfield & (flush_bitfield - 1u32) : flush_bitfield;
-
-
-        let has_two_pair: bool = (pair_12 as u8) +
-                                 (pair_23 as u8) +
-                                 (pair_34 as u8) +
-                                 (pair_45 as u8) +
-                                 (pair_56 as u8) +
-                                 (pair_67 as u8) >= 2u8;
-
-        let not_pair_67: bool = !pair_67;
-        let not_pair_56: bool = !pair_56;
-        let not_pair_45: bool = !pair_45;
-
-        let second_pair_rank: u8 = pair_56 && not_pair_67 ? r6 :
-                                   pair_45 && not_pair_56 && not_pair_67 ? r5 :
-                                   pair_34 ? r4 :
-                                   pair_23 ? r3 :
-                                             r2;
-        let two_pair_kicker: u8 = not_pair_67 ? r7 :
-                                  not_pair_56 ? r6 :
-                                  not_pair_45 ? r5 :
-                                  !pair_34 ? r4 :
-                                  !pair_23 ? r3 :
-                                             r2;
-
-        let trips_kicker1: u8 = trip_567 ? r4 : r7;
-        let trips_kicker2: u8 = trip_567 ? r3 :
-                                trip_456 ? r3 :
-                                           r6;
-
-        let pair_kicker1: u8 = pair_67 ? r5 : r7;
-        let pair_kicker2: u8 = pair_67 ? r4 :
-                               pair_56 ? r4 :
-                                         r6;
-        let pair_kicker3: u8 = pair_67 ? r3 :
-                               pair_56 ? r3 :
-                               pair_45 ? r3 :
-                                         r5;
-
-        let hand_value: u32 = has_sf ? HAND_STRAIGHT_FLUSH | sf_high :
-                              has_quads ? HAND_QUADS | (quad_rank as u32 << 4u8) | quad_kicker as u32 :
-                              has_fh ? HAND_FULL_HOUSE | (trip_rank as u32 << 4u8) | pair_rank as u32 :
-                              has_flush ? HAND_FLUSH | flush_bitfield :
-                              has_straight ? HAND_STRAIGHT | straight_high :
-                              trips_only ? HAND_TRIPS | (trip_rank as u32 << 8u8) |
-                                                        (trips_kicker1 as u32 << 4u8) |
-                                                        trips_kicker2 as u32 :
-                              has_two_pair ? HAND_TWO_PAIR | (pair_rank as u32 << 8u8) |
-                                                             (second_pair_rank as u32 << 4u8) |
-                                                             two_pair_kicker as u32 :
-                              pair_only ? HAND_PAIR | (pair_rank as u32 << 12u8) |
-                                                      (pair_kicker1 as u32 << 8u8) |
-                                                      (pair_kicker2 as u32 << 4u8) |
-                                                      pair_kicker3 as u32 :
-                              HAND_HIGH_CARD | (r7 as u32 << 16u8) |
-                                               (r6 as u32 << 12u8) |
-                                               (r5 as u32 << 8u8) |
-                                               (r4 as u32 << 4u8) |
-                                               r3 as u32;
-
-        return hand_value;
-    }
-
-    async transition new_hand(game_id: u32, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
-        let deck: [group; 52] = commutative_encryption.aleo/initialize_deck();
-        commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
-
-        let deck_enc: [group; 52] = commutative_encryption.aleo/encrypt_deck(secret, deck_shuffled);
-
-        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+        assert_eq(commutative_encryption.aleo::decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
 
         let signer: address = self.signer;
         let keys: Keys = Keys {
@@ -1695,10 +1492,10 @@ program mental_poker.aleo {
             secret_inv: secret_inv,
         };
 
-        return (keys, finalize_new_hand(game_id, deck_enc, signer));
+        return (keys, final { finalize_new_hand(game_id, deck_enc, signer); });
     }
 
-    async function finalize_new_hand(game_id: u32, deck: [group; 52], signer: address) {
+    final fn finalize_new_hand(game_id: u32, deck: [group; 52], signer: address) {
         let game: Game = Mapping::get(games, game_id);
         let chip: Chips = Mapping::get(chips, game_id);
 
@@ -1805,12 +1602,12 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
 
-    async transition shuffle_deck(game_id: u32, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Future) {
-        commutative_encryption.aleo/verify_permutation(deck, deck_shuffled);
+    fn shuffle_deck(game_id: u32, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Final) {
+        commutative_encryption.aleo::verify_permutation(deck, deck_shuffled);
 
-        let deck_enc: [group; 52] = commutative_encryption.aleo/encrypt_deck(secret, deck_shuffled);
+        let deck_enc: [group; 52] = commutative_encryption.aleo::encrypt_deck(secret, deck_shuffled);
 
-        assert_eq(commutative_encryption.aleo/decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+        assert_eq(commutative_encryption.aleo::decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
 
         let signer: address = self.signer;
         let keys: Keys = Keys {
@@ -1819,10 +1616,10 @@ program mental_poker.aleo {
             secret_inv: secret_inv,
         };
 
-        return (keys, finalize_shuffle_deck(game_id, deck, deck_enc, signer));
+        return (keys, final { finalize_shuffle_deck(game_id, deck, deck_enc, signer); });
     }
 
-    async function finalize_shuffle_deck(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address) {
+    final fn finalize_shuffle_deck(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address) {
         let game: Game = Mapping::get(games, game_id);
         let previous_deck: [group; 52] = Mapping::get(decks, game_id);
         assert(previous_deck == deck);
@@ -1870,12 +1667,13 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
 
-    async transition claim_prize(game_id: u32, public prize: u64) -> Future {
-        let transfer_future: Future = credits.aleo/transfer_public(self.signer, prize);
-        return finalize_claim_prize(game_id, self.signer, prize, transfer_future);
+    fn claim_prize(game_id: u32, public prize: u64) -> Final {
+        let signer: address = self.signer;
+        let transfer_future: Final = credits.aleo::transfer_public(signer, prize);
+        return final { finalize_claim_prize(game_id, signer, prize, transfer_future); };
     }
 
-    async function finalize_claim_prize(game_id: u32, signer: address, prize: u64, transfer_future: Future) {
+    final fn finalize_claim_prize(game_id: u32, signer: address, prize: u64, transfer_future: Final) {
         let game: Game = Mapping::get(games, game_id);
         let chip: Chips = Mapping::get(chips, game_id);
 
@@ -1889,7 +1687,7 @@ program mental_poker.aleo {
         let expected_prize: u64 = game.buy_in * 3u64;
         assert_eq(prize, expected_prize);
 
-        transfer_future.await();
+        transfer_future.run();
 
         let completed_game: Game = Game {
             player1: game.player1,
@@ -1914,5 +1712,218 @@ program mental_poker.aleo {
     }
 
     @noupgrade
-    async constructor() {}
+    constructor() {}
+}
+
+fn evaluate_hand(
+    s1: u8, r1: u8,
+    s2: u8, r2: u8,
+    s3: u8, r3: u8,
+    s4: u8, r4: u8,
+    s5: u8, r5: u8,
+    s6: u8, r6: u8,
+    s7: u8, r7: u8
+) -> u32 {
+
+    let eq_12: bool = r1 == r2;
+    let eq_23: bool = r2 == r3;
+    let eq_34: bool = r3 == r4;
+    let eq_45: bool = r4 == r5;
+    let eq_56: bool = r5 == r6;
+    let eq_67: bool = r6 == r7;
+
+    // Four of a kind
+    let quad_1234: bool = eq_12 && eq_23 && eq_34;
+    let quad_2345: bool = eq_23 && eq_34 && eq_45;
+    let quad_3456: bool = eq_34 && eq_45 && eq_56;
+    let quad_4567: bool = eq_45 && eq_56 && eq_67;
+    let has_quads: bool = quad_1234 || quad_2345 || quad_3456 || quad_4567;
+    let quad_rank: u8 =   quad_4567 ? r7 :
+                          quad_3456 ? r6 :
+                          quad_2345 ? r5 :
+                                      r4;
+    let quad_kicker: u8 = quad_4567 ? r3 : r7;
+
+    // Three of a kind
+    let trip_123: bool = eq_12 && eq_23;
+    let trip_234: bool = eq_23 && eq_34;
+    let trip_345: bool = eq_34 && eq_45;
+    let trip_456: bool = eq_45 && eq_56;
+    let trip_567: bool = eq_56 && eq_67;
+    let has_trips: bool = trip_123 || trip_234 || trip_345 || trip_456 || trip_567;
+    let trip_rank: u8 = trip_567 ? r7 :
+                        trip_456 ? r6 :
+                        trip_345 ? r5 :
+                        trip_234 ? r4 :
+                        r3;
+
+    // Pair
+    let pair_12: bool = eq_12 && !trip_123;
+    let pair_23: bool = eq_23 && !trip_123 && !trip_234;
+    let pair_34: bool = eq_34 && !trip_234 && !trip_345;
+    let pair_45: bool = eq_45 && !trip_345 && !trip_456;
+    let pair_56: bool = eq_56 && !trip_456 && !trip_567;
+    let pair_67: bool = eq_67 && !trip_567;
+    let has_pair: bool = pair_12 || pair_23 || pair_34 || pair_45 || pair_56 || pair_67;
+    let pair_rank: u8 = pair_67 ? r7 :
+                        pair_56 ? r6 :
+                        pair_45 ? r5 :
+                        pair_34 ? r4 :
+                        pair_23 ? r3 :
+                                  r2;
+
+    let has_fh: bool = has_trips && has_pair;
+    let trips_only: bool = has_trips && !has_pair;
+    let pair_only: bool = has_pair && !has_trips;
+
+    // Flush
+    let suit0_count: u8 = (s1 == 0u8) as u8 +
+                          (s2 == 0u8) as u8 +
+                          (s3 == 0u8) as u8 +
+                          (s4 == 0u8) as u8 +
+                          (s5 == 0u8) as u8 +
+                          (s6 == 0u8) as u8 +
+                          (s7 == 0u8) as u8;
+
+    let suit1_count: u8 = (s1 == 1u8) as u8 +
+                          (s2 == 1u8) as u8 +
+                          (s3 == 1u8) as u8 +
+                          (s4 == 1u8) as u8 +
+                          (s5 == 1u8) as u8 +
+                          (s6 == 1u8) as u8 +
+                          (s7 == 1u8) as u8;
+
+    let suit2_count: u8 = (s1 == 2u8) as u8 +
+                          (s2 == 2u8) as u8 +
+                          (s3 == 2u8) as u8 +
+                          (s4 == 2u8) as u8 +
+                          (s5 == 2u8) as u8 +
+                          (s6 == 2u8) as u8 +
+                          (s7 == 2u8) as u8;
+
+    let suit3_count: u8 = (s1 == 3u8) as u8 +
+                          (s2 == 3u8) as u8 +
+                          (s3 == 3u8) as u8 +
+                          (s4 == 3u8) as u8 +
+                          (s5 == 3u8) as u8 +
+                          (s6 == 3u8) as u8 +
+                          (s7 == 3u8) as u8;
+
+    let suit0_flush: bool = suit0_count >= 5u8;
+    let suit1_flush: bool = suit1_count >= 5u8;
+    let suit2_flush: bool = suit2_count >= 5u8;
+    let suit3_flush: bool = suit3_count >= 5u8;
+
+    let has_flush: bool = suit0_flush || suit1_flush || suit2_flush || suit3_flush;
+    let flush_suit: u8 = suit3_flush ? 3u8 :
+                         suit2_flush ? 2u8 :
+                         suit1_flush ? 1u8 :
+                                       0u8;
+    let flush_count: u8 = suit3_flush ? suit3_count :
+                          suit2_flush ? suit2_count :
+                          suit1_flush ? suit1_count :
+                                        suit0_count;
+
+   let hand_bitfield: u32 = (1u32 << r1 as u32) |
+                            (1u32 << r2 as u32) |
+                            (1u32 << r3 as u32) |
+                            (1u32 << r4 as u32) |
+                            (1u32 << r5 as u32) |
+                            (1u32 << r6 as u32) |
+                            (1u32 << r7 as u32);
+
+    let flush_bitfield: u32 = (s1 == flush_suit ? 1u32 << r1 as u32 : 0u32) |
+                              (s2 == flush_suit ? 1u32 << r2 as u32 : 0u32) |
+                              (s3 == flush_suit ? 1u32 << r3 as u32 : 0u32) |
+                              (s4 == flush_suit ? 1u32 << r4 as u32 : 0u32) |
+                              (s5 == flush_suit ? 1u32 << r5 as u32 : 0u32) |
+                              (s6 == flush_suit ? 1u32 << r6 as u32 : 0u32) |
+                              (s7 == flush_suit ? 1u32 << r7 as u32 : 0u32);
+
+    // Combine bitfield and make a space for the low ace bit
+    let combined_bitfield: u32 = ((flush_bitfield << 16u32) | hand_bitfield) << 1u32;
+
+    // Copy aces from bit 13 to bit 0, and from bit 29 to bit 16
+    let ace_low_bits: u32 = (combined_bitfield >> 13u32) & ((1u32 << 16u32) | 1u32);
+    let bitfield: u32 = combined_bitfield | ace_low_bits;
+
+    let straight_high: u32 = bitfield &
+                             bitfield >> 1u32 &
+                             bitfield >> 2u32 &
+                             bitfield >> 3u32 &
+                             bitfield >> 4u32;
+
+    // Clear trailing bits to ignore lower straights
+    straight_high = (straight_high & (straight_high >> 1u32)) ^ straight_high;
+
+    // Only keep sf bits
+    let sf_high: u32 = straight_high >> 16u32;
+
+    let has_straight: bool = straight_high != 0u32;
+    let has_sf: bool = sf_high != 0u32;
+
+    // Only keep the five highest cards in a flush
+    flush_bitfield = flush_count == 7u8 ? flush_bitfield & (flush_bitfield - 1u32) : flush_bitfield;
+    flush_bitfield = flush_count >= 6u8 ? flush_bitfield & (flush_bitfield - 1u32) : flush_bitfield;
+
+
+    let has_two_pair: bool = (pair_12 as u8) +
+                             (pair_23 as u8) +
+                             (pair_34 as u8) +
+                             (pair_45 as u8) +
+                             (pair_56 as u8) +
+                             (pair_67 as u8) >= 2u8;
+
+    let not_pair_67: bool = !pair_67;
+    let not_pair_56: bool = !pair_56;
+    let not_pair_45: bool = !pair_45;
+
+    let second_pair_rank: u8 = pair_56 && not_pair_67 ? r6 :
+                               pair_45 && not_pair_56 && not_pair_67 ? r5 :
+                               pair_34 ? r4 :
+                               pair_23 ? r3 :
+                                         r2;
+    let two_pair_kicker: u8 = not_pair_67 ? r7 :
+                              not_pair_56 ? r6 :
+                              not_pair_45 ? r5 :
+                              !pair_34 ? r4 :
+                              !pair_23 ? r3 :
+                                         r2;
+
+    let trips_kicker1: u8 = trip_567 ? r4 : r7;
+    let trips_kicker2: u8 = trip_567 ? r3 :
+                            trip_456 ? r3 :
+                                       r6;
+
+    let pair_kicker1: u8 = pair_67 ? r5 : r7;
+    let pair_kicker2: u8 = pair_67 ? r4 :
+                           pair_56 ? r4 :
+                                     r6;
+    let pair_kicker3: u8 = pair_67 ? r3 :
+                           pair_56 ? r3 :
+                           pair_45 ? r3 :
+                                     r5;
+
+    let hand_value: u32 = has_sf ? HAND_STRAIGHT_FLUSH | sf_high :
+                          has_quads ? HAND_QUADS | (quad_rank as u32 << 4u8) | quad_kicker as u32 :
+                          has_fh ? HAND_FULL_HOUSE | (trip_rank as u32 << 4u8) | pair_rank as u32 :
+                          has_flush ? HAND_FLUSH | flush_bitfield :
+                          has_straight ? HAND_STRAIGHT | straight_high :
+                          trips_only ? HAND_TRIPS | (trip_rank as u32 << 8u8) |
+                                                    (trips_kicker1 as u32 << 4u8) |
+                                                    trips_kicker2 as u32 :
+                          has_two_pair ? HAND_TWO_PAIR | (pair_rank as u32 << 8u8) |
+                                                         (second_pair_rank as u32 << 4u8) |
+                                                         two_pair_kicker as u32 :
+                          pair_only ? HAND_PAIR | (pair_rank as u32 << 12u8) |
+                                                  (pair_kicker1 as u32 << 8u8) |
+                                                  (pair_kicker2 as u32 << 4u8) |
+                                                  pair_kicker3 as u32 :
+                          HAND_HIGH_CARD | (r7 as u32 << 16u8) |
+                                           (r6 as u32 << 12u8) |
+                                           (r5 as u32 << 8u8) |
+                                           (r4 as u32 << 4u8) |
+                                           r3 as u32;
+
+    return hand_value;
 }

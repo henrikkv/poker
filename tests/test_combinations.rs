@@ -1,13 +1,17 @@
-use mental_poker_bindings::mental_poker::interpreter::mental_poker_interpreter_cheats::*;
+use leo_bindings::leo_bindings_sdk::snapshot_store;
 use mental_poker_bindings::mental_poker::*;
-use snarkvm::console::network::TestnetV0;
 use snarkvm::prelude::*;
 use std::str::FromStr;
 
-const ENDPOINT: &str = "http://localhost:3030";
+use leo_bindings::leo_bindings_sdk::Account;
+
 const PRIVATE_KEY: &str = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
 
-type Account<N> = leo_bindings::utils::Account<N>;
+snapshot_store!(SETUP, |store| {
+    let account = Account::from_str(PRIVATE_KEY).unwrap();
+    MentalPokerAleo::new(&account, store.vm().clone()).unwrap();
+    store.save("deployed");
+});
 
 fn card(s: &str) -> u8 {
     let s = s.trim().replace(" ", "").to_uppercase();
@@ -65,10 +69,11 @@ struct Expectation {
 
 fn run_test(setup: GameSetup, cards: Cards, expectation: Expectation) {
     leo_bindings::utils::init_test_logger();
-    let p1: Account<TestnetV0> = Account::from_str(PRIVATE_KEY).unwrap();
-    let p2: Account<TestnetV0> = Account::new(&mut rand::thread_rng()).unwrap();
-    let p3: Account<TestnetV0> = Account::new(&mut rand::thread_rng()).unwrap();
-    let poker = MentalPokerInterpreter::new(&p1, ENDPOINT).unwrap();
+    let p1 = Account::from_str(PRIVATE_KEY).unwrap();
+    let p2 = Account::dev_account(1).unwrap();
+    let p3 = Account::dev_account(2).unwrap();
+    let vm = SETUP.restore("deployed");
+    let poker = MentalPokerAleo::new(&p1, vm).unwrap();
 
     let game = Game::new(
         p1.address(),
@@ -84,11 +89,11 @@ fn run_test(setup: GameSetup, cards: Cards, expectation: Expectation) {
         10u16,
         20u16,
         10u8,
-        0u8,
+        1u8,
         3u8,
         0u16,
     );
-    set_games(setup.game_id, game).unwrap();
+    poker.set_games(setup.game_id, game);
 
     let chips = Chips::new(
         setup.initial_chips.0,
@@ -98,7 +103,7 @@ fn run_test(setup: GameSetup, cards: Cards, expectation: Expectation) {
         setup.initial_bets.1,
         setup.initial_bets.2,
     );
-    set_chips(setup.game_id, chips).unwrap();
+    poker.set_chips(setup.game_id, chips);
 
     let revealed = RevealedCards::new(
         cards.p1_cards,
@@ -108,7 +113,7 @@ fn run_test(setup: GameSetup, cards: Cards, expectation: Expectation) {
         cards.turn,
         cards.river,
     );
-    set_revealed_cards(setup.game_id, revealed).unwrap();
+    poker.set_revealed_cards(setup.game_id, revealed);
 
     poker.compare_hands(&p1, setup.game_id).unwrap();
 

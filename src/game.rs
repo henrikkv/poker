@@ -2,7 +2,7 @@ use anyhow;
 use commutative_encryption_bindings::commutative_encryption::*;
 use credits_bindings::credits::*;
 use crossterm::event::{KeyCode, KeyEvent};
-use leo_bindings::utils::*;
+use leo_bindings::leo_bindings_sdk::{Account, Client, Credentials, LocalVM, NetworkVm, VMManager};
 use mental_poker_bindings::mental_poker::*;
 use rand::seq::SliceRandom;
 use ratatui::{
@@ -253,35 +253,20 @@ fn shuffle_deck<N: Network>(deck: [Group<N>; 52]) -> [Group<N>; 52] {
     cards.try_into().unwrap()
 }
 
-pub struct PokerGame<
-    N: Network,
-    P: MentalPokerAleo<N>,
-    C: CreditsAleo<N>,
-    E: CommutativeEncryptionAleo<N>,
-> {
+pub struct PokerGame<N: Network, M: VMManager<N> + Clone> {
     pub account: Account<N>,
-    pub endpoint: String,
     pub secret: Scalar<N>,
     pub secret_inv: Scalar<N>,
-    pub poker: P,
-    pub credits: C,
-    pub encryption: E,
+    pub poker: MentalPokerAleo<N, M>,
+    pub credits: CreditsAleo<N, M>,
+    pub encryption: CommutativeEncryptionAleo<N, M>,
     pub player_id: u8,
     pub keys: Option<Keys<N>>,
     pub card_hashes: HashMap<Group<N>, u8>,
 }
 
-impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryptionAleo<N>>
-    PokerGame<N, P, C, E>
-{
-    pub fn new(
-        account: Account<N>,
-        endpoint: String,
-        poker: P,
-        credits: C,
-        encryption: E,
-        player_id: u8,
-    ) -> anyhow::Result<Self> {
+impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
+    pub fn new(account: Account<N>, vm_manager: M, player_id: u8) -> anyhow::Result<Self> {
         use crate::cards::compute_card_hashes_from_deck;
         use crate::deck::initialized_deck;
 
@@ -292,9 +277,12 @@ impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncrypt
         let initial_deck = initialized_deck();
         let card_hashes = compute_card_hashes_from_deck(initial_deck);
 
+        let poker = MentalPokerAleo::new(&account, vm_manager.clone())?;
+        let credits = CreditsAleo::new(&account, vm_manager.clone())?;
+        let encryption = CommutativeEncryptionAleo::new(&account, vm_manager)?;
+
         Ok(Self {
             account,
-            endpoint,
             secret,
             secret_inv,
             poker,
@@ -828,9 +816,7 @@ pub trait GameHandle {
     fn shuffle_existing_deck(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
 }
 
-impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncryptionAleo<N>>
-    GameHandle for PokerGame<N, P, C, E>
-{
+impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
     fn check_game_exists(&self, game_id: u32) -> bool {
         self.poker.get_games(game_id).is_some()
     }
@@ -1122,12 +1108,9 @@ impl<N: Network, P: MentalPokerAleo<N>, C: CreditsAleo<N>, E: CommutativeEncrypt
 }
 
 pub fn new_interpreter_game(account_index: u16) -> anyhow::Result<Box<dyn GameHandle>> {
-    let account = get_dev_account(account_index).unwrap();
-    let endpoint = "https://api.explorer.provable.com/v2";
-    let poker = MentalPokerInterpreter::new(&account, endpoint)?;
-    let credits = CreditsInterpreter::new(&account, endpoint)?;
-    let encryption = CommutativeEncryptionInterpreter::new(&account, endpoint)?;
-    let game = PokerGame::new(account, endpoint.to_string(), poker, credits, encryption, 0)?;
+    let account = Account::<TestnetV0>::dev_account(account_index)?;
+    let vm = LocalVM::new()?;
+    let game = PokerGame::new(account, vm, 0)?;
     Ok(Box::new(game))
 }
 
@@ -1138,32 +1121,21 @@ pub fn new_testnet_game(account_index: u16, endpoint: &str) -> anyhow::Result<Bo
         0 => std::env::var("PRIVATE_KEY_P1")
             .ok()
             .and_then(|pk| Account::from_str(&pk).ok())
-            .unwrap_or_else(|| get_dev_account(0).unwrap()),
+            .unwrap_or_else(|| Account::dev_account(0).unwrap()),
         1 => std::env::var("PRIVATE_KEY_P2")
             .ok()
             .and_then(|pk| Account::from_str(&pk).ok())
-            .unwrap_or_else(|| get_dev_account(1).unwrap()),
+            .unwrap_or_else(|| Account::dev_account(1).unwrap()),
         2 => std::env::var("PRIVATE_KEY_P3")
             .ok()
             .and_then(|pk| Account::from_str(&pk).ok())
-            .unwrap_or_else(|| get_dev_account(2).unwrap()),
-        _ => get_dev_account(account_index).unwrap(),
+            .unwrap_or_else(|| Account::dev_account(2).unwrap()),
+        _ => Account::dev_account(account_index).unwrap(),
     };
-    let mut poker = MentalPokerTestnet::new(&account, endpoint)?;
-    let mut credits = CreditsTestnet::new(&account, endpoint)?;
-    let mut encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
-
-    if let Ok(config) = leo_bindings::DelegatedProvingConfig::from_env() {
-        poker = poker
-            .configure_delegation(config.clone())
-            .enable_delegation();
-        credits = credits
-            .configure_delegation(config.clone())
-            .enable_delegation();
-        encryption = encryption.configure_delegation(config).enable_delegation();
-    }
-
-    let game = PokerGame::new(account, endpoint.to_string(), poker, credits, encryption, 0)?;
+    let credentials = Credentials::from_env().ok();
+    let client = Client::new(endpoint, credentials)?;
+    let vm = NetworkVm::<TestnetV0>::new(&client)?;
+    let game = PokerGame::new(account, vm, 0)?;
     Ok(Box::new(game))
 }
 
@@ -1174,22 +1146,10 @@ pub fn new_game_from_private_key(
     dotenvy::dotenv().ok();
 
     let account: Account<TestnetV0> = Account::from_str(private_key)?;
-
-    let mut poker = MentalPokerTestnet::new(&account, endpoint)?;
-    let mut credits = CreditsTestnet::new(&account, endpoint)?;
-    let mut encryption = CommutativeEncryptionTestnet::new(&account, endpoint)?;
-
-    if let Ok(config) = leo_bindings::DelegatedProvingConfig::from_env() {
-        poker = poker
-            .configure_delegation(config.clone())
-            .enable_delegation();
-        credits = credits
-            .configure_delegation(config.clone())
-            .enable_delegation();
-        encryption = encryption.configure_delegation(config).enable_delegation();
-    }
-
-    let game = PokerGame::new(account, endpoint.to_string(), poker, credits, encryption, 0)?;
+    let credentials = Credentials::from_env().ok();
+    let client = Client::new(endpoint, credentials)?;
+    let vm = NetworkVm::new(&client)?;
+    let game = PokerGame::new(account, vm, 0)?;
     Ok(Box::new(game))
 }
 

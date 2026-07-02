@@ -1863,8 +1863,9 @@ fn evaluate_hand(
     let has_sf: bool = sf_high != 0u32;
 
     // Only keep the five highest cards in a flush
-    flush_bitfield = flush_count == 7u8 ? flush_bitfield & (flush_bitfield - 1u32) : flush_bitfield;
-    flush_bitfield = flush_count >= 6u8 ? flush_bitfield & (flush_bitfield - 1u32) : flush_bitfield;
+    // sub_wrapped to prevent underflow when flush_bitfield == 0
+    flush_bitfield = flush_count == 7u8 ? flush_bitfield & (flush_bitfield.sub_wrapped(1u32)) : flush_bitfield;
+    flush_bitfield = flush_count >= 6u8 ? flush_bitfield & (flush_bitfield.sub_wrapped(1u32)) : flush_bitfield;
 
 
     let has_two_pair: bool = (pair_12 as u8) +

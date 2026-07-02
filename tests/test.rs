@@ -1,6 +1,6 @@
 use commutative_encryption_bindings::commutative_encryption::*;
 use credits_bindings::credits::*;
-use leo_bindings::utils::*;
+use leo_bindings::leo_bindings_sdk::{Account, Client, LocalVM, NetworkVm, VMManager};
 use mental_poker_bindings::mental_poker::*;
 use poker::cards::CardDisplay;
 use rand::seq::SliceRandom;
@@ -25,24 +25,23 @@ fn shuffle_deck<N: Network>(deck: [Group<N>; 52]) -> [Group<N>; 52] {
 fn commutative_encryption_interpreter() {
     leo_bindings::utils::init_test_logger();
     let alice: Account<TestnetV0> = Account::from_str(PRIVATE_KEY).unwrap();
-    run_commutative_encryption(
-        &CommutativeEncryptionInterpreter::new(&alice, ENDPOINT).unwrap(),
-        &alice,
-    );
+    let vm = LocalVM::new().unwrap();
+    let encryption = CommutativeEncryptionAleo::new(&alice, vm).unwrap();
+    run_commutative_encryption(&encryption, &alice);
 }
 
 #[test]
 fn commutative_encryption_testnet() {
     leo_bindings::utils::init_test_logger();
     let alice: Account<TestnetV0> = Account::from_str(PRIVATE_KEY).unwrap();
-    run_commutative_encryption(
-        &CommutativeEncryptionTestnet::new(&alice, ENDPOINT).unwrap(),
-        &alice,
-    );
+    let client = Client::new(ENDPOINT, None).unwrap();
+    let vm = NetworkVm::new(&client).unwrap();
+    let encryption = CommutativeEncryptionAleo::new(&alice, vm).unwrap();
+    run_commutative_encryption(&encryption, &alice);
 }
 
-fn run_commutative_encryption<N: Network, C: CommutativeEncryptionAleo<N>>(
-    commutative_encryption: &C,
+fn run_commutative_encryption<N: Network, M: VMManager<N>>(
+    commutative_encryption: &CommutativeEncryptionAleo<N, M>,
     alice: &Account<N>,
 ) {
     let mut rng = TestRng::default();
@@ -85,43 +84,33 @@ fn run_commutative_encryption<N: Network, C: CommutativeEncryptionAleo<N>>(
 fn poker_interpreter() {
     leo_bindings::utils::init_test_logger();
     let alice = Account::from_str(PRIVATE_KEY).unwrap();
-    let rng = &mut rand::thread_rng();
-    let bob = Account::new(rng).unwrap();
-    let charlie = Account::new(rng).unwrap();
-    gameplay(
-        &MentalPokerInterpreter::new(&alice, ENDPOINT).unwrap(),
-        &CreditsInterpreter::new(&alice, ENDPOINT).unwrap(),
-        &CommutativeEncryptionInterpreter::new(&alice, ENDPOINT).unwrap(),
-        &alice,
-        &bob,
-        &charlie,
-    );
+    let bob = Account::dev_account(1).unwrap();
+    let charlie = Account::dev_account(2).unwrap();
+    let vm = LocalVM::new().unwrap();
+    let poker = MentalPokerAleo::new(&alice, vm.clone()).unwrap();
+    let credits = CreditsAleo::new(&alice, vm.clone()).unwrap();
+    let encryption = CommutativeEncryptionAleo::new(&alice, vm).unwrap();
+    gameplay(&poker, &credits, &encryption, &alice, &bob, &charlie);
 }
+
 #[test]
 fn poker_testnet() {
     leo_bindings::utils::init_test_logger();
     let alice = Account::from_str(PRIVATE_KEY).unwrap();
-    let rng = &mut rand::thread_rng();
-    let bob = Account::new(rng).unwrap();
-    let charlie = Account::new(rng).unwrap();
-    gameplay(
-        &MentalPokerTestnet::new(&alice, ENDPOINT).unwrap(),
-        &CreditsTestnet::new(&alice, ENDPOINT).unwrap(),
-        &CommutativeEncryptionTestnet::new(&alice, ENDPOINT).unwrap(),
-        &alice,
-        &bob,
-        &charlie,
-    );
+    let bob = Account::dev_account(1).unwrap();
+    let charlie = Account::dev_account(2).unwrap();
+    let client = Client::new(ENDPOINT, None).unwrap();
+    let vm = NetworkVm::<TestnetV0>::new(&client).unwrap();
+    let poker = MentalPokerAleo::new(&alice, vm.clone()).unwrap();
+    let credits = CreditsAleo::new(&alice, vm.clone()).unwrap();
+    let encryption = CommutativeEncryptionAleo::new(&alice, vm).unwrap();
+    gameplay(&poker, &credits, &encryption, &alice, &bob, &charlie);
 }
-fn gameplay<
-    N: Network,
-    P: MentalPokerAleo<N>,
-    C: CreditsAleo<N>,
-    E: CommutativeEncryptionAleo<N>,
->(
-    poker: &P,
-    credits: &C,
-    commutative_encryption: &E,
+
+fn gameplay<N: Network, M: VMManager<N>>(
+    poker: &MentalPokerAleo<N, M>,
+    credits: &CreditsAleo<N, M>,
+    commutative_encryption: &CommutativeEncryptionAleo<N, M>,
     alice: &Account<N>,
     bob: &Account<N>,
     charlie: &Account<N>,
@@ -296,7 +285,7 @@ fn gameplay<
     let chips = poker.get_chips(0).unwrap();
     dbg!(&chips);
     let revealed = poker.get_revealed_cards(0).unwrap();
-    println!("{}", &revealed.display_cards());
+    println!("{}", revealed.display_cards());
 
     let balances_after = [
         credits.get_account(alice.address()).unwrap(),
@@ -313,14 +302,13 @@ fn gameplay<
 
 #[test]
 fn test_all_in() {
-    use mental_poker_bindings::mental_poker::interpreter::mental_poker_interpreter_cheats::*;
-
     leo_bindings::utils::init_test_logger();
     let alice = Account::from_str(PRIVATE_KEY).unwrap();
-    let bob = Account::new(&mut rand::thread_rng()).unwrap();
-    let charlie = Account::new(&mut rand::thread_rng()).unwrap();
+    let bob = Account::dev_account(1).unwrap();
+    let charlie = Account::dev_account(2).unwrap();
 
-    let poker = MentalPokerInterpreter::new(&alice, ENDPOINT).unwrap();
+    let vm = LocalVM::new().unwrap();
+    let poker = MentalPokerAleo::new(&alice, vm).unwrap();
 
     let game = Game::new(
         alice.address(),
@@ -340,10 +328,10 @@ fn test_all_in() {
         3u8,
         0u16,
     );
-    set_games(0, game).unwrap();
+    poker.set_games(0, game);
 
-    let chips = Chips::new(1000u16, 1000u16, 1000u16, 5u16, 10u16, 0u16);
-    set_chips(0, chips).unwrap();
+    let chips = Chips::new(1000, 1000, 1000, 5, 10, 0);
+    poker.set_chips(0, chips);
 
     poker.bet(&charlie, 0, 1000).unwrap();
     poker.bet(&alice, 0, 995).unwrap();

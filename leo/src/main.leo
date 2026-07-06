@@ -1,5 +1,71 @@
-import commutative_encryption.aleo;
 import credits.aleo;
+
+fn decrypt_card(secret_inv: scalar, card: group) -> group {
+    return card * secret_inv;
+}
+
+fn to_u8(g: group) -> u8 {
+    return g == Poseidon2::hash_to_group(0u8) ? 0u8 :
+           g == Poseidon2::hash_to_group(1u8) ? 1u8 :
+           g == Poseidon2::hash_to_group(2u8) ? 2u8 :
+           g == Poseidon2::hash_to_group(3u8) ? 3u8 :
+           g == Poseidon2::hash_to_group(4u8) ? 4u8 :
+           g == Poseidon2::hash_to_group(5u8) ? 5u8 :
+           g == Poseidon2::hash_to_group(6u8) ? 6u8 :
+           g == Poseidon2::hash_to_group(7u8) ? 7u8 :
+           g == Poseidon2::hash_to_group(8u8) ? 8u8 :
+           g == Poseidon2::hash_to_group(9u8) ? 9u8 :
+           g == Poseidon2::hash_to_group(10u8) ? 10u8 :
+           g == Poseidon2::hash_to_group(11u8) ? 11u8 :
+           g == Poseidon2::hash_to_group(12u8) ? 12u8 :
+           g == Poseidon2::hash_to_group(13u8) ? 13u8 :
+           g == Poseidon2::hash_to_group(14u8) ? 14u8 :
+           g == Poseidon2::hash_to_group(15u8) ? 15u8 :
+           g == Poseidon2::hash_to_group(16u8) ? 16u8 :
+           g == Poseidon2::hash_to_group(17u8) ? 17u8 :
+           g == Poseidon2::hash_to_group(18u8) ? 18u8 :
+           g == Poseidon2::hash_to_group(19u8) ? 19u8 :
+           g == Poseidon2::hash_to_group(20u8) ? 20u8 :
+           g == Poseidon2::hash_to_group(21u8) ? 21u8 :
+           g == Poseidon2::hash_to_group(22u8) ? 22u8 :
+           g == Poseidon2::hash_to_group(23u8) ? 23u8 :
+           g == Poseidon2::hash_to_group(24u8) ? 24u8 :
+           g == Poseidon2::hash_to_group(25u8) ? 25u8 :
+           g == Poseidon2::hash_to_group(26u8) ? 26u8 :
+           g == Poseidon2::hash_to_group(27u8) ? 27u8 :
+           g == Poseidon2::hash_to_group(28u8) ? 28u8 :
+           g == Poseidon2::hash_to_group(29u8) ? 29u8 :
+           g == Poseidon2::hash_to_group(30u8) ? 30u8 :
+           g == Poseidon2::hash_to_group(31u8) ? 31u8 :
+           g == Poseidon2::hash_to_group(32u8) ? 32u8 :
+           g == Poseidon2::hash_to_group(33u8) ? 33u8 :
+           g == Poseidon2::hash_to_group(34u8) ? 34u8 :
+           g == Poseidon2::hash_to_group(35u8) ? 35u8 :
+           g == Poseidon2::hash_to_group(36u8) ? 36u8 :
+           g == Poseidon2::hash_to_group(37u8) ? 37u8 :
+           g == Poseidon2::hash_to_group(38u8) ? 38u8 :
+           g == Poseidon2::hash_to_group(39u8) ? 39u8 :
+           g == Poseidon2::hash_to_group(40u8) ? 40u8 :
+           g == Poseidon2::hash_to_group(41u8) ? 41u8 :
+           g == Poseidon2::hash_to_group(42u8) ? 42u8 :
+           g == Poseidon2::hash_to_group(43u8) ? 43u8 :
+           g == Poseidon2::hash_to_group(44u8) ? 44u8 :
+           g == Poseidon2::hash_to_group(45u8) ? 45u8 :
+           g == Poseidon2::hash_to_group(46u8) ? 46u8 :
+           g == Poseidon2::hash_to_group(47u8) ? 47u8 :
+           g == Poseidon2::hash_to_group(48u8) ? 48u8 :
+           g == Poseidon2::hash_to_group(49u8) ? 49u8 :
+           g == Poseidon2::hash_to_group(50u8) ? 50u8 :
+           g == Poseidon2::hash_to_group(51u8) ? 51u8 : 255u8;
+}
+
+fn initialize_deck() -> [group; 52] {
+    let deck: [group; 52] = [0group; 52];
+    for i: u8 in 0u8..52u8 {
+        deck[i] = Poseidon2::hash_to_group(i);
+    }
+    return deck;
+}
 
 const p2_join: u8 = 0u8;
 const p3_join: u8 = 1u8;
@@ -176,14 +242,12 @@ program mental_poker.aleo {
         secret: scalar,
         secret_inv: scalar,
     }
-    fn create_game(buy_in: u64, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128, blind_frequency: u8) -> (Keys, Final) {
-        let deck: [group; 52] = commutative_encryption.aleo::initialize_deck();
-        commutative_encryption.aleo::verify_permutation(deck, deck_shuffled);
+    fn create_game(buy_in: u64, control_bits: [bool; 249], secret: scalar, secret_inv: scalar, password: u128, blind_frequency: u8) -> (Keys, Final) {
+        let deck: [group; 52] = initialize_deck();
 
-        let deck_enc: [group; 52] = commutative_encryption.aleo::encrypt_deck(secret, deck_shuffled);
+        let deck_enc: [group; 52] = waksman::shuffle_and_encrypt(deck, secret, control_bits);
 
-        // Check if decryption key is correct
-        assert_eq(commutative_encryption.aleo::decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+        assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
 
         let password_hash: u128 = password == 0u128 ? 0u128 : BHP256::hash_to_u128(password);
 
@@ -226,12 +290,10 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, game);
         Mapping::set(decks, game_id, deck);
     }
-    fn join_game(game_id: u32, buy_in: u64, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar, password: u128) -> (Keys, Final) {
-        commutative_encryption.aleo::verify_permutation(deck, deck_shuffled);
+    fn join_game(game_id: u32, buy_in: u64, deck: [group; 52], control_bits: [bool; 249], secret: scalar, secret_inv: scalar, password: u128) -> (Keys, Final) {
+        let deck_enc: [group; 52] = waksman::shuffle_and_encrypt(deck, secret, control_bits);
 
-        let deck_enc: [group; 52] = commutative_encryption.aleo::encrypt_deck(secret, deck_shuffled);
-
-        assert_eq(commutative_encryption.aleo::decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+        assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
 
         let password_hash: u128 = password == 0u128 ? 0u128 : BHP256::hash_to_u128(password);
 
@@ -535,10 +597,10 @@ program mental_poker.aleo {
     }
     fn decrypt_hands(game_id: u32, other1: [group; 2], other2: [group; 2], keys: Keys) -> (Keys, Final) {
 
-        let other1_card0_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, other1[0u8]);
-        let other1_card1_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, other1[1u8]);
-        let other2_card0_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, other2[0u8]);
-        let other2_card1_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, other2[1u8]);
+        let other1_card0_dec: group = decrypt_card(keys.secret_inv, other1[0u8]);
+        let other1_card1_dec: group = decrypt_card(keys.secret_inv, other1[1u8]);
+        let other2_card0_dec: group = decrypt_card(keys.secret_inv, other2[0u8]);
+        let other2_card1_dec: group = decrypt_card(keys.secret_inv, other2[1u8]);
         
         let new_other1: [group; 2] = [other1_card0_dec, other1_card1_dec];
         let new_other2: [group; 2] = [other2_card0_dec, other2_card1_dec];
@@ -628,15 +690,15 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
     fn decrypt_flop(game_id: u32, flop: [group; 3], keys: Keys) -> (Keys, Final) {
-        let flop0: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, flop[0u8]);
-        let flop1: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, flop[1u8]);
-        let flop2: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, flop[2u8]);
+        let flop0: group = decrypt_card(keys.secret_inv, flop[0u8]);
+        let flop1: group = decrypt_card(keys.secret_inv, flop[1u8]);
+        let flop2: group = decrypt_card(keys.secret_inv, flop[2u8]);
         
         let flop_dec: [group; 3] = [flop0, flop1, flop2];
 
-        let flop0_u8: u8 = commutative_encryption.aleo::to_u8(flop0);
-        let flop1_u8: u8 = commutative_encryption.aleo::to_u8(flop1);
-        let flop2_u8: u8 = commutative_encryption.aleo::to_u8(flop2);
+        let flop0_u8: u8 = to_u8(flop0);
+        let flop1_u8: u8 = to_u8(flop1);
+        let flop2_u8: u8 = to_u8(flop2);
         let flop_u8: [u8; 3] = [flop0_u8, flop1_u8, flop2_u8];
 
         let signer: address = self.signer;
@@ -844,8 +906,8 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
     fn decrypt_turn_river(game_id: u32, card: group, keys: Keys) -> (Keys, Final) {
-        let card_dec: group = commutative_encryption.aleo::decrypt_card(keys.secret_inv, card);
-        let card_u8: u8 = commutative_encryption.aleo::to_u8(card_dec);
+        let card_dec: group = decrypt_card(keys.secret_inv, card);
+        let card_u8: u8 = to_u8(card_dec);
         let signer: address = self.signer;
         return (keys, final { finalize_decrypt_turn_river(game_id, card, card_dec, card_u8, signer); });
     }
@@ -994,8 +1056,8 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
     fn showdown(game_id: u32, hand: [group; 2], keys: Keys) -> (Keys, Final) {
-        let c0: u8 = commutative_encryption.aleo::to_u8(commutative_encryption.aleo::decrypt_card(keys.secret_inv, hand[0u8]));
-        let c1: u8 = commutative_encryption.aleo::to_u8(commutative_encryption.aleo::decrypt_card(keys.secret_inv, hand[1u8]));
+        let c0: u8 = to_u8(decrypt_card(keys.secret_inv, hand[0u8]));
+        let c1: u8 = to_u8(decrypt_card(keys.secret_inv, hand[1u8]));
 
         let signer: address = self.signer;
         return (keys, final { finalize_showdown(game_id, signer, hand, [c0, c1]); });
@@ -1477,13 +1539,11 @@ program mental_poker.aleo {
     }
 
 
-    fn new_hand(game_id: u32, deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Final) {
-        let deck: [group; 52] = commutative_encryption.aleo::initialize_deck();
-        commutative_encryption.aleo::verify_permutation(deck, deck_shuffled);
+    fn new_hand(game_id: u32, control_bits: [bool; 249], secret: scalar, secret_inv: scalar) -> (Keys, Final) {
 
-        let deck_enc: [group; 52] = commutative_encryption.aleo::encrypt_deck(secret, deck_shuffled);
+        let deck_enc: [group; 52] = waksman::shuffle_and_encrypt(initialize_deck(), secret, control_bits);
 
-        assert_eq(commutative_encryption.aleo::decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+        assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
 
         let signer: address = self.signer;
         let keys: Keys = Keys {
@@ -1602,12 +1662,10 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
 
-    fn shuffle_deck(game_id: u32, deck: [group; 52], deck_shuffled: [group; 52], secret: scalar, secret_inv: scalar) -> (Keys, Final) {
-        commutative_encryption.aleo::verify_permutation(deck, deck_shuffled);
+    fn shuffle_deck(game_id: u32, deck: [group; 52], control_bits: [bool; 249], secret: scalar, secret_inv: scalar) -> (Keys, Final) {
+        let deck_enc: [group; 52] = waksman::shuffle_and_encrypt(deck, secret, control_bits);
 
-        let deck_enc: [group; 52] = commutative_encryption.aleo::encrypt_deck(secret, deck_shuffled);
-
-        assert_eq(commutative_encryption.aleo::decrypt_card(secret_inv, deck_enc[0]), deck_shuffled[0]);
+        assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
 
         let signer: address = self.signer;
         let keys: Keys = Keys {

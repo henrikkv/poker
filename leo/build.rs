@@ -20,7 +20,7 @@ fn main() {
     }
 
 
-    println!("cargo:rerun-if-changed=./imports/commutative_encryption/build/commutative_encryption/abi.json");
+    println!("cargo:rerun-if-changed=lib/waksman//src/lib.leo");
 
     let needs_refresh = if src_main_leo.exists() {
         !build_aleo.exists()

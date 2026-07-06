@@ -1,10 +1,9 @@
+use crate::waksman_ctrl;
 use anyhow;
-use commutative_encryption_bindings::commutative_encryption::*;
 use credits_bindings::credits::*;
 use crossterm::event::{KeyCode, KeyEvent};
 use leo_bindings::leo_bindings_sdk::{Account, Client, Credentials, LocalVM, NetworkVm, VMManager};
 use mental_poker_bindings::mental_poker::*;
-use rand::seq::SliceRandom;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -246,20 +245,12 @@ impl DecryptionStep {
     }
 }
 
-fn shuffle_deck<N: Network>(deck: [Group<N>; 52]) -> [Group<N>; 52] {
-    let mut rng = rand::thread_rng();
-    let mut cards: Vec<Group<N>> = deck.into();
-    cards.shuffle(&mut rng);
-    cards.try_into().unwrap()
-}
-
 pub struct PokerGame<N: Network, M: VMManager<N> + Clone> {
     pub account: Account<N>,
     pub secret: Scalar<N>,
     pub secret_inv: Scalar<N>,
     pub poker: MentalPokerAleo<N, M>,
     pub credits: CreditsAleo<N, M>,
-    pub encryption: CommutativeEncryptionAleo<N, M>,
     pub player_id: u8,
     pub keys: Option<Keys<N>>,
     pub card_hashes: HashMap<Group<N>, u8>,
@@ -278,8 +269,7 @@ impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
         let card_hashes = compute_card_hashes_from_deck(initial_deck);
 
         let poker = MentalPokerAleo::new(&account, vm_manager.clone())?;
-        let credits = CreditsAleo::new(&account, vm_manager.clone())?;
-        let encryption = CommutativeEncryptionAleo::new(&account, vm_manager)?;
+        let credits = CreditsAleo::new(&account, vm_manager)?;
 
         Ok(Self {
             account,
@@ -287,7 +277,6 @@ impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
             secret_inv,
             poker,
             credits,
-            encryption,
             player_id,
             keys: None,
             card_hashes,
@@ -514,12 +503,8 @@ impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
     pub fn initialize_game(&mut self, model: &mut GameModel) -> anyhow::Result<()> {
         use crate::deck::initialized_deck;
 
-        model.log_action_start("Initializing deck".to_string());
-        let initial_deck = initialized_deck();
-        model.log_action_complete();
-
         model.log_action_start("Shuffling deck".to_string());
-        let shuffled_deck = shuffle_deck(initial_deck);
+        let (_, control_bits) = waksman_ctrl::shuffle_deck(initialized_deck::<N>());
         model.log_action_complete();
 
         let password = if model.password_input.is_empty() {
@@ -549,7 +534,7 @@ impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
         let (keys, _) = self.poker.create_game(
             &self.account,
             buy_in,
-            shuffled_deck,
+            control_bits,
             self.secret,
             self.secret_inv,
             password,
@@ -893,7 +878,7 @@ impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
         model.log_action_complete();
 
         model.log_action_start("Shuffling deck".to_string());
-        let shuffled_deck = shuffle_deck(deck);
+        let (_, control_bits) = waksman_ctrl::shuffle_deck(deck);
         model.log_action_complete();
 
         let password = if model.password_input.is_empty() {
@@ -928,7 +913,7 @@ impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
             game_id,
             buy_in,
             deck,
-            shuffled_deck,
+            control_bits,
             self.secret,
             self.secret_inv,
             password,
@@ -1062,15 +1047,14 @@ impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
     fn new_shuffle(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
         use crate::deck::initialized_deck;
 
-        let initial_deck = initialized_deck();
-        let shuffled_deck = shuffle_deck(initial_deck);
+        let (_, control_bits) = waksman_ctrl::shuffle_deck(initialized_deck::<N>());
         model.log_action_complete();
 
         model.log_action_start("Starting new hand".to_string());
         let (keys, _) = self.poker.new_hand(
             &self.account,
             game_id,
-            shuffled_deck,
+            control_bits,
             self.secret,
             self.secret_inv,
         )?;
@@ -1087,14 +1071,14 @@ impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
         model.log_action_complete();
 
         model.log_action_start("Shuffling deck".to_string());
-        let shuffled_deck = shuffle_deck(deck);
+        let (_, control_bits) = crate::waksman_ctrl::shuffle_deck(deck);
         model.log_action_complete();
 
         let (keys, _) = self.poker.shuffle_deck(
             &self.account,
             game_id,
             deck,
-            shuffled_deck,
+            control_bits,
             self.secret,
             self.secret_inv,
         )?;
@@ -1107,11 +1091,26 @@ impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
     }
 }
 
-pub fn new_interpreter_game(account_index: u16) -> anyhow::Result<Box<dyn GameHandle>> {
-    let account = Account::<TestnetV0>::dev_account(account_index)?;
+pub fn new_interpreter_game() -> anyhow::Result<[Box<dyn GameHandle>; 3]> {
     let vm = LocalVM::new()?;
-    let game = PokerGame::new(account, vm, 0)?;
-    Ok(Box::new(game))
+    let games = [
+        Box::new(PokerGame::new(
+            Account::<TestnetV0>::dev_account(0)?,
+            vm.clone(),
+            0,
+        )?) as Box<dyn GameHandle>,
+        Box::new(PokerGame::new(
+            Account::<TestnetV0>::dev_account(1)?,
+            vm.clone(),
+            0,
+        )?),
+        Box::new(PokerGame::new(
+            Account::<TestnetV0>::dev_account(2)?,
+            vm,
+            0,
+        )?),
+    ];
+    Ok(games)
 }
 
 pub fn new_testnet_game(account_index: u16, endpoint: &str) -> anyhow::Result<Box<dyn GameHandle>> {

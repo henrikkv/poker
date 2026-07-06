@@ -6,15 +6,15 @@
   "leo": "4.3.2",
   "dependencies": [
     {
-      "name": "commutative_encryption.aleo",
-      "location": "local",
-      "path": "./imports/commutative_encryption",
-      "edition": null
-    },
-    {
       "name": "credits.aleo",
       "location": "network",
       "path": null,
+      "edition": null
+    },
+    {
+      "name": "waksman",
+      "location": "local",
+      "path": "lib/waksman/",
       "edition": null
     }
   ],

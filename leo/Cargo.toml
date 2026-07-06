@@ -9,7 +9,6 @@ path = "lib.rs"
 
 [dependencies]
 leo-bindings = { git = "https://github.com/henrikkv/leo-bindings" }
-commutative_encryption_bindings = { path = "./imports/commutative_encryption" }
 
 # BEGIN IMPORTS
 # credits_bindings = { git = "https://github.com/henrikkv/leo-bindings" }

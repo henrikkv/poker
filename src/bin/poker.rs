@@ -109,8 +109,7 @@ fn init_file_logger(account_index: Option<u16>) -> Result<(), Box<dyn std::error
         .filter_module("leo_bindings", log::LevelFilter::Debug)
         .filter_module("credits_bindings", log::LevelFilter::Debug)
         .filter_module("mental_poker_bindings", log::LevelFilter::Debug)
-        .filter_module("commutative_encryption_bindings", log::LevelFilter::Debug)
-        .filter(Some("ureq"), log::LevelFilter::Off)
+.filter(Some("ureq"), log::LevelFilter::Off)
         .try_init()?;
 
     Ok(())

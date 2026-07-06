@@ -52,11 +52,14 @@ enum TestMessage {
 impl TestModel {
     fn new(network_type: NetworkType, endpoint: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let games = match network_type {
-            NetworkType::Interpreter => [
-                Game::new(new_interpreter_game(0u16)?, network_type),
-                Game::new(new_interpreter_game(1u16)?, network_type),
-                Game::new(new_interpreter_game(2u16)?, network_type),
-            ],
+            NetworkType::Interpreter => {
+                let [g0, g1, g2] = new_interpreter_game()?;
+                [
+                    Game::new(g0, network_type),
+                    Game::new(g1, network_type),
+                    Game::new(g2, network_type),
+                ]
+            }
             NetworkType::Testnet => [
                 Game::new(new_testnet_game(0u16, endpoint)?, network_type),
                 Game::new(new_testnet_game(1u16, endpoint)?, network_type),

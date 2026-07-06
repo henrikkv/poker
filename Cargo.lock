@@ -487,13 +487,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "commutative_encryption_bindings"
-version = "0.1.0"
-dependencies = [
- "leo-bindings",
-]
-
-[[package]]
 name = "compact_str"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2121,7 +2114,6 @@ checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
 name = "mental_poker_bindings"
 version = "0.1.0"
 dependencies = [
- "commutative_encryption_bindings",
  "leo-bindings",
 ]
 
@@ -2412,7 +2404,6 @@ dependencies = [
  "anyhow",
  "clap",
  "colored",
- "commutative_encryption_bindings",
  "credits_bindings",
  "crossterm",
  "dotenvy",

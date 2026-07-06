@@ -7,7 +7,6 @@ edition = "2024"
 leo-bindings = { git = "https://github.com/henrikkv/leo-bindings" }
 credits_bindings = { git = "https://github.com/henrikkv/leo-bindings" }
 mental_poker_bindings = { path = "./leo" }
-commutative_encryption_bindings = { path = "./leo/imports/commutative_encryption" }
 
 rand = "0.8"
 snarkvm = { git = "https://github.com/henrikkv/snarkVM", branch = "leo-bindings" }

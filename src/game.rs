@@ -7,13 +7,14 @@ use mental_poker_bindings::mental_poker::*;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph, Widget},
 };
 use snarkvm::prelude::{Group, Inverse, Network, Scalar, TestRng, TestnetV0, Uniform};
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::thread::{self, JoinHandle};
 use std::time::Instant;
 
 use crate::cards::{
@@ -225,7 +226,7 @@ impl GameState {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum DecryptionStep {
+pub enum DecryptionStep {
     Hands,
     Flop,
     Turn,
@@ -256,7 +257,7 @@ pub struct PokerGame<N: Network, M: VMManager<N> + Clone> {
     pub card_hashes: HashMap<Group<N>, u8>,
 }
 
-impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
+impl<N: Network, M: VMManager<N> + 'static> PokerGame<N, M> {
     pub fn new(account: Account<N>, vm_manager: M, player_id: u8) -> anyhow::Result<Self> {
         use crate::cards::compute_card_hashes_from_deck;
         use crate::deck::initialized_deck;
@@ -547,9 +548,9 @@ impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
         Ok(())
     }
 
-    pub fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+    pub fn refresh_game_state(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<bool> {
         if !model.game_initialized {
-            return Ok(());
+            return Ok(false);
         }
 
         let game = self
@@ -567,66 +568,39 @@ impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
                 model.log(format!("State {}: {}", state, description));
             }
             model.current_state = new_state;
+
+            if let Some(state) = new_state {
+                match state {
+                    GameState::P1NewShuffle | GameState::P2NewShuffle => {
+                        model.card = None;
+                        model.decrypted_hand = None;
+                        if matches!(
+                            (state, self.player_id),
+                            (GameState::P1NewShuffle, 1) | (GameState::P2NewShuffle, 2)
+                        ) {
+                            model.log(format!("Starting new hand (state: {})", state));
+                        }
+                    }
+                    GameState::P2Shuffle | GameState::P3Shuffle => {
+                        if matches!(
+                            (state, self.player_id),
+                            (GameState::P2Shuffle, 2) | (GameState::P3Shuffle, 3)
+                        ) {
+                            model.log(format!("Shuffling deck (state: {})", state));
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
 
         let current_chips = self.get_chip(game_id);
         let cards = self.poker.get_cards(game_id);
-
         let mut hand_decrypted = false;
 
         if let Some(state) = new_state {
             self.setup_betting_ui(state, state_changed, current_chips, &game, model);
 
-            if self.keys.is_some() && state_changed {
-                let step = match (state, self.player_id) {
-                    (GameState::P1DecHand, 1)
-                    | (GameState::P2DecHand, 2)
-                    | (GameState::P3DecHand, 3) => Some(DecryptionStep::Hands),
-                    (GameState::P1DecFlop, 1)
-                    | (GameState::P2DecFlop, 2)
-                    | (GameState::P3DecFlop, 3) => Some(DecryptionStep::Flop),
-                    (GameState::P1DecTurn, 1)
-                    | (GameState::P2DecTurn, 2)
-                    | (GameState::P3DecTurn, 3) => Some(DecryptionStep::Turn),
-                    (GameState::P1DecRiver, 1)
-                    | (GameState::P2DecRiver, 2)
-                    | (GameState::P3DecRiver, 3) => Some(DecryptionStep::River),
-                    (GameState::P1Showdown, 1)
-                    | (GameState::P2Showdown, 2)
-                    | (GameState::P3Showdown, 3) => Some(DecryptionStep::Showdown),
-                    _ => None,
-                };
-
-                if let (Some(step), Some(c)) = (step, cards) {
-                    self.handle_decryption_step(step, game_id, &c, model)?;
-                }
-            }
-
-            if model.game_winner.is_none() {
-                match (state, self.player_id) {
-                    (GameState::P1NewShuffle, 1) | (GameState::P2NewShuffle, 2) => {
-                        if state_changed {
-                            model.card = None;
-                            model.decrypted_hand = None;
-                            model.log(format!("Starting new hand (state: {})", state));
-                        }
-                        self.new_shuffle(model, game_id)?;
-                    }
-                    (GameState::P1NewShuffle | GameState::P2NewShuffle, _) => {
-                        if state_changed {
-                            model.card = None;
-                            model.decrypted_hand = None;
-                        }
-                    }
-                    (GameState::P2Shuffle, 2) | (GameState::P3Shuffle, 3) => {
-                        if state_changed {
-                            model.log(format!("Shuffling deck (state: {})", state));
-                        }
-                        self.shuffle_existing_deck(model, game_id)?;
-                    }
-                    _ => {}
-                }
-            }
             if model.decrypted_hand.is_none()
                 && let (Some(c), Some(_keys)) = (&cards, &self.keys)
             {
@@ -653,18 +627,6 @@ impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
                     }
                 }
             }
-
-            match state {
-                GameState::Compare => {
-                    self.handle_compare_hands(game_id, &game, new_state, model)?;
-                }
-                GameState::P1Claim | GameState::P2Claim | GameState::P3Claim
-                    if state.current_player() == Some(self.player_id) =>
-                {
-                    self.handle_claim_prize(game_id, &game, new_state, model)?;
-                }
-                _ => {}
-            }
         }
 
         let should_update_render = state_changed || hand_decrypted || model.card.is_none();
@@ -683,7 +645,121 @@ impl<N: Network, M: VMManager<N> + Clone> PokerGame<N, M> {
 
         model.last_poll_time = Instant::now();
 
-        Ok(())
+        Ok(state_changed)
+    }
+
+    fn detect_auto_action(
+        &self,
+        model: &GameModel,
+        game_id: u32,
+        state_changed: bool,
+    ) -> Option<GameCommand> {
+        if !state_changed || model.game_winner.is_some() {
+            return None;
+        }
+
+        let state = model.current_state?;
+
+        if self.keys.is_some() {
+            let step = match (state, self.player_id) {
+                (GameState::P1DecHand, 1)
+                | (GameState::P2DecHand, 2)
+                | (GameState::P3DecHand, 3) => Some(DecryptionStep::Hands),
+                (GameState::P1DecFlop, 1)
+                | (GameState::P2DecFlop, 2)
+                | (GameState::P3DecFlop, 3) => Some(DecryptionStep::Flop),
+                (GameState::P1DecTurn, 1)
+                | (GameState::P2DecTurn, 2)
+                | (GameState::P3DecTurn, 3) => Some(DecryptionStep::Turn),
+                (GameState::P1DecRiver, 1)
+                | (GameState::P2DecRiver, 2)
+                | (GameState::P3DecRiver, 3) => Some(DecryptionStep::River),
+                (GameState::P1Showdown, 1)
+                | (GameState::P2Showdown, 2)
+                | (GameState::P3Showdown, 3) => Some(DecryptionStep::Showdown),
+                _ => None,
+            };
+
+            if let Some(step) = step
+                && self.poker.get_cards(game_id).is_some()
+            {
+                return Some(GameCommand::AutoDecrypt { game_id, step });
+            }
+        }
+
+        match (state, self.player_id) {
+            (GameState::P1NewShuffle, 1) | (GameState::P2NewShuffle, 2) => {
+                return Some(GameCommand::AutoNewShuffle(game_id));
+            }
+            (GameState::P2Shuffle, 2) | (GameState::P3Shuffle, 3) => {
+                return Some(GameCommand::AutoShuffleDeck(game_id));
+            }
+            _ => {}
+        }
+
+        if state == GameState::Compare {
+            let game = self.poker.get_games(game_id)?;
+            let player_bitmap = 1u8 << (self.player_id - 1);
+            if game.dealer_button == player_bitmap {
+                return Some(GameCommand::AutoCompare(game_id));
+            }
+        }
+
+        if matches!(
+            state,
+            GameState::P1Claim | GameState::P2Claim | GameState::P3Claim
+        ) && state.current_player() == Some(self.player_id)
+        {
+            return Some(GameCommand::AutoClaim(game_id));
+        }
+
+        None
+    }
+
+    fn execute_auto_decrypt(
+        &mut self,
+        model: &mut GameModel,
+        game_id: u32,
+        step: DecryptionStep,
+    ) -> anyhow::Result<()> {
+        let cards = self
+            .poker
+            .get_cards(game_id)
+            .ok_or_else(|| anyhow::anyhow!("Cards not found for game {}", game_id))?;
+        self.handle_decryption_step(step, game_id, &cards, model)
+    }
+
+    fn execute_auto_compare(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+        let game = self
+            .poker
+            .get_games(game_id)
+            .ok_or_else(|| anyhow::anyhow!("Game {} not found", game_id))?;
+        let new_state = model.current_state;
+        self.handle_compare_hands(game_id, &game, new_state, model)
+    }
+
+    fn execute_auto_claim(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+        let game = self
+            .poker
+            .get_games(game_id)
+            .ok_or_else(|| anyhow::anyhow!("Game {} not found", game_id))?;
+        let new_state = model.current_state;
+        self.handle_claim_prize(game_id, &game, new_state, model)
+    }
+}
+
+impl<N: Network, M: VMManager<N>> Clone for PokerGame<N, M> {
+    fn clone(&self) -> Self {
+        Self {
+            account: self.account.clone(),
+            secret: self.secret,
+            secret_inv: self.secret_inv,
+            poker: self.poker.clone(),
+            credits: self.credits.clone(),
+            player_id: self.player_id,
+            keys: self.keys.clone(),
+            card_hashes: self.card_hashes.clone(),
+        }
     }
 }
 
@@ -776,7 +852,8 @@ impl Chip {
     }
 }
 
-pub trait GameHandle {
+pub trait GameHandle: Send {
+    fn clone_handle(&self) -> Box<dyn GameHandle>;
     fn check_game_exists(&self, game_id: u32) -> bool;
     fn get_game_state(&self, game_id: u32) -> Option<u8>;
     fn get_player_id(&self) -> u8;
@@ -786,7 +863,13 @@ pub trait GameHandle {
     fn get_player_id_from_address(&self, game_id: u32) -> Option<u8>;
     fn initialize_game(&mut self, model: &mut GameModel) -> anyhow::Result<()>;
     fn join_game(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
-    fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn refresh_game_state(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<bool>;
+    fn detect_auto_action(
+        &self,
+        model: &GameModel,
+        game_id: u32,
+        state_changed: bool,
+    ) -> Option<GameCommand>;
     fn place_bet(
         &mut self,
         model: &mut GameModel,
@@ -794,14 +877,25 @@ pub trait GameHandle {
         action: crate::game_state::BettingAction,
         amount: u64,
     ) -> anyhow::Result<()>;
-    fn compare_hands(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
     fn search_for_player_game(&self, model: &mut GameModel) -> Option<u32>;
     fn try_set_player_id(&mut self, game_id: u32) -> anyhow::Result<()>;
     fn new_shuffle(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
     fn shuffle_existing_deck(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn execute_auto_decrypt(
+        &mut self,
+        model: &mut GameModel,
+        game_id: u32,
+        step: DecryptionStep,
+    ) -> anyhow::Result<()>;
+    fn execute_auto_compare(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
+    fn execute_auto_claim(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()>;
 }
 
-impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
+impl<N: Network, M: VMManager<N> + 'static> GameHandle for PokerGame<N, M> {
+    fn clone_handle(&self) -> Box<dyn GameHandle> {
+        Box::new(self.clone())
+    }
+
     fn check_game_exists(&self, game_id: u32) -> bool {
         self.poker.get_games(game_id).is_some()
     }
@@ -928,8 +1022,17 @@ impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
         Ok(())
     }
 
-    fn poll_game_state(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
-        self.poll_game_state(model, game_id)
+    fn refresh_game_state(&self, model: &mut GameModel, game_id: u32) -> anyhow::Result<bool> {
+        self.refresh_game_state(model, game_id)
+    }
+
+    fn detect_auto_action(
+        &self,
+        model: &GameModel,
+        game_id: u32,
+        state_changed: bool,
+    ) -> Option<GameCommand> {
+        self.detect_auto_action(model, game_id, state_changed)
     }
 
     fn place_bet(
@@ -997,12 +1100,21 @@ impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
         Ok(())
     }
 
-    fn compare_hands(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
-        model.log_action_start("Comparing hands".to_string());
-        self.poker.compare_hands(&self.account, game_id)?;
-        model.log_action_complete();
+    fn execute_auto_decrypt(
+        &mut self,
+        model: &mut GameModel,
+        game_id: u32,
+        step: DecryptionStep,
+    ) -> anyhow::Result<()> {
+        self.execute_auto_decrypt(model, game_id, step)
+    }
 
-        Ok(())
+    fn execute_auto_compare(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+        self.execute_auto_compare(model, game_id)
+    }
+
+    fn execute_auto_claim(&mut self, model: &mut GameModel, game_id: u32) -> anyhow::Result<()> {
+        self.execute_auto_claim(model, game_id)
     }
 
     fn search_for_player_game(&self, model: &mut GameModel) -> Option<u32> {
@@ -1091,7 +1203,7 @@ impl<N: Network, M: VMManager<N>> GameHandle for PokerGame<N, M> {
     }
 }
 
-pub fn new_interpreter_game() -> anyhow::Result<[Box<dyn GameHandle>; 3]> {
+pub fn new_local_game() -> anyhow::Result<[Box<dyn GameHandle>; 3]> {
     let vm = LocalVM::new()?;
     let games = [
         Box::new(PokerGame::new(
@@ -1178,28 +1290,331 @@ pub enum GameCommand {
     InitializeGame(u32),
     JoinGame(u32),
     SearchForGame,
-    PollGameState(u32),
+    RefreshGameState(u32),
     PlaceBet {
         game_id: u32,
         action: crate::game_state::BettingAction,
         amount: u64,
     },
-    CompareHands(u32),
-    NewShuffle(u32),
+    AutoDecrypt {
+        game_id: u32,
+        step: DecryptionStep,
+    },
+    AutoNewShuffle(u32),
+    AutoShuffleDeck(u32),
+    AutoCompare(u32),
+    AutoClaim(u32),
+}
+
+impl GameCommand {
+    fn is_sync(&self) -> bool {
+        matches!(self, Self::RefreshGameState(_) | Self::SearchForGame)
+    }
+
+    fn background_label(&self) -> &'static str {
+        match self {
+            Self::InitializeGame(_) => "Creating game",
+            Self::JoinGame(_) => "Joining game",
+            Self::SearchForGame => "Searching for game",
+            Self::RefreshGameState(_) => "Updating game state",
+            Self::PlaceBet { .. } => "Submitting bet",
+            Self::AutoDecrypt { step, .. } => step.log_message(),
+            Self::AutoNewShuffle(_) => "Starting new hand",
+            Self::AutoShuffleDeck(_) => "Shuffling deck",
+            Self::AutoCompare(_) => "Comparing hands",
+            Self::AutoClaim(_) => "Claiming prize",
+        }
+    }
+}
+
+struct RunningCommand {
+    join_handle: JoinHandle<CommandResult>,
+}
+
+struct CommandResult {
+    handle: Option<Box<dyn GameHandle>>,
+    model: Option<GameModel>,
+    next_command: Option<GameCommand>,
+    message: Option<GameMessage>,
 }
 
 pub struct Game {
-    handle: Box<dyn GameHandle>,
+    handle: Option<Box<dyn GameHandle>>,
+    refresh_handle: Option<Box<dyn GameHandle>>,
     pub model: GameModel,
     pending_command: Option<GameCommand>,
+    running_command: Option<RunningCommand>,
 }
 
 impl Game {
     pub fn new(handle: Box<dyn GameHandle>, network_type: NetworkType) -> Self {
         Self {
-            handle,
+            handle: Some(handle),
+            refresh_handle: None,
             model: GameModel::new(network_type),
             pending_command: None,
+            running_command: None,
+        }
+    }
+
+    fn reader(&self) -> &dyn GameHandle {
+        if let Some(ref refresh) = self.refresh_handle {
+            refresh.as_ref()
+        } else {
+            self.handle
+                .as_deref()
+                .expect("handle must exist when no background work is running")
+        }
+    }
+
+    fn run_sync_command(
+        handle: &mut dyn GameHandle,
+        model: &mut GameModel,
+        command: GameCommand,
+    ) -> CommandResult {
+        match command {
+            GameCommand::RefreshGameState(game_id) => {
+                let refresh_result = handle.refresh_game_state(model, game_id);
+                let state_changed = refresh_result.as_ref().copied().unwrap_or(false);
+                let next_command = if refresh_result.is_ok() {
+                    handle.detect_auto_action(model, game_id, state_changed)
+                } else {
+                    None
+                };
+                CommandResult {
+                    handle: None,
+                    model: None,
+                    next_command,
+                    message: Some(GameMessage::GameStatePolled(
+                        refresh_result.map(|_| ()).map_err(|e| e.to_string()),
+                    )),
+                }
+            }
+
+            GameCommand::SearchForGame => {
+                if let Some(game_id) = model.game_id {
+                    CommandResult {
+                        handle: None,
+                        model: None,
+                        next_command: Some(GameCommand::RefreshGameState(game_id)),
+                        message: None,
+                    }
+                } else {
+                    let found_id = handle.search_for_player_game(model);
+                    if let Some(game_id) = found_id {
+                        model.game_id = Some(game_id);
+                        model.log(format!("Found game {}", game_id));
+                        if let Err(e) = handle.try_set_player_id(game_id) {
+                            model.log(format!("Warning: Could not determine player ID: {}", e));
+                        } else {
+                            model.current_player_id = handle.get_player_id();
+                            model.log(format!("You are Player {}", model.current_player_id));
+                        }
+                        CommandResult {
+                            handle: None,
+                            model: None,
+                            next_command: Some(GameCommand::RefreshGameState(game_id)),
+                            message: None,
+                        }
+                    } else {
+                        model.last_known_game_id += 1;
+                        CommandResult {
+                            handle: None,
+                            model: None,
+                            next_command: Some(GameCommand::SearchForGame),
+                            message: None,
+                        }
+                    }
+                }
+            }
+            _ => unreachable!("non-sync command passed to run_sync_command"),
+        }
+    }
+
+    fn run_background_command(
+        mut handle: Box<dyn GameHandle>,
+        mut model: GameModel,
+        command: GameCommand,
+    ) -> CommandResult {
+        let message = match command {
+            GameCommand::InitializeGame(game_id) => {
+                model.log(format!("Creating new game {}", game_id));
+                let result = handle
+                    .initialize_game(&mut model)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::GameInitialized(result))
+            }
+
+            GameCommand::JoinGame(game_id) => {
+                let player_num = if handle.get_game_state(game_id) == Some(0) {
+                    2
+                } else {
+                    3
+                };
+                model.log(format!("Joining game {} as Player {}", game_id, player_num));
+                let result = handle
+                    .join_game(&mut model, game_id)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::GameJoined(result))
+            }
+
+            GameCommand::PlaceBet {
+                game_id,
+                action,
+                amount,
+            } => {
+                let result = handle
+                    .place_bet(&mut model, game_id, action, amount)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::BetPlaced(result))
+            }
+
+            GameCommand::AutoDecrypt { game_id, step } => {
+                let result = handle
+                    .execute_auto_decrypt(&mut model, game_id, step)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::GameStatePolled(result))
+            }
+
+            GameCommand::AutoNewShuffle(game_id) => {
+                let result = handle
+                    .new_shuffle(&mut model, game_id)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::NewShuffleComplete(result))
+            }
+
+            GameCommand::AutoShuffleDeck(game_id) => {
+                let result = handle
+                    .shuffle_existing_deck(&mut model, game_id)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::NewShuffleComplete(result))
+            }
+
+            GameCommand::AutoCompare(game_id) => {
+                let result = handle
+                    .execute_auto_compare(&mut model, game_id)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::HandsCompared(result))
+            }
+
+            GameCommand::AutoClaim(game_id) => {
+                let result = handle
+                    .execute_auto_claim(&mut model, game_id)
+                    .map_err(|e| e.to_string());
+                Some(GameMessage::GameStatePolled(result))
+            }
+
+            _ => None,
+        };
+
+        model.background_task = None;
+        model.background_task_started_ms = None;
+
+        CommandResult {
+            handle: Some(handle),
+            model: Some(model),
+            next_command: None,
+            message,
+        }
+    }
+
+    fn apply_command_result(&mut self, result: CommandResult) -> Option<GameMessage> {
+        if let Some(model) = result.model {
+            self.model = model;
+        }
+        if let Some(handle) = result.handle {
+            self.handle = Some(handle);
+        }
+        if let Some(next) = result.next_command {
+            self.pending_command = Some(next);
+        }
+        result.message
+    }
+
+    pub fn try_start_pending_command(&mut self) -> Option<GameMessage> {
+        if self.running_command.is_some() {
+            return None;
+        }
+
+        let command = self.pending_command.take()?;
+
+        if command.is_sync() {
+            let result = if self.refresh_handle.is_some() {
+                let mut reader_handle = self.reader().clone_handle();
+                Self::run_sync_command(reader_handle.as_mut(), &mut self.model, command)
+            } else {
+                let mut handle = self
+                    .handle
+                    .take()
+                    .expect("handle must exist to run sync command");
+                let result = Self::run_sync_command(handle.as_mut(), &mut self.model, command);
+                self.handle = Some(handle);
+                result
+            };
+            return self.apply_command_result(result);
+        }
+
+        self.model.background_task =
+            Some(format!("Generating proof: {}", command.background_label()));
+        self.model.background_task_started_ms = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0),
+        );
+
+        let handle = self
+            .handle
+            .take()
+            .expect("handle must exist to start background command");
+        self.refresh_handle = Some(handle.clone_handle());
+        let worker_model = self.model.clone();
+
+        let join_handle =
+            thread::spawn(move || Self::run_background_command(handle, worker_model, command));
+
+        self.running_command = Some(RunningCommand { join_handle });
+        None
+    }
+
+    pub fn poll_background_command(&mut self) -> Option<GameMessage> {
+        let running = self.running_command.as_ref()?;
+        if !running.join_handle.is_finished() {
+            return None;
+        }
+
+        let running = self.running_command.take().unwrap();
+        let result = running
+            .join_handle
+            .join()
+            .expect("background command thread panicked");
+        self.refresh_handle = None;
+        self.model.background_task = None;
+        self.model.background_task_started_ms = None;
+        self.apply_command_result(result)
+    }
+
+    pub fn is_running_background(&self) -> bool {
+        self.running_command.is_some()
+    }
+
+    fn process_message(&mut self, msg: GameMessage) {
+        let mut current = Some(msg);
+        while let Some(msg) = current {
+            current = self.update(msg);
+        }
+    }
+
+    pub fn drive(&mut self) {
+        loop {
+            while let Some(msg) = self.poll_background_command() {
+                self.process_message(msg);
+            }
+            self.update(GameMessage::Tick);
+            match self.try_start_pending_command() {
+                Some(msg) => self.process_message(msg),
+                None => break,
+            }
         }
     }
 
@@ -1296,11 +1711,11 @@ impl Game {
                             self.model.game_id = Some(id);
                             self.model.screen = Screen::InGame;
 
-                            let game_exists = self.handle.check_game_exists(id);
-                            if let Some(state) = self.handle.get_game_state(id) {
+                            let game_exists = self.reader().check_game_exists(id);
+                            if let Some(state) = self.reader().get_game_state(id) {
                                 match state {
                                     0 | 1 => {
-                                        if self.handle.check_address_conflict(id) {
+                                        if self.reader().check_address_conflict(id) {
                                             self.model.log(format!(
                                                 "Cannot join game {}: Your address is already a player in this game",
                                                 id
@@ -1315,7 +1730,8 @@ impl Game {
                                             id
                                         ));
                                         self.model.game_initialized = true;
-                                        self.pending_command = Some(GameCommand::PollGameState(id));
+                                        self.pending_command =
+                                            Some(GameCommand::RefreshGameState(id));
                                     }
                                 }
                             } else if !game_exists {
@@ -1426,12 +1842,12 @@ impl Game {
             }
 
             GameMessage::Tick => {
-                if self.pending_command.is_none()
-                    && self.model.game_initialized
+                if self.model.game_initialized
                     && self.model.should_poll()
+                    && self.pending_command.is_none()
                     && let Some(game_id) = self.model.game_id
                 {
-                    self.pending_command = Some(GameCommand::PollGameState(game_id));
+                    self.pending_command = Some(GameCommand::RefreshGameState(game_id));
                 }
                 None
             }
@@ -1445,7 +1861,7 @@ impl Game {
                 match result {
                     Ok(()) => {
                         self.model.game_initialized = true;
-                        self.model.current_player_id = self.handle.get_player_id();
+                        self.model.current_player_id = self.reader().get_player_id();
                         self.pending_command = Some(GameCommand::SearchForGame);
                     }
                     Err(e) => {
@@ -1459,9 +1875,9 @@ impl Game {
                 match result {
                     Ok(()) => {
                         self.model.game_initialized = true;
-                        self.model.current_player_id = self.handle.get_player_id();
+                        self.model.current_player_id = self.reader().get_player_id();
                         if let Some(game_id) = self.model.game_id {
-                            self.pending_command = Some(GameCommand::PollGameState(game_id));
+                            self.pending_command = Some(GameCommand::RefreshGameState(game_id));
                         }
                     }
                     Err(e) => {
@@ -1483,7 +1899,7 @@ impl Game {
                     Ok(()) => {
                         self.model.betting_ui = None;
                         if let Some(game_id) = self.model.game_id {
-                            self.pending_command = Some(GameCommand::PollGameState(game_id));
+                            self.pending_command = Some(GameCommand::RefreshGameState(game_id));
                         }
                     }
                     Err(e) => {
@@ -1497,7 +1913,7 @@ impl Game {
                 match result {
                     Ok(()) => {
                         if let Some(game_id) = self.model.game_id {
-                            self.pending_command = Some(GameCommand::PollGameState(game_id));
+                            self.pending_command = Some(GameCommand::RefreshGameState(game_id));
                         }
                     }
                     Err(e) => {
@@ -1511,7 +1927,7 @@ impl Game {
                 match result {
                     Ok(()) => {
                         if let Some(game_id) = self.model.game_id {
-                            self.pending_command = Some(GameCommand::PollGameState(game_id));
+                            self.pending_command = Some(GameCommand::RefreshGameState(game_id));
                         }
                     }
                     Err(e) => {
@@ -1534,98 +1950,6 @@ impl Game {
 
     pub fn should_quit(&self) -> bool {
         self.model.should_quit
-    }
-
-    pub fn execute_pending_command(&mut self) -> Option<GameMessage> {
-        let command = self.pending_command.take()?;
-
-        match command {
-            GameCommand::InitializeGame(game_id) => {
-                self.model.log(format!("Creating new game {}", game_id));
-                let result = self
-                    .handle
-                    .initialize_game(&mut self.model)
-                    .map_err(|e| e.to_string());
-                Some(GameMessage::GameInitialized(result))
-            }
-
-            GameCommand::JoinGame(game_id) => {
-                let player_num = if self.handle.get_game_state(game_id) == Some(0) {
-                    2
-                } else {
-                    3
-                };
-                self.model
-                    .log(format!("Joining game {} as Player {}", game_id, player_num));
-                let result = self
-                    .handle
-                    .join_game(&mut self.model, game_id)
-                    .map_err(|e| e.to_string());
-                Some(GameMessage::GameJoined(result))
-            }
-
-            GameCommand::SearchForGame => {
-                if let Some(game_id) = self.model.game_id {
-                    self.pending_command = Some(GameCommand::PollGameState(game_id));
-                    None
-                } else {
-                    let found_id = self.handle.search_for_player_game(&mut self.model);
-                    if let Some(game_id) = found_id {
-                        self.model.game_id = Some(game_id);
-                        self.model.log(format!("Found game {}", game_id));
-                        if let Err(e) = self.handle.try_set_player_id(game_id) {
-                            self.model
-                                .log(format!("Warning: Could not determine player ID: {}", e));
-                        } else {
-                            self.model.current_player_id = self.handle.get_player_id();
-                            self.model
-                                .log(format!("You are Player {}", self.model.current_player_id));
-                        }
-                        self.pending_command = Some(GameCommand::PollGameState(game_id));
-                    } else {
-                        self.model.last_known_game_id += 1;
-                        self.pending_command = Some(GameCommand::SearchForGame);
-                    }
-                    None
-                }
-            }
-
-            GameCommand::PollGameState(game_id) => {
-                let result = self
-                    .handle
-                    .poll_game_state(&mut self.model, game_id)
-                    .map_err(|e| e.to_string());
-                Some(GameMessage::GameStatePolled(result))
-            }
-
-            GameCommand::PlaceBet {
-                game_id,
-                action,
-                amount,
-            } => {
-                let result = self
-                    .handle
-                    .place_bet(&mut self.model, game_id, action, amount)
-                    .map_err(|e| e.to_string());
-                Some(GameMessage::BetPlaced(result))
-            }
-
-            GameCommand::CompareHands(game_id) => {
-                let result = self
-                    .handle
-                    .compare_hands(&mut self.model, game_id)
-                    .map_err(|e| e.to_string());
-                Some(GameMessage::HandsCompared(result))
-            }
-
-            GameCommand::NewShuffle(game_id) => {
-                let result = self
-                    .handle
-                    .new_shuffle(&mut self.model, game_id)
-                    .map_err(|e| e.to_string());
-                Some(GameMessage::NewShuffleComplete(result))
-            }
-        }
     }
 
     pub fn render_logs(&self, frame: &mut Frame, area: Rect) {
@@ -1784,22 +2108,30 @@ struct PlayerWidget {
     chips: u16,
     is_eliminated: bool,
     dealer_button: u8,
+    is_active_turn: bool,
+    is_proving: bool,
+    proving_started_ms: Option<u64>,
+}
+
+struct PlayerWidgetState {
+    is_eliminated: bool,
+    dealer_button: u8,
+    is_active_turn: bool,
+    is_proving: bool,
+    proving_started_ms: Option<u64>,
 }
 
 impl PlayerWidget {
-    fn new(
-        player_id: u8,
-        cards: [u8; 2],
-        chips: u16,
-        is_eliminated: bool,
-        dealer_button: u8,
-    ) -> Self {
+    fn new(player_id: u8, cards: [u8; 2], chips: u16, state: PlayerWidgetState) -> Self {
         Self {
             player_id,
             cards,
             chips,
-            is_eliminated,
-            dealer_button,
+            is_eliminated: state.is_eliminated,
+            dealer_button: state.dealer_button,
+            is_active_turn: state.is_active_turn,
+            is_proving: state.is_proving,
+            proving_started_ms: state.proving_started_ms,
         }
     }
 }
@@ -1808,6 +2140,8 @@ impl Widget for PlayerWidget {
     fn render(self, area: Rect, buf: &mut ratatui::prelude::Buffer) {
         let block_style = if self.is_eliminated {
             Style::default().fg(Color::DarkGray)
+        } else if self.is_active_turn {
+            Style::default().add_modifier(Modifier::BOLD)
         } else {
             Style::default()
         };
@@ -1893,6 +2227,35 @@ impl Widget for PlayerWidget {
             let dealer_style = Style::default().fg(Color::Black).bg(Color::White);
             buf.set_string(dealer_x, dealer_y, "D", dealer_style);
         }
+
+        if self.is_proving && inner.width > 0 && inner.height > 0 {
+            let proving_text = proving_indicator_text(self.proving_started_ms);
+            let shown = trim_to_width(&proving_text, inner.width as usize);
+            let proving_style = Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD);
+            let y = inner.y + inner.height.saturating_sub(1);
+            buf.set_string(inner.x, y, shown, proving_style);
+        }
+    }
+}
+
+fn proving_indicator_text(started_ms: Option<u64>) -> String {
+    const DOT_FRAMES: [&str; 4] = [".  ", " . ", "  .", "   "];
+    let start_ms = started_ms.unwrap_or(0);
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0);
+    let frame = ((now_ms.saturating_sub(start_ms) / 250) % 4) as usize;
+    format!("Proving{}", DOT_FRAMES[frame])
+}
+
+fn trim_to_width(text: &str, width: usize) -> &str {
+    if text.len() > width {
+        &text[..width]
+    } else {
+        text
     }
 }
 
@@ -2124,6 +2487,9 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
     let current_player = model.current_player_id;
     let (opponent1, opponent2) = get_opponents(current_player);
     let state = model.current_state;
+    let acting_player = state.and_then(|s| s.current_player());
+    let is_proving_local = model.background_task.is_some();
+    let proving_started_ms = model.background_task_started_ms;
 
     let is_betting_round = matches!(state, Some(s) if s.is_betting_state());
     let current_bet_1 = chips.get_current_bet(opponent1);
@@ -2154,8 +2520,13 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
             opponent1,
             cards.get_cards(opponent1),
             chips.get_chips(opponent1),
-            is_opponent1_eliminated,
-            model.dealer_button,
+            PlayerWidgetState {
+                is_eliminated: is_opponent1_eliminated,
+                dealer_button: model.dealer_button,
+                is_active_turn: acting_player == Some(opponent1),
+                is_proving: false,
+                proving_started_ms: None,
+            },
         ),
         top_layout[0],
     );
@@ -2164,8 +2535,13 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
             opponent2,
             cards.get_cards(opponent2),
             chips.get_chips(opponent2),
-            is_opponent2_eliminated,
-            model.dealer_button,
+            PlayerWidgetState {
+                is_eliminated: is_opponent2_eliminated,
+                dealer_button: model.dealer_button,
+                is_active_turn: acting_player == Some(opponent2),
+                is_proving: false,
+                proving_started_ms: None,
+            },
         ),
         top_layout[1],
     );
@@ -2245,8 +2621,13 @@ fn render_game_table(frame: &mut Frame, area: Rect, model: &GameModel) {
             current_player,
             cards.get_cards(current_player),
             chips.get_chips(current_player),
-            is_current_eliminated,
-            model.dealer_button,
+            PlayerWidgetState {
+                is_eliminated: is_current_eliminated,
+                dealer_button: model.dealer_button,
+                is_active_turn: acting_player == Some(current_player),
+                is_proving: is_proving_local,
+                proving_started_ms,
+            },
         ),
         player_area,
     );

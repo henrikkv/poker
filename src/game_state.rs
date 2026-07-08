@@ -2,7 +2,7 @@ use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkType {
-    Interpreter,
+    Local,
     Testnet,
     Mainnet,
 }
@@ -10,7 +10,7 @@ pub enum NetworkType {
 impl NetworkType {
     pub fn name(&self) -> &'static str {
         match self {
-            NetworkType::Interpreter => "Interpreter",
+            NetworkType::Local => "Local",
             NetworkType::Testnet => "Testnet",
             NetworkType::Mainnet => "Mainnet",
         }
@@ -18,7 +18,7 @@ impl NetworkType {
 
     pub fn poll_interval_ms(&self) -> u64 {
         match self {
-            NetworkType::Interpreter => 100,
+            NetworkType::Local => 100,
             NetworkType::Testnet => 1000,
             NetworkType::Mainnet => 1000,
         }
@@ -116,7 +116,7 @@ impl BettingAction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BettingUIState {
     pub selected_action: BettingAction,
     pub raise_amount: u64,
@@ -172,7 +172,7 @@ impl BettingUIState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GameModel {
     pub game_id: Option<u32>,
     pub game_initialized: bool,
@@ -205,6 +205,8 @@ pub struct GameModel {
     pub eliminated_players: [bool; 3],
     pub game_winner: Option<u8>,
     pub dealer_button: u8,
+    pub background_task: Option<String>,
+    pub background_task_started_ms: Option<u64>,
 }
 
 impl GameModel {
@@ -234,6 +236,8 @@ impl GameModel {
             eliminated_players: [false, false, false],
             game_winner: None,
             dealer_button: 0,
+            background_task: None,
+            background_task_started_ms: None,
         };
         model.log(format!("Starting poker with {}", network_type.name()));
         model

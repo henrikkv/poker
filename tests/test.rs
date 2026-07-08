@@ -11,7 +11,7 @@ const ENDPOINT: &str = "http://localhost:3030";
 const PRIVATE_KEY: &str = "APrivateKey1zkp8CZNn3yeCseEtxuVPbDCwSyhGW6yZKUYKfgXmcpoGPWH";
 
 #[test]
-fn poker_interpreter() {
+fn poker_local() {
     leo_bindings::utils::init_test_logger();
     let alice = Account::from_str(PRIVATE_KEY).unwrap();
     let bob = Account::dev_account(1).unwrap();

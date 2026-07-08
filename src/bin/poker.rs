@@ -74,18 +74,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             game.view(f, chunks[0]);
             game.render_logs(f, chunks[1]);
         })?;
+
         if let Some(msg) = handle_event()? {
             let mut current_msg = Some(msg);
             while let Some(msg) = current_msg {
                 current_msg = game.update(msg);
             }
-            while let Some(result_msg) = game.execute_pending_command() {
-                current_msg = Some(result_msg);
-                while let Some(msg) = current_msg {
-                    current_msg = game.update(msg);
-                }
-            }
         }
+
+        game.drive();
     }
 
     restore_terminal(&mut terminal)?;
@@ -134,10 +131,10 @@ fn restore_terminal(
 }
 
 fn handle_event() -> Result<Option<GameMessage>, Box<dyn std::error::Error>> {
-    if event::poll(Duration::from_millis(100))? {
-        if let Event::Key(key) = event::read()? {
-            return Ok(handle_game_key(key));
-        }
+    if event::poll(Duration::from_millis(100))?
+        && let Event::Key(key) = event::read()?
+    {
+        return Ok(handle_game_key(key));
     }
-    Ok(Some(GameMessage::Tick))
+    Ok(None)
 }

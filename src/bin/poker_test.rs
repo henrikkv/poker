@@ -5,7 +5,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use poker::game::{
-    DEFAULT_ENDPOINT, Game, GameMessage, handle_game_key, new_interpreter_game, new_testnet_game,
+    DEFAULT_ENDPOINT, Game, GameMessage, handle_game_key, new_local_game, new_testnet_game,
 };
 use poker::game_state::NetworkType;
 use ratatui::{
@@ -29,7 +29,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Interpreter,
+    Local,
     Testnet {
         #[arg(short, long, default_value = DEFAULT_ENDPOINT)]
         endpoint: String,
@@ -43,17 +43,15 @@ struct TestModel {
 
 enum TestMessage {
     GameMessage(GameMessage),
-
     NextPlayer,
     PrevPlayer,
-    TickAll,
 }
 
 impl TestModel {
     fn new(network_type: NetworkType, endpoint: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let games = match network_type {
-            NetworkType::Interpreter => {
-                let [g0, g1, g2] = new_interpreter_game()?;
+            NetworkType::Local => {
+                let [g0, g1, g2] = new_local_game()?;
                 [
                     Game::new(g0, network_type),
                     Game::new(g1, network_type),
@@ -90,16 +88,6 @@ impl TestModel {
 
             TestMessage::PrevPlayer => {
                 self.active_index = (self.active_index + 2) % 3;
-                None
-            }
-
-            TestMessage::TickAll => {
-                for game in &mut self.games {
-                    game.update(GameMessage::Tick);
-                    while let Some(result_msg) = game.execute_pending_command() {
-                        game.update(result_msg);
-                    }
-                }
                 None
             }
         }
@@ -153,7 +141,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
 
     let (network_type, endpoint) = match cli.command {
-        Commands::Interpreter => (NetworkType::Interpreter, DEFAULT_ENDPOINT.to_string()),
+        Commands::Local => (NetworkType::Local, DEFAULT_ENDPOINT.to_string()),
         Commands::Testnet { endpoint } => {
             let endpoint = if endpoint == DEFAULT_ENDPOINT {
                 std::env::var("ENDPOINT").unwrap_or(endpoint)
@@ -176,12 +164,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             while let Some(msg) = current_msg {
                 current_msg = model.update(msg);
             }
-            while let Some(result_msg) = model.games[model.active_index].execute_pending_command() {
-                current_msg = Some(TestMessage::GameMessage(result_msg));
-                while let Some(msg) = current_msg {
-                    current_msg = model.update(msg);
-                }
-            }
+        }
+
+        for game in &mut model.games {
+            game.drive();
         }
     }
 
@@ -218,5 +204,5 @@ fn handle_event() -> Result<Option<TestMessage>, Box<dyn std::error::Error>> {
         });
     }
 
-    Ok(Some(TestMessage::TickAll))
+    Ok(None)
 }

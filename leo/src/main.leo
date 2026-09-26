@@ -251,7 +251,7 @@ program mental_poker.aleo {
 
         let password_hash: u128 = password == 0u128 ? 0u128 : BHP256::hash_to_u128(password);
 
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         let keys: Keys = Keys {
             owner: signer,
             secret: secret,
@@ -297,7 +297,7 @@ program mental_poker.aleo {
 
         let password_hash: u128 = password == 0u128 ? 0u128 : BHP256::hash_to_u128(password);
 
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         let keys: Keys = Keys {
             owner: signer,
             secret: secret,
@@ -378,7 +378,7 @@ program mental_poker.aleo {
         }
     }
     fn bet(game_id: u32, amount: u16) -> Final {
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         return final { finalize_bet(game_id, amount, signer); };
     }
     final fn finalize_bet(game_id: u32, amount: u16, signer: address) {
@@ -605,7 +605,7 @@ program mental_poker.aleo {
         let new_other1: [group; 2] = [other1_card0_dec, other1_card1_dec];
         let new_other2: [group; 2] = [other2_card0_dec, other2_card1_dec];
         
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         return (keys, final { finalize_decrypt_hands(game_id, other1, other2, new_other1, new_other2, signer); });
     }
     final fn finalize_decrypt_hands(game_id: u32, other1: [group; 2], other2: [group; 2], new_other1: [group; 2], new_other2: [group; 2], signer: address) {
@@ -701,7 +701,7 @@ program mental_poker.aleo {
         let flop2_u8: u8 = to_u8(flop2);
         let flop_u8: [u8; 3] = [flop0_u8, flop1_u8, flop2_u8];
 
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         return (keys, final { finalize_decrypt_flop(game_id, flop, flop_dec, flop_u8, signer); });
     }
     final fn finalize_decrypt_flop(game_id: u32, flop: [group; 3], flop_dec: [group; 3], flop_u8: [u8; 3], signer: address) {
@@ -780,7 +780,7 @@ program mental_poker.aleo {
         Mapping::set(games, game_id, new_game);
     }
     fn fold(game_id: u32) -> Final {
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         return final { finalize_fold(game_id, signer); };
     }
     
@@ -908,7 +908,7 @@ program mental_poker.aleo {
     fn decrypt_turn_river(game_id: u32, card: group, keys: Keys) -> (Keys, Final) {
         let card_dec: group = decrypt_card(keys.secret_inv, card);
         let card_u8: u8 = to_u8(card_dec);
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         return (keys, final { finalize_decrypt_turn_river(game_id, card, card_dec, card_u8, signer); });
     }
     final fn finalize_decrypt_turn_river(game_id: u32, card: group, card_dec: group, card_u8: u8, signer: address) {
@@ -1059,7 +1059,7 @@ program mental_poker.aleo {
         let c0: u8 = to_u8(decrypt_card(keys.secret_inv, hand[0u8]));
         let c1: u8 = to_u8(decrypt_card(keys.secret_inv, hand[1u8]));
 
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         return (keys, final { finalize_showdown(game_id, signer, hand, [c0, c1]); });
     }
     final fn finalize_showdown(game_id: u32, signer: address, hand: [group; 2], hand_u8: [u8; 2]) {
@@ -1119,7 +1119,7 @@ program mental_poker.aleo {
     }
 
     fn compare_hands(game_id: u32) -> Final {
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         return final { finalize_compare_hands(game_id, signer); };
     }
     final fn finalize_compare_hands(game_id: u32, signer: address) {
@@ -1545,7 +1545,7 @@ program mental_poker.aleo {
 
         assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
 
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         let keys: Keys = Keys {
             owner: signer,
             secret: secret,
@@ -1667,7 +1667,7 @@ program mental_poker.aleo {
 
         assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
 
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         let keys: Keys = Keys {
             owner: signer,
             secret: secret,
@@ -1726,7 +1726,7 @@ program mental_poker.aleo {
     }
 
     fn claim_prize(game_id: u32, public prize: u64) -> Final {
-        let signer: address = self.signer;
+        let signer: address = std::ctx::signer();
         let transfer_future: Final = credits.aleo::transfer_public(signer, prize);
         return final { finalize_claim_prize(game_id, signer, prize, transfer_future); };
     }

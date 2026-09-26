@@ -26,3 +26,11 @@ path = "src/bin/poker.rs"
 [[bin]]
 name = "poker_test"
 path = "src/bin/poker_test.rs"
+
+[profile.dev]
+opt-level = 3
+incremental = true
+
+[profile.test]
+opt-level = 3
+incremental = true

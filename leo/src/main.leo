@@ -227,7 +227,7 @@ struct RevealedCards {
     river: u8,
 }
 
-program mental_poker.aleo {
+program mental_poker2.aleo {
 
     mapping next_game_id: u32 => u32;
 
@@ -258,7 +258,7 @@ program mental_poker.aleo {
             secret_inv: secret_inv,
         };
 
-        let transfer_future: Final = credits.aleo::transfer_public_as_signer(mental_poker.aleo, buy_in);
+        let transfer_future: Final = credits.aleo::transfer_public_as_signer(mental_poker2.aleo, buy_in);
 
         return (keys, final { finalize_new_game(deck_enc, signer, buy_in, password_hash, blind_frequency, transfer_future); });
     }
@@ -304,7 +304,7 @@ program mental_poker.aleo {
             secret_inv: secret_inv,
         };
 
-        let transfer_future: Final = credits.aleo::transfer_public_as_signer(mental_poker.aleo, buy_in);
+        let transfer_future: Final = credits.aleo::transfer_public_as_signer(mental_poker2.aleo, buy_in);
 
         return (keys, final { finalize_join_game(game_id, deck, deck_enc, signer, buy_in, password_hash, transfer_future); });
     }

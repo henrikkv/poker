@@ -6,6 +6,12 @@ export const POLL_INTERVAL_MS = 1000;
 export const MAX_LOGS = 100;
 
 export type Screen = "menu" | "createGame" | "joinGame" | "inGame";
+
+export interface SeatedTableView {
+    gameId: number;
+    playerIds: number[];
+    unfinished: boolean;
+}
 export type CreateGameField = "buyIn" | "blindFrequency" | "password";
 export type JoinGameField = "gameId" | "password";
 export type MenuOption = "createGame" | "joinGame";
@@ -143,6 +149,12 @@ export interface GameModel {
 
     lastKnownGameId: number;
 
+    seatedTables: SeatedTableView[];
+    blockedGameId: number | null;
+    inviteGameId: number | null;
+    tableName: string | null;
+    spectating: boolean;
+
     playerAddresses: [string, string, string] | null;
     eliminatedPlayers: [boolean, boolean, boolean];
     gameWinner: PlayerId | null;
@@ -175,6 +187,11 @@ export function newGameModel(networkName: string): GameModel {
         chip: null,
         bettingUi: null,
         lastKnownGameId: 0,
+        seatedTables: [],
+        blockedGameId: null,
+        inviteGameId: null,
+        tableName: null,
+        spectating: false,
         playerAddresses: null,
         eliminatedPlayers: [false, false, false],
         gameWinner: null,

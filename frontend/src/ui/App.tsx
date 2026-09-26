@@ -62,6 +62,8 @@ export function App({
                 networkName={config.networkName}
                 playPath={playPath}
                 onChangeWallet={onChangeWallet}
+                gameId={model.gameId}
+                inviteGameId={model.inviteGameId}
             />
 
             <div className="grid flex-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -74,7 +76,14 @@ export function App({
                             exit={{ opacity: 0, y: -8 }}
                             transition={{ duration: 0.18 }}
                         >
-                            {model.screen === "menu" && <Menu selected={model.selectedMenuOption} dispatch={dispatch} />}
+                            {model.screen === "menu" && (
+                                <Menu
+                                    selected={model.selectedMenuOption}
+                                    seatedTables={model.seatedTables}
+                                    blockedGameId={model.blockedGameId}
+                                    dispatch={dispatch}
+                                />
+                            )}
                             {model.screen === "createGame" && (
                                 <CreateGameForm model={model} dispatch={dispatch} />
                             )}

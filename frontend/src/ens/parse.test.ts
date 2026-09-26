@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { looksLikeEnsName, parseGameRecord, parseJoinTarget } from "./parse.js";
+import { encodeTablesRecord, looksLikeEnsName, parseGameRecord, parseJoinTarget, parseTablesRecord } from "./parse.js";
 
 describe("looksLikeEnsName", () => {
     it("accepts dotted names", () => {
@@ -38,5 +38,20 @@ describe("parseGameRecord", () => {
     it("rejects missing or non-numeric values", () => {
         expect(parseGameRecord(null)).toBeNull();
         expect(parseGameRecord("alice.eth")).toBeNull();
+    });
+});
+
+describe("parseTablesRecord", () => {
+    it("reads a JSON list of game ids, newest last", () => {
+        expect(parseTablesRecord("[2, 12, 19]")).toEqual([2, 12, 19]);
+        expect(parseTablesRecord('["2", 12]')).toEqual([2, 12]);
+        expect(encodeTablesRecord([2, 12, 12, -1])).toBe("[2,12]");
+    });
+
+    it("rejects missing or invalid values", () => {
+        expect(parseTablesRecord(null)).toEqual([]);
+        expect(parseTablesRecord("")).toEqual([]);
+        expect(parseTablesRecord("{")).toEqual([]);
+        expect(parseTablesRecord("12")).toEqual([]);
     });
 });

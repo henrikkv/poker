@@ -12,7 +12,15 @@ import {
     selectPrevAction,
     setAllIn,
 } from "./model.js";
-import { currentPlayer, describeGameState, GameState, gameStateFromU8, isBettingState } from "./state.js";
+import {
+    currentPlayer,
+    describeGameState,
+    GameState,
+    gameStateFromU8,
+    isBettingState,
+    isLobbyState,
+    isUnfinishedState,
+} from "./state.js";
 
 describe("GameState", () => {
     it("covers 0..36", () => {
@@ -21,6 +29,14 @@ describe("GameState", () => {
             expect(describeGameState(state as GameState)).toBeTruthy();
         }
         expect(gameStateFromU8(37)).toBeNull();
+    });
+
+    it("treats lobby and in-hand as unfinished, not claim", () => {
+        expect(isUnfinishedState(GameState.P2Join)).toBe(true);
+        expect(isUnfinishedState(GameState.P3Shuffle)).toBe(true);
+        expect(isUnfinishedState(GameState.P1Claim)).toBe(false);
+        expect(isLobbyState(GameState.P2Join)).toBe(true);
+        expect(isLobbyState(GameState.P1DecHand)).toBe(false);
     });
 
     it("identifies betting states", () => {

@@ -33,3 +33,5 @@ export function parseGameRecord(value: string | null | undefined): number | null
     }
     return Number(trimmed);
 }
+
+export { encodeTablesRecord, parseTablesRecord } from "./tables.js";

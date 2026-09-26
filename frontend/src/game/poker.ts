@@ -42,10 +42,30 @@ import {
     GameState,
     gameStateFromU8,
     isBettingState,
+    isUnfinishedState,
     type DecryptionStep,
     type PlayerId,
 } from "./state.js";
 import { shuffleDeck } from "./waksman.js";
+
+export type GameLookup =
+    | { status: "ok"; game: Game }
+    | { status: "missing" }
+    | { status: "error"; message: string };
+
+export interface SeatedGameInfo {
+    gameId: number;
+    playerIds: PlayerId[];
+    state: number;
+    unfinished: boolean;
+}
+
+const LOOKUP_ATTEMPTS = 3;
+const SCAN_TAIL = 8;
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export type GameCommand =
     | { type: "initializeGame" }
@@ -183,16 +203,71 @@ export class PokerGame {
         }
     }
 
-    async findSeatedGame(): Promise<number | null> {
-        const next = (await this.poker.get_next_game_id(0)) ?? 0;
-        const latest = next > 0 ? next - 1 : 0;
-        for (let gameId = latest; gameId >= 0; gameId -= 1) {
-            const game = await this.poker.get_games(gameId);
-            if (game && this.playerIdFromGame(game) !== null) {
-                return gameId;
+    async lookupGame(gameId: number, attempts = LOOKUP_ATTEMPTS): Promise<GameLookup> {
+        let lastError: string | null = null;
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+            try {
+                const game = await this.poker.get_games(gameId);
+                if (game) {
+                    return { status: "ok", game };
+                }
+            } catch (error) {
+                lastError = errorMessage(error);
+            }
+            if (attempt + 1 < attempts) {
+                await delay(400 * 2 ** attempt);
             }
         }
-        return null;
+        if (lastError) {
+            return { status: "error", message: lastError };
+        }
+        return { status: "missing" };
+    }
+
+    async findSeatedGames(knownIds: number[] = []): Promise<SeatedGameInfo[]> {
+        let latest = 0;
+        try {
+            const next = (await this.poker.get_next_game_id(0)) ?? 0;
+            latest = next > 0 ? next - 1 : 0;
+        } catch {
+            latest = Math.max(0, ...knownIds);
+        }
+        const ids = new Set(knownIds.filter((id) => Number.isInteger(id) && id >= 0));
+        for (let id = latest; id >= Math.max(0, latest - SCAN_TAIL + 1); id -= 1) {
+            ids.add(id);
+        }
+        const found: SeatedGameInfo[] = [];
+        for (const gameId of [...ids].sort((a, b) => b - a)) {
+            try {
+                const game = await this.poker.get_games(gameId);
+                if (!game) {
+                    continue;
+                }
+                const playerIds = this.seatsFromGame(game);
+                if (playerIds.length === 0) {
+                    continue;
+                }
+                found.push({
+                    gameId,
+                    playerIds,
+                    state: game.state,
+                    unfinished: isUnfinishedState(game.state),
+                });
+            } catch {
+                // A flaky read must not drop a known seat.
+            }
+        }
+        return found;
+    }
+
+    async findSeatedGame(knownIds: number[] = []): Promise<number | null> {
+        const seated = await this.findSeatedGames(knownIds);
+        return seated.find((table) => table.unfinished)?.gameId ?? seated[0]?.gameId ?? null;
+    }
+
+    async findUnfinishedSeat(knownIds: number[] = []): Promise<number | null> {
+        const seated = await this.findSeatedGames(knownIds);
+        return seated.find((table) => table.unfinished)?.gameId ?? null;
     }
 
     async initializeGame(model: GameModel): Promise<void> {
@@ -324,9 +399,6 @@ export class PokerGame {
         game: Game,
         model: GameModel,
     ): void {
-        if (!stateChanged) {
-            return;
-        }
         if (this.playerId === 0 || !isBettingState(state) || currentPlayer(state) !== this.playerId) {
             model.bettingUi = null;
             return;
@@ -336,6 +408,9 @@ export class PokerGame {
         }
         if (isPlayerEliminated(model, this.playerId) || getChips(chips, this.playerId) === 0) {
             model.bettingUi = null;
+            return;
+        }
+        if (!stateChanged && model.bettingUi !== null) {
             return;
         }
 
@@ -437,6 +512,7 @@ export class PokerGame {
                 case GameState.P2NewShuffle:
                     model.card = null;
                     model.decryptedHand = null;
+                    model.gameWinner = null;
                     if (
                         (newState === GameState.P1NewShuffle && this.playerId === 1) ||
                         (newState === GameState.P2NewShuffle && this.playerId === 2)
@@ -446,6 +522,7 @@ export class PokerGame {
                     break;
                 case GameState.P2Shuffle:
                 case GameState.P3Shuffle:
+                    model.gameWinner = null;
                     if (
                         (newState === GameState.P2Shuffle && this.playerId === 2) ||
                         (newState === GameState.P3Shuffle && this.playerId === 3)

@@ -101,6 +101,24 @@ export function describeGameState(state: GameState): string {
     return DESCRIPTIONS[state];
 }
 
+/** Lobby or in-hand. Claim states are finished enough to start another table. */
+export function isUnfinishedState(state: number): boolean {
+    return Number.isInteger(state) && state >= GameState.P2Join && state <= GameState.P3Shuffle;
+}
+
+export function isLobbyState(state: number): boolean {
+    return state === GameState.P2Join || state === GameState.P3Join;
+}
+
+export function isNewHandState(state: GameState): boolean {
+    return (
+        state === GameState.P1NewShuffle ||
+        state === GameState.P2NewShuffle ||
+        state === GameState.P2Shuffle ||
+        state === GameState.P3Shuffle
+    );
+}
+
 export function isBettingState(state: GameState): boolean {
     return (
         (state >= GameState.P1BetPre && state <= GameState.P3BetPre) ||

@@ -52,13 +52,6 @@ function EthereumEnsPanel({
         }
     }, [aleo, ens.claimSeat, ens.name]);
 
-    useEffect(() => {
-        if (gameId === null) {
-            return;
-        }
-        void ens.hydrateDirectory(gameId);
-    }, [ens.hydrateDirectory, gameId]);
-
     return (
         <section className="mt-3 rounded-2xl border border-white/10 bg-black/25 p-4 backdrop-blur">
             <p className="text-[11px] font-semibold tracking-[0.2em] text-gold/80 uppercase">ENS · Sepolia</p>
@@ -93,8 +86,9 @@ function EthereumEnsPanel({
                     this.{" "}
                     {seated ? (
                         <>
-                            <strong className="font-medium text-paper/80">Share this table</strong> writes the
-                            current game and your seat onto the name, so friends can join as {ens.name}.
+                            <strong className="font-medium text-paper/80">Share this table</strong> writes game{" "}
+                            {gameId} as the current invite and appends it to your advertised tables. Friends who
+                            join as {ens.name} resume a listed game they already sit in, or the newest open lobby.
                         </>
                     ) : (
                         <>

@@ -1,16 +1,18 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { ensurePublisherKey, publisherAccountAddress, publisherAddress, publisherWallet } from "./agent.js";
 import { POKER_PROGRAM, RECORD, tableRecordContext } from "./keys.js";
 import { parseJoinTarget } from "./parse.js";
-import { loadRoster, rememberAleo, rememberTable, type EnsRoster } from "./roster.js";
+import { encodeTablesRecord } from "./tables.js";
+import { applyDirectory, loadRoster, rememberAleo, type EnsRoster } from "./roster.js";
 import {
-    invalidateEnsProfile,
-    resolveAleoRecord,
+    cacheEnsProfile,
+    peekEnsProfile,
     resolvePrimaryName,
     resolveProfile,
     resolveTable,
+    type EnsJoinResult,
     type EnsProfile,
 } from "./resolve.js";
 import { connectEthereum, ownerWallet } from "./wallet.js";
@@ -31,7 +33,7 @@ export interface EnsContextValue {
     error: string | null;
     connect: () => Promise<void>;
     disconnect: () => void;
-    resolveJoin: (input: string) => Promise<{ gameId: number; tableName: string }>;
+    resolveJoin: (input: string) => Promise<EnsJoinResult>;
     hydrateDirectory: (gameId: number) => Promise<void>;
     publishBinding: (aleo: string) => Promise<void>;
     publishTable: (gameId: number, aleo: string, playerId: 1 | 2 | 3) => Promise<void>;
@@ -79,12 +81,7 @@ export function EnsProvider({
         }
         const next = await resolveProfile(primary);
         setProfile(next);
-        if (next.aleo) {
-            setRoster(rememberAleo(next.aleo, next.name));
-        }
-        if (next.gameId !== null) {
-            setRoster(rememberTable(next.gameId, next.name));
-        }
+        setRoster((current) => applyDirectory(next, current));
     }, []);
 
     const connect = useCallback(async () => {
@@ -104,38 +101,38 @@ export function EnsProvider({
         setError(null);
     }, []);
 
-    const bindDirectory = useCallback(async (listed: EnsProfile) => {
-        if (listed.aleo) {
-            setRoster(rememberAleo(listed.aleo, listed.name));
-        }
-        for (const seatName of Object.values(listed.seats)) {
-            if (!seatName) {
-                continue;
-            }
-            const aleo = seatName === listed.name ? listed.aleo : await resolveAleoRecord(seatName);
-            if (aleo) {
-                setRoster(rememberAleo(aleo, seatName));
-            }
-        }
+    const bindDirectory = useCallback((listed: EnsProfile) => {
+        setRoster((current) => applyDirectory(listed, current));
     }, []);
+
+    const hydratedKey = useRef<string | null>(null);
 
     const hydrateDirectory = useCallback(
         async (gameId: number) => {
-            const tableName = roster.tables[String(gameId)] ?? (profile?.gameId === gameId ? profile.name : null);
+            const tableName =
+                loadRoster().tables[String(gameId)] ??
+                (profile && (profile.gameId === gameId || profile.tables.includes(gameId)) ? profile.name : null);
             if (!tableName) {
                 return;
             }
+            const key = `${gameId}:${tableName}`;
+            if (hydratedKey.current === key) {
+                return;
+            }
+            const local = (profile?.name === tableName ? profile : null) ?? peekEnsProfile(tableName);
+            if (local) {
+                hydratedKey.current = key;
+                bindDirectory(local);
+                return;
+            }
             try {
-                const table = await resolveTable(tableName);
-                setRoster(rememberTable(table.gameId, table.name));
-                await bindDirectory(table.profile);
+                bindDirectory(await resolveProfile(tableName));
+                hydratedKey.current = key;
             } catch {
-                if (profile?.name === tableName) {
-                    await bindDirectory(profile);
-                }
+                // Keep the local roster if Sepolia is rate-limited.
             }
         },
-        [bindDirectory, profile, roster.tables],
+        [bindDirectory, profile],
     );
 
     const resolveJoin = useCallback(
@@ -145,12 +142,21 @@ export function EnsProvider({
                 throw new Error("Enter a game id or an ENS name");
             }
             if (target.kind === "gameId") {
-                return { gameId: target.gameId, tableName: roster.tables[String(target.gameId)] ?? `game ${target.gameId}` };
+                return {
+                    gameId: target.gameId,
+                    tableName: roster.tables[String(target.gameId)] ?? `game ${target.gameId}`,
+                    inviteGameId: target.gameId,
+                    listedIds: [target.gameId],
+                };
             }
-            const table = await resolveTable(target.name);
-            setRoster(rememberTable(table.gameId, table.name));
-            await bindDirectory(table.profile);
-            return { gameId: table.gameId, tableName: table.name };
+            const table = await resolveTable(target.name, { fresh: true });
+            bindDirectory(table.profile);
+            return {
+                gameId: table.gameId,
+                tableName: table.name,
+                inviteGameId: table.gameId,
+                listedIds: table.listedIds,
+            };
         },
         [bindDirectory, roster.tables],
     );
@@ -185,9 +191,10 @@ export function EnsProvider({
             await run("Updating your ENS name", async () => {
                 await writeRecords([[RECORD.aleo, aleo]]);
                 if (profile) {
-                    invalidateEnsProfile(profile.name);
-                    setRoster(rememberAleo(aleo, profile.name));
-                    setProfile({ ...profile, aleo });
+                    const next = { ...profile, aleo };
+                    cacheEnsProfile(next);
+                    setRoster((current) => rememberAleo(aleo, profile.name, current));
+                    setProfile(next);
                 }
             });
         },
@@ -203,25 +210,31 @@ export function EnsProvider({
                 if (!profile?.name) {
                     throw new Error("Connect an Ethereum wallet that has a primary ENS name on Sepolia");
                 }
+                const listed = profile.tables ?? [];
+                const tables = listed.includes(gameId) ? listed : [...listed, gameId];
                 const records: Array<readonly [string, string]> = [
                     [RECORD.game, String(gameId)],
+                    [RECORD.tables, encodeTablesRecord(tables)],
                     [RECORD.program, POKER_PROGRAM],
                     [RECORD.aleo, aleo],
-                    [RECORD.seat(playerId), profile.name],
+                    [RECORD.seat(1), playerId === 1 ? profile.name : ""],
+                    [RECORD.seat(2), playerId === 2 ? profile.name : ""],
+                    [RECORD.seat(3), playerId === 3 ? profile.name : ""],
                     [RECORD.agentContext, tableRecordContext(gameId, profile.name)],
                     [RECORD.agentEndpointWeb, typeof window === "undefined" ? "" : window.location.origin],
                 ];
                 await writeRecords(records);
-                invalidateEnsProfile(profile.name);
-                setRoster(rememberTable(gameId, profile.name));
-                setRoster(rememberAleo(aleo, profile.name));
-                setProfile({
+                const next = {
                     ...profile,
                     aleo,
                     gameId,
+                    tables,
                     agentContext: tableRecordContext(gameId, profile.name),
-                    seats: { ...profile.seats, [playerId]: profile.name },
-                });
+                    seats: { [playerId]: profile.name },
+                };
+                cacheEnsProfile(next);
+                setRoster((current) => applyDirectory(next, current));
+                setProfile(next);
             });
         },
         [allowEthereum, profile, run, writeRecords],
@@ -247,12 +260,7 @@ export function EnsProvider({
             if (!profile?.name) {
                 return;
             }
-            setRoster((current) => {
-                if (current.aleo[aleo] === profile.name) {
-                    return current;
-                }
-                return rememberAleo(aleo, profile.name);
-            });
+            setRoster((current) => rememberAleo(aleo, profile.name, current));
         },
         [profile],
     );

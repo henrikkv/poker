@@ -10,11 +10,15 @@ export function Header({
     networkName,
     playPath,
     onChangeWallet,
+    gameId,
+    inviteGameId,
 }: {
     status: ClientStatus;
     networkName: string;
     playPath: PlayPath;
     onChangeWallet: () => void;
+    gameId: number | null;
+    inviteGameId: number | null;
 }) {
     return (
         <header className="flex flex-wrap items-center justify-between gap-4">
@@ -33,7 +37,7 @@ export function Header({
 
                 <Pill tone="neutral">{status.balance === null ? "…" : `${formatCredits(status.balance)} credits`}</Pill>
 
-                {playPath === "ethereum" && <EnsName />}
+                {playPath === "ethereum" && <EnsName gameId={gameId} inviteGameId={inviteGameId} />}
                 {playPath === "shield" && <WalletMultiButton />}
 
                 <button
@@ -48,12 +52,28 @@ export function Header({
     );
 }
 
-function EnsName() {
+function EnsName({ gameId, inviteGameId }: { gameId: number | null; inviteGameId: number | null }) {
     const ens = useEns();
     if (!ens.name) {
         return null;
     }
-    return <Pill tone="ok">{ens.name}</Pill>;
+    const invite = inviteGameId ?? ens.profile?.gameId ?? null;
+    return (
+        <span className="flex flex-wrap items-center gap-2">
+            <Pill tone="ok">
+                {ens.name}
+                {gameId !== null && (
+                    <>
+                        {" · "}
+                        <span className="text-gold">#{gameId}</span>
+                    </>
+                )}
+            </Pill>
+            {invite !== null && gameId !== null && invite !== gameId && (
+                <Pill tone="neutral">Invite now points at game {invite}</Pill>
+            )}
+        </span>
+    );
 }
 
 function Pill({ tone, children }: { tone: "ok" | "bad" | "neutral"; children: ReactNode }) {

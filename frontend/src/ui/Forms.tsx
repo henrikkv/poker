@@ -72,6 +72,11 @@ export function CreateGameForm({ model, dispatch }: { model: GameModel; dispatch
             subtitle="Blinds start at 5/10 and rise every few hands. The buy-in is escrowed by the program."
             onSubmit={() => dispatch({ type: "confirm" })}
         >
+            {model.blockedGameId !== null && (
+                <p className="rounded-xl border border-gold/30 bg-black/20 px-4 py-3 text-sm text-paper">
+                    You are already in game {model.blockedGameId}. Resume that table instead of opening another.
+                </p>
+            )}
             <Field label="Buy-in (credits)">
                 <input
                     id="create-buy-in"
@@ -130,6 +135,12 @@ export function JoinGameForm({ model, dispatch }: { model: GameModel; dispatch: 
             subtitle="Open tables are waiting for players 2 and 3. Started games open as a spectator."
             onSubmit={() => dispatch({ type: "confirm" })}
         >
+            {model.blockedGameId !== null && (
+                <p className="rounded-xl border border-gold/30 bg-black/20 px-4 py-3 text-sm text-paper">
+                    You are already in game {model.blockedGameId}. Resume that table, or leave locally to join a
+                    different one.
+                </p>
+            )}
             <Field label="Game id or ENS name" hint="A host who published their table can be joined as alice.eth.">
                 <input
                     id="join-game-id"

@@ -13,7 +13,7 @@ export function dnsEncodedName(name: string): `0x${string}` {
 async function resolverAddress(name: string): Promise<`0x${string}`> {
     const address = await ensPublicClient().getEnsResolver({ name: normalize(name) });
     if (!address) {
-        throw new Error(`${name} has no resolver on ENSv2 Sepolia`);
+        throw new Error(`${name} is not set up on Sepolia`);
     }
     return address;
 }
@@ -40,17 +40,22 @@ export async function setTextRecords(
         }),
     );
     try {
-        return await wallet.writeContract({
+        const hash = await wallet.writeContract({
             address: resolver,
             abi: permissionedResolverAbi,
             functionName: "multicall",
             args: [calls],
             ...writeArgs(wallet),
         });
+        await waitForWrite(hash);
+        return hash;
     } catch (error) {
+        if (isUserRejected(error)) {
+            throw error;
+        }
         if (isEacDenied(error)) {
             throw new Error(
-                "This account cannot write those records. On ENSv2 the name must use a Permissioned Resolver you control, or the table publisher needs an EAC grant.",
+                "This wallet cannot update that ENS name. Use the wallet that owns it.",
             );
         }
         return setTextRecordsLegacy(wallet, resolver, name, records);
@@ -71,13 +76,19 @@ async function setTextRecordsLegacy(
             args: [node, key, value],
         }),
     );
-    return wallet.writeContract({
+    const hash = await wallet.writeContract({
         address: resolver,
         abi: legacyResolverAbi,
         functionName: "multicall",
         args: [calls],
         ...writeArgs(wallet),
     });
+    await waitForWrite(hash);
+    return hash;
+}
+
+async function waitForWrite(hash: `0x${string}`): Promise<void> {
+    await ensPublicClient().waitForTransactionReceipt({ hash });
 }
 
 /** Grant a local key ROLE_SET_TEXT for only the poker directory records. */
@@ -120,4 +131,9 @@ export async function grantPublisherSetterRoles(
 function isEacDenied(error: unknown): boolean {
     const text = error instanceof Error ? error.message : String(error);
     return text.includes("EACUnauthorized") || text.includes("EACCannotGrant");
+}
+
+function isUserRejected(error: unknown): boolean {
+    const text = error instanceof Error ? error.message : String(error);
+    return /user rejected/i.test(text);
 }

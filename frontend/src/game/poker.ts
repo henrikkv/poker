@@ -1,5 +1,6 @@
 import type { Session } from "../net/aleo.js";
 import { reservedFeeMicrocredits } from "../net/aleo.js";
+import { withExclusiveLock } from "../net/tabLock.js";
 import { MentalPoker, type Cards, type Game } from "./program.js";
 import { secretsFromRecord } from "./keysRecord.js";
 import type { StoredSeat } from "./seat.js";
@@ -105,11 +106,34 @@ export class PokerGame {
         }
     }
 
-    playerIdFromGame(game: Game): PlayerId | null {
-        if (this.address === game.player1) return 1;
-        if (this.address === game.player2) return 2;
-        if (this.address === game.player3) return 3;
-        return null;
+    seatsFromGame(game: Pick<Game, "player1" | "player2" | "player3">): PlayerId[] {
+        const seats: PlayerId[] = [];
+        if (this.address === game.player1) {
+            seats.push(1);
+        }
+        if (this.address === game.player2) {
+            seats.push(2);
+        }
+        if (this.address === game.player3) {
+            seats.push(3);
+        }
+        return seats;
+    }
+
+    playerIdFromGame(game: Pick<Game, "player1" | "player2" | "player3">): PlayerId | null {
+        return this.seatsFromGame(game)[0] ?? null;
+    }
+
+    adoptActingSeat(game: Game, state: GameState | null): PlayerId | null {
+        const seats = this.seatsFromGame(game);
+        if (seats.length === 0) {
+            return null;
+        }
+        const turn = state === null ? null : currentPlayer(state);
+        const id = turn && seats.includes(turn) ? turn : seats[0];
+        this.playerId = id;
+        this.hasKeys = true;
+        return id;
     }
 
     async checkGameExists(gameId: number): Promise<boolean> {
@@ -132,13 +156,13 @@ export class PokerGame {
 
     async trySetPlayerId(gameId: number): Promise<void> {
         const game = await this.requireGame(gameId);
-        const id = this.playerIdFromGame(game);
+        const id = this.adoptActingSeat(game, gameStateFromU8(game.state));
         if (id === null) {
             throw new Error(`Not a player in game ${gameId}`);
         }
-        this.playerId = id;
-        this.hasKeys = true;
-        await this.adoptWalletKeys();
+        if (this.session.kind !== "local") {
+            await this.adoptWalletKeys();
+        }
     }
 
     /** Prefer the secret stored in the wallet Keys record over a freshly generated one. */
@@ -179,7 +203,7 @@ export class PokerGame {
         const password = parsePassword(model.passwordInput);
         const buyIn = parseCreditsInput(model.buyInInput);
 
-        await this.requireBalance(buyIn + BigInt(reservedFeeMicrocredits("create_game")));
+        await this.requireBalance(buyIn + BigInt(reservedFeeMicrocredits("create_game", this.session.kind)));
 
         const nextId = await this.poker.get_next_game_id(0);
         model.lastKnownGameId = nextId ?? 0;
@@ -200,7 +224,7 @@ export class PokerGame {
     }
 
     async joinGame(model: GameModel, gameId: number): Promise<void> {
-        logActionStart(model, "Getting current deck");
+        logActionStart(model, "Loading the table deck");
         const deck = await this.poker.get_decks(gameId);
         if (!deck) {
             throw new Error(`Deck not found for game ${gameId}`);
@@ -212,16 +236,21 @@ export class PokerGame {
         logActionComplete(model);
 
         const password = parsePassword(model.passwordInput);
-        const game = await this.requireGame(gameId);
-        await this.requireBalance(game.buy_in + BigInt(reservedFeeMicrocredits("join_game")));
-
-        logActionStart(model, `Joining game ${gameId}`);
-        log(model, "Approve in Shield with delegated proving. Local fee calculation for join can sit forever.");
-        await this.poker.join_game(gameId, game.buy_in, deck, control, this.secret, this.secretInv, password);
-        this.hasKeys = true;
-        logActionComplete(model);
-        await this.trySetPlayerId(gameId);
-        log(model, `Joined game ${gameId} as P${this.playerId}`);
+        await withExclusiveLock(`poker-join-game-${gameId}`, async () => {
+            const game = await this.requireGame(gameId);
+            if (this.playerIdFromGame(game) !== null) {
+                await this.trySetPlayerId(gameId);
+                log(model, `Already seated in game ${gameId} as Player ${this.playerId}`);
+                return;
+            }
+            await this.requireBalance(game.buy_in + BigInt(reservedFeeMicrocredits("join_game", this.session.kind)));
+            logActionStart(model, `Joining game ${gameId}`);
+            await this.poker.join_game(gameId, game.buy_in, deck, control, this.secret, this.secretInv, password);
+            this.hasKeys = true;
+            logActionComplete(model);
+            await this.trySetPlayerId(gameId);
+            log(model, `Joined game ${gameId} as Player ${this.playerId}`);
+        });
     }
 
     async placeBet(model: GameModel, gameId: number, action: BettingAction, amount: number): Promise<void> {
@@ -357,7 +386,7 @@ export class PokerGame {
         const updatedState = gameStateFromU8(updated.state);
         if (updatedState !== model.currentState) {
             if (updatedState !== null) {
-                log(model, `State ${updatedState}: ${describeGameState(updatedState)}`);
+                log(model, describeGameState(updatedState));
             }
             model.currentState = updatedState;
         }
@@ -391,11 +420,15 @@ export class PokerGame {
         const game = await this.requireGame(gameId);
         model.playerAddresses = [game.player1, game.player2, game.player3];
         const newState = gameStateFromU8(game.state);
+        const acting = this.adoptActingSeat(game, newState);
+        if (acting !== null) {
+            model.currentPlayerId = acting;
+        }
         const stateChanged = model.currentState !== newState;
 
         if (stateChanged) {
             if (newState !== null) {
-                log(model, `State ${newState}: ${describeGameState(newState)}`);
+                log(model, describeGameState(newState));
             }
             model.currentState = newState;
 
@@ -408,7 +441,7 @@ export class PokerGame {
                         (newState === GameState.P1NewShuffle && this.playerId === 1) ||
                         (newState === GameState.P2NewShuffle && this.playerId === 2)
                     ) {
-                        log(model, `Starting new hand (state: ${newState})`);
+                        log(model, "Starting new hand");
                     }
                     break;
                 case GameState.P2Shuffle:
@@ -417,7 +450,7 @@ export class PokerGame {
                         (newState === GameState.P2Shuffle && this.playerId === 2) ||
                         (newState === GameState.P3Shuffle && this.playerId === 3)
                     ) {
-                        log(model, `Shuffling deck (state: ${newState})`);
+                        log(model, "Shuffling deck");
                     }
                     break;
             }
@@ -470,15 +503,21 @@ export class PokerGame {
         return stateChanged;
     }
 
-    async detectAutoAction(model: GameModel, gameId: number, stateChanged: boolean): Promise<GameCommand | null> {
-        if (!stateChanged) {
-            return null;
-        }
+    async detectAutoAction(model: GameModel, gameId: number): Promise<GameCommand | null> {
         const state = model.currentState;
-        if (state === null || this.playerId === 0) {
+        if (state === null) {
             return null;
         }
-        const me = this.playerId;
+        const game = await this.poker.get_games(gameId);
+        if (!game) {
+            return null;
+        }
+        const seats = this.seatsFromGame(game);
+        if (seats.length === 0) {
+            return null;
+        }
+        const me = this.adoptActingSeat(game, state) ?? seats[0];
+        model.currentPlayerId = me;
 
         const isClaim = state === GameState.P1Claim || state === GameState.P2Claim || state === GameState.P3Claim;
         if (isClaim) {
@@ -488,7 +527,9 @@ export class PokerGame {
             return null;
         }
         const mine = (p1: GameState, p2: GameState, p3: GameState) =>
-            (state === p1 && me === 1) || (state === p2 && me === 2) || (state === p3 && me === 3);
+            (state === p1 && seats.includes(1) && me === 1) ||
+            (state === p2 && seats.includes(2) && me === 2) ||
+            (state === p3 && seats.includes(3) && me === 3);
 
         if (this.hasKeys) {
             let step: DecryptionStep | null = null;

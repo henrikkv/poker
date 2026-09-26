@@ -50,6 +50,14 @@ export function rememberAleo(aleo: string, name: string): EnsRoster {
     if (roster.aleo[aleo] === name) {
         return roster;
     }
+    const taken = Object.entries(roster.aleo).find(([, seated]) => seated === name)?.[0];
+    if (taken && taken !== aleo) {
+        if (taken.startsWith("seat.")) {
+            delete roster.aleo[taken];
+        } else {
+            return roster;
+        }
+    }
     roster.aleo[aleo] = name;
     saveRoster(roster);
     return roster;

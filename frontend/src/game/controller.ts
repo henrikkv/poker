@@ -23,10 +23,12 @@ import {
 } from "./model.js";
 import { decryptionLogMessage } from "./state.js";
 import { parseJoinTarget } from "../ens/parse.js";
+import { loadRoster } from "../ens/roster.js";
 import { errorMessage, PokerGame, type GameCommand } from "./poker.js";
-import { clearSeat, loadSeat, saveSeat } from "./seat.js";
+import { clearSeat, loadJoinedTable, loadSeat, rememberJoinedTable, saveSeat } from "./seat.js";
 
 export type ResolveEnsTable = (input: string) => Promise<{ gameId: number; tableName: string }>;
+export type JoinIdentity = () => { name: string | null; aleo: string | null };
 
 export type GameMessage =
     | { type: "charInput"; char: string }
@@ -123,11 +125,14 @@ export class GameController {
     private readonly listeners = new Set<() => void>();
     private timers: ReturnType<typeof setInterval>[] = [];
 
+    private autoQueuedForState: number | null = null;
+
     constructor(
         readonly session: Session,
         networkName: string,
         private readonly endpoint: string,
         private readonly resolveEnsTable?: ResolveEnsTable,
+        private readonly joinIdentity?: JoinIdentity,
     ) {
         const address = session.address();
         const seat = loadSeat(address);
@@ -159,6 +164,20 @@ export class GameController {
         this.timers = [];
     }
 
+    async settleHouseFunds(): Promise<void> {
+        if (!this.session.returnFunds) {
+            return;
+        }
+        try {
+            log(this.model, "Returning leftover credits");
+            await this.session.returnFunds();
+            log(this.model, "Returned leftover credits");
+        } catch (error) {
+            log(this.model, `Could not return leftover credits: ${errorMessage(error)}`);
+        }
+        this.emit();
+    }
+
     subscribe = (listener: () => void): (() => void) => {
         this.listeners.add(listener);
         return () => this.listeners.delete(listener);
@@ -185,6 +204,28 @@ export class GameController {
         this.listeners.forEach((listener) => listener());
     }
 
+    private nameAlreadySeated(game: { player1: string; player2: string; player3: string }): boolean {
+        const identity = this.joinIdentity?.();
+        const name = identity?.name;
+        if (!name || this.handle.playerIdFromGame(game) !== null) {
+            return false;
+        }
+        const roster = loadRoster();
+        const published = identity?.aleo;
+        for (const address of [game.player1, game.player2, game.player3]) {
+            if (!address) {
+                continue;
+            }
+            if (roster.aleo[address] === name) {
+                return true;
+            }
+            if (published && address === published && address !== this.status.address) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private persistSeat(): void {
         saveSeat(this.status.address, {
             gameId: this.model.gameId,
@@ -192,6 +233,12 @@ export class GameController {
             secret: this.handle.secret,
             secretInv: this.handle.secretInv,
         });
+        if (this.model.gameId !== null && this.handle.playerId !== 0) {
+            const prior = loadJoinedTable(this.model.gameId);
+            const playerIds = new Set(prior?.address === this.status.address ? prior.playerIds : []);
+            playerIds.add(this.handle.playerId);
+            rememberJoinedTable(this.model.gameId, this.status.address, [...playerIds]);
+        }
     }
 
     private resumeIfSeated(): void {
@@ -201,7 +248,7 @@ export class GameController {
             log(this.model, `Rejoining game ${seat.gameId}`);
             this.pendingCommand = { type: "resumeGame", gameId: seat.gameId };
         } else {
-            log(this.model, "Looking for a table you already sit in");
+            log(this.model, "Looking for a table you already joined");
             this.pendingCommand = { type: "findMyGame" };
         }
         this.emit();
@@ -214,6 +261,10 @@ export class GameController {
         this.model.currentPlayerId = this.handle.playerId;
         this.model.screen = "inGame";
         this.persistSeat();
+        const game = await this.handle.poker.get_games(gameId);
+        if (game) {
+            rememberJoinedTable(gameId, this.status.address, this.handle.seatsFromGame(game));
+        }
         this.pendingCommand = { type: "refreshGameState", gameId };
     }
 
@@ -272,7 +323,7 @@ export class GameController {
                 this.processMessage(message);
             }
         } catch (error) {
-            log(this.model, `Error polling: ${errorMessage(error)}`);
+            log(this.model, `Could not refresh the table: ${errorMessage(error)}`);
             this.model.lastPollTime = Date.now();
         } finally {
             this.syncBusy = false;
@@ -292,9 +343,10 @@ export class GameController {
                     model.lastPollTime = Date.now();
                     return { type: "gameStatePolled", error: errorMessage(error) };
                 }
-                const next = await handle.detectAutoAction(model, command.gameId, stateChanged);
-                if (next) {
+                const next = await handle.detectAutoAction(model, command.gameId);
+                if (next && (stateChanged || this.autoQueuedForState !== model.currentState)) {
                     this.pendingCommand = next;
+                    this.autoQueuedForState = model.currentState;
                 }
                 return { type: "gameStatePolled" };
             }
@@ -330,11 +382,18 @@ export class GameController {
             case "resumeGame":
             case "prepareJoin": {
                 const id = command.gameId;
+                log(model, `Opening game ${id}`);
+                model.backgroundTask = `Opening game ${id}`;
+                this.emit();
                 const game = await handle.poker.get_games(id);
+                model.backgroundTask = null;
                 if (!game) {
-                    log(model, `Game ${id} does not exist`);
+                    log(model, `Game ${id} is not ready yet`);
                     if (command.type === "resumeGame") {
-                        this.pendingCommand = { type: "findMyGame" };
+                        clearSeat(this.status.address);
+                        model.gameId = null;
+                        model.gameInitialized = false;
+                        model.screen = "menu";
                     } else {
                         model.gameId = null;
                         model.screen = "joinGame";
@@ -343,11 +402,34 @@ export class GameController {
                 }
                 if (handle.playerIdFromGame(game) !== null) {
                     await this.sitAsPlayer(id);
-                    log(model, `Rejoined game ${id} as P${model.currentPlayerId}`);
+                    const seats = handle.seatsFromGame(game);
+                    log(
+                        model,
+                        seats.length > 1
+                            ? `Rejoined game ${id} as Player ${seats.join(" and ")}`
+                            : `Rejoined game ${id} as Player ${model.currentPlayerId}`,
+                    );
+                    return null;
+                }
+                const prior = loadJoinedTable(id);
+                if (prior && prior.address !== this.status.address) {
+                    log(
+                        model,
+                        "You already sat at this table in an earlier session. A reload created a new key, so this table cannot be finished.",
+                    );
+                    model.gameId = null;
+                    model.screen = "menu";
                     return null;
                 }
                 if (command.type === "resumeGame") {
+                    log(model, `You are not seated in game ${id}`);
                     this.pendingCommand = { type: "findMyGame" };
+                    return null;
+                }
+                if (this.nameAlreadySeated(game)) {
+                    log(model, "This name is already seated at that table");
+                    model.gameId = null;
+                    model.screen = "joinGame";
                     return null;
                 }
                 const state = game.state;
@@ -362,8 +444,13 @@ export class GameController {
             }
 
             case "findMyGame": {
+                log(model, "Searching for your table");
+                model.backgroundTask = "Searching for your table";
+                this.emit();
                 const found = await handle.findSeatedGame();
+                model.backgroundTask = null;
                 if (found === null) {
+                    log(model, "No table found — create or join from the menu");
                     clearSeat(this.status.address);
                     model.gameId = null;
                     model.gameInitialized = false;
@@ -371,7 +458,7 @@ export class GameController {
                     return null;
                 }
                 await this.sitAsPlayer(found);
-                log(model, `Rejoined game ${found} as P${model.currentPlayerId}`);
+                log(model, `Rejoined game ${found} as Player ${model.currentPlayerId}`);
                 return null;
             }
 
@@ -380,12 +467,12 @@ export class GameController {
                     log(model, "Error: ENS resolution is not available");
                     return null;
                 }
-                log(model, `Resolving ${command.input} on ENSv2 Sepolia`);
+                log(model, `Looking up ${command.input}`);
                 try {
                     const table = await this.resolveEnsTable(command.input);
                     model.gameId = table.gameId;
                     model.screen = "inGame";
-                    log(model, `${table.tableName} → Aleo game ${table.gameId}`);
+                    log(model, `${table.tableName} → game ${table.gameId}`);
                     this.pendingCommand = { type: "prepareJoin", gameId: table.gameId };
                 } catch (error) {
                     log(model, `Error: ${errorMessage(error)}`);
@@ -399,7 +486,7 @@ export class GameController {
     }
 
     private startBackground(command: GameCommand): void {
-        this.model.backgroundTask = `Waiting for wallet: ${backgroundLabel(command)}`;
+        this.model.backgroundTask = backgroundLabel(command);
         this.model.backgroundTaskStartedMs = Date.now();
 
         this.running = this.runBackgroundCommand(command).then((message) => {
@@ -407,6 +494,7 @@ export class GameController {
             this.model.backgroundTask = null;
             this.model.backgroundTaskStartedMs = null;
             if (message && "error" in message && message.error !== undefined && command.type.startsWith("auto")) {
+                this.autoQueuedForState = null;
                 this.model.currentState = null;
             }
             if (message) {
@@ -467,11 +555,13 @@ export class GameController {
                     type: "handsCompared",
                     error: await capture(() => handle.executeAutoCompare(model, command.gameId)),
                 };
-            case "autoClaim":
-                return {
-                    type: "gameStatePolled",
-                    error: await capture(() => handle.executeAutoClaim(model, command.gameId)),
-                };
+            case "autoClaim": {
+                const error = await capture(() => handle.executeAutoClaim(model, command.gameId));
+                if (!error) {
+                    await this.settleHouseFunds();
+                }
+                return { type: "gameStatePolled", error };
+            }
             default:
                 return null;
         }
@@ -685,7 +775,7 @@ export class GameController {
 
             case "gameStatePolled":
                 if (msg.error !== undefined) {
-                    log(model, `Error polling: ${msg.error}`);
+                    log(model, `Could not refresh the table: ${msg.error}`);
                 }
                 return null;
 

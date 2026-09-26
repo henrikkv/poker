@@ -182,7 +182,7 @@ export function newGameModel(networkName: string): GameModel {
         backgroundTask: null,
         backgroundTaskStartedMs: null,
     };
-    log(model, `Starting poker with ${networkName}`);
+    log(model, `Starting poker on ${networkName}`);
     return model;
 }
 

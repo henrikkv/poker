@@ -54,3 +54,35 @@ export function clearSeat(address: string): void {
     }
     localStorage.removeItem(key(address));
 }
+
+const JOINED = "mental-poker.joined-tables";
+
+export interface JoinedTable {
+    address: string;
+    playerIds: number[];
+}
+
+function readJoined(): Record<string, JoinedTable> {
+    if (typeof localStorage === "undefined") {
+        return {};
+    }
+    try {
+        const raw = localStorage.getItem(JOINED);
+        return raw ? (JSON.parse(raw) as Record<string, JoinedTable>) : {};
+    } catch {
+        return {};
+    }
+}
+
+export function loadJoinedTable(gameId: number): JoinedTable | null {
+    return readJoined()[String(gameId)] ?? null;
+}
+
+export function rememberJoinedTable(gameId: number, address: string, playerIds: number[]): void {
+    if (typeof localStorage === "undefined") {
+        return;
+    }
+    const all = readJoined();
+    all[String(gameId)] = { address, playerIds };
+    localStorage.setItem(JOINED, JSON.stringify(all));
+}

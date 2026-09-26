@@ -9,6 +9,7 @@ import { LogPanel } from "./LogPanel.js";
 import { Menu } from "./Menu.js";
 import { Table } from "./Table.js";
 import { useController } from "./useController.js";
+import type { PlayPath } from "./playPath.js";
 
 const KEYS: Record<string, GameMessage> = {
     ArrowLeft: { type: "left" },
@@ -23,7 +24,15 @@ function isTyping(target: EventTarget | null): boolean {
     return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 }
 
-export function App({ controller }: { controller: GameController }) {
+export function App({
+    controller,
+    playPath,
+    onChangeWallet,
+}: {
+    controller: GameController;
+    playPath: PlayPath;
+    onChangeWallet: () => void;
+}) {
     const { model, status, busy } = useController(controller);
     const dispatch = controller.dispatch;
 
@@ -48,7 +57,12 @@ export function App({ controller }: { controller: GameController }) {
 
     return (
         <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-5 py-8 lg:px-10">
-            <Header status={status} networkName={config.networkName} />
+            <Header
+                status={status}
+                networkName={config.networkName}
+                playPath={playPath}
+                onChangeWallet={onChangeWallet}
+            />
 
             <div className="grid flex-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <main className="min-w-0">
@@ -74,11 +88,15 @@ export function App({ controller }: { controller: GameController }) {
 
                 <aside className="flex max-h-[70vh] min-h-64 flex-col lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)]">
                     <LogPanel logs={model.logs} />
-                    <EnsPanel aleo={status.address} gameId={model.gameId} playerId={model.currentPlayerId} />
+                    <EnsPanel
+                        aleo={status.address}
+                        gameId={model.gameId}
+                        playerId={model.currentPlayerId}
+                        playPath={playPath}
+                    />
                     <p className="mt-3 px-1 text-xs leading-relaxed text-muted/70">
-                        Shield still signs Aleo moves. ENSv2 on Sepolia is the public name: publish{" "}
-                        <code className="text-paper/80">poker.game</code> and friends join as{" "}
-                        <code className="text-paper/80">yourname.eth</code>.
+                        Friends can join this table by game id
+                        {playPath === "ethereum" ? " or by your ENS name after you publish it." : "."}
                     </p>
                 </aside>
             </div>

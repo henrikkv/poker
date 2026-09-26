@@ -3,13 +3,24 @@ import type { ReactNode } from "react";
 import { useEns } from "../ens/index.js";
 import type { ClientStatus } from "../game/controller.js";
 import { formatCredits } from "../game/model.js";
+import type { PlayPath } from "./playPath.js";
 
-export function Header({ status, networkName }: { status: ClientStatus; networkName: string }) {
+export function Header({
+    status,
+    networkName,
+    playPath,
+    onChangeWallet,
+}: {
+    status: ClientStatus;
+    networkName: string;
+    playPath: PlayPath;
+    onChangeWallet: () => void;
+}) {
     return (
         <header className="flex flex-wrap items-center justify-between gap-4">
             <div>
                 <p className="text-[11px] font-semibold tracking-[0.25em] text-gold/80 uppercase">
-                    Aleo · {networkName}
+                    {playPath === "ethereum" ? "Ethereum · Sepolia" : `Aleo · ${networkName}`}
                 </p>
                 <h1 className="font-display text-3xl leading-tight text-paper">Mental Poker</h1>
             </div>
@@ -22,27 +33,27 @@ export function Header({ status, networkName }: { status: ClientStatus; networkN
 
                 <Pill tone="neutral">{status.balance === null ? "…" : `${formatCredits(status.balance)} credits`}</Pill>
 
-                <EnsBadge />
-                <WalletMultiButton />
+                {playPath === "ethereum" && <EnsName />}
+                {playPath === "shield" && <WalletMultiButton />}
+
+                <button
+                    type="button"
+                    onClick={onChangeWallet}
+                    className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-xs text-muted transition hover:border-gold/50 hover:text-paper"
+                >
+                    Use a different wallet
+                </button>
             </div>
         </header>
     );
 }
 
-function EnsBadge() {
+function EnsName() {
     const ens = useEns();
-    if (ens.name) {
-        return <Pill tone="ok">{ens.name}</Pill>;
+    if (!ens.name) {
+        return null;
     }
-    return (
-        <button
-            type="button"
-            onClick={() => void ens.connect()}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-xs text-paper transition hover:border-gold/50"
-        >
-            Play as ENS
-        </button>
-    );
+    return <Pill tone="ok">{ens.name}</Pill>;
 }
 
 function Pill({ tone, children }: { tone: "ok" | "bad" | "neutral"; children: ReactNode }) {

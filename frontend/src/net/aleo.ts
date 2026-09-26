@@ -7,6 +7,22 @@ export type { TransactionInput };
 
 export type WalletRef = { current: WalletContextState };
 
+export type SessionKind = "wallet" | "local";
+
+export interface Session {
+    readonly kind: SessionKind;
+    address(): string;
+    execute(
+        programName: string,
+        functionName: string,
+        inputs: TransactionInput[],
+        settled?: () => Promise<boolean>,
+    ): Promise<string[]>;
+    requestRecords(programName: string): Promise<unknown[]>;
+    mapping(programName: string, mappingName: string, key: string): Promise<string | null>;
+    returnFunds?(): Promise<void>;
+}
+
 /**
  * Priority fee sent to Shield, in microcredits.
  * Official adapter examples use 100_000. Shield still synthesizes the
@@ -16,8 +32,11 @@ export function publicFeeMicrocredits(_functionName: string): number {
     return 100_000;
 }
 
-/** Public credits to keep on top of a buy-in so the synthesized base fee still fits. */
-export function reservedFeeMicrocredits(functionName: string): number {
+/** Public credits to keep on top of a buy-in so the fee still fits. */
+export function reservedFeeMicrocredits(functionName: string, kind: SessionKind = "wallet"): number {
+    if (kind === "local") {
+        return 500_000;
+    }
     switch (functionName) {
         case "create_game":
         case "join_game":
@@ -35,11 +54,46 @@ export function reservedFeeMicrocredits(functionName: string): number {
     }
 }
 
+export const PRIORITY_FEE_CREDITS = 0.1;
+
+export async function waitUntilSettled(functionName: string, settled?: () => Promise<boolean>): Promise<void> {
+    if (!settled) {
+        return;
+    }
+    const deadline = Date.now() + 600_000;
+    while (Date.now() < deadline) {
+        if (await settled()) {
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    throw new Error(`Timed out waiting for ${functionName} to finish`);
+}
+
+export async function readMapping(
+    networkClient: AleoNetworkClient,
+    programName: string,
+    mappingName: string,
+    key: string,
+): Promise<string | null> {
+    try {
+        const value = await networkClient.getProgramMappingValue(programName, mappingName, key);
+        return value == null || value === "null" ? null : value;
+    } catch (error) {
+        if (String(error instanceof Error ? error.message : error).includes("404")) {
+            return null;
+        }
+        throw error;
+    }
+}
+
 /**
  * A connected Aleo wallet plus a read-only network client.
  * Transitions are signed and proved by the wallet (Shield via the adapter).
  */
-export class Session {
+export class WalletSession implements Session {
+    readonly kind = "wallet" as const;
+
     constructor(
         private readonly walletRef: WalletRef,
         private readonly networkClient: AleoNetworkClient,
@@ -75,7 +129,7 @@ export class Session {
         if (!submitted?.transactionId) {
             throw new Error(`Wallet did not submit ${programName}/${functionName}`);
         }
-        await this.waitUntilSettled(functionName, settled);
+        await waitUntilSettled(functionName, settled);
         return [];
     }
 
@@ -84,28 +138,6 @@ export class Session {
     }
 
     async mapping(programName: string, mappingName: string, key: string): Promise<string | null> {
-        try {
-            const value = await this.networkClient.getProgramMappingValue(programName, mappingName, key);
-            return value == null || value === "null" ? null : value;
-        } catch (error) {
-            if (String(error instanceof Error ? error.message : error).includes("404")) {
-                return null;
-            }
-            throw error;
-        }
-    }
-
-    private async waitUntilSettled(functionName: string, settled?: () => Promise<boolean>): Promise<void> {
-        if (!settled) {
-            return;
-        }
-        const deadline = Date.now() + 600_000;
-        while (Date.now() < deadline) {
-            if (await settled()) {
-                return;
-            }
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-        }
-        throw new Error(`Timed out waiting for ${functionName} to land on-chain`);
+        return readMapping(this.networkClient, programName, mappingName, key);
     }
 }

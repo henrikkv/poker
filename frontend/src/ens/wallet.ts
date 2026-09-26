@@ -40,7 +40,7 @@ export async function ensureSepolia(provider: EIP1193Provider = injected()): Pro
     } catch (error) {
         const code = typeof error === "object" && error && "code" in error ? Number(error.code) : 0;
         if (code !== 4902) {
-            throw new Error("Switch your wallet to Sepolia to use ENSv2");
+            throw new Error("Switch your wallet to Sepolia");
         }
         await provider.request({
             method: "wallet_addEthereumChain",
@@ -63,4 +63,8 @@ export function ownerWallet(account: `0x${string}`): WalletClient {
         chain: sepolia,
         transport: custom(injected()),
     });
+}
+
+export async function signEthereumMessage(account: `0x${string}`, message: string): Promise<`0x${string}`> {
+    return ownerWallet(account).signMessage({ account, message });
 }

@@ -5,7 +5,14 @@ import { ensurePublisherKey, publisherAccountAddress, publisherAddress, publishe
 import { POKER_PROGRAM, RECORD, tableRecordContext } from "./keys.js";
 import { parseJoinTarget } from "./parse.js";
 import { loadRoster, rememberAleo, rememberTable, type EnsRoster } from "./roster.js";
-import { resolvePrimaryName, resolveProfile, resolveTable, type EnsProfile } from "./resolve.js";
+import {
+    invalidateEnsProfile,
+    resolveAleoRecord,
+    resolvePrimaryName,
+    resolveProfile,
+    resolveTable,
+    type EnsProfile,
+} from "./resolve.js";
 import { connectEthereum, ownerWallet } from "./wallet.js";
 import { grantPublisherSetterRoles, setTextRecords } from "./write.js";
 
@@ -25,6 +32,7 @@ export interface EnsContextValue {
     connect: () => Promise<void>;
     disconnect: () => void;
     resolveJoin: (input: string) => Promise<{ gameId: number; tableName: string }>;
+    hydrateDirectory: (gameId: number) => Promise<void>;
     publishBinding: (aleo: string) => Promise<void>;
     publishTable: (gameId: number, aleo: string, playerId: 1 | 2 | 3) => Promise<void>;
     authorizePublisher: () => Promise<void>;
@@ -35,7 +43,14 @@ export interface EnsContextValue {
 
 const EnsContext = createContext<EnsContextValue | null>(null);
 
-export function EnsProvider({ children }: { children: ReactNode }) {
+export function EnsProvider({
+    children,
+    allowEthereum = true,
+}: {
+    children: ReactNode;
+    /** When false, resolve ENS names only — never request an Ethereum wallet. */
+    allowEthereum?: boolean;
+}) {
     const [ethAddress, setEthAddress] = useState<`0x${string}` | null>(null);
     const [profile, setProfile] = useState<EnsProfile | null>(null);
     const [roster, setRoster] = useState<EnsRoster>(() => loadRoster());
@@ -73,12 +88,15 @@ export function EnsProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const connect = useCallback(async () => {
+        if (!allowEthereum) {
+            return;
+        }
         await run("Connecting Ethereum", async () => {
             const address = await connectEthereum();
             setEthAddress(address);
             await loadNamedProfile(address);
         });
-    }, [loadNamedProfile, run]);
+    }, [allowEthereum, loadNamedProfile, run]);
 
     const disconnect = useCallback(() => {
         setEthAddress(null);
@@ -86,34 +104,56 @@ export function EnsProvider({ children }: { children: ReactNode }) {
         setError(null);
     }, []);
 
-    const resolveJoin = useCallback(async (input: string) => {
-        const target = parseJoinTarget(input);
-        if (!target) {
-            throw new Error("Enter a game id or an ENS name");
+    const bindDirectory = useCallback(async (listed: EnsProfile) => {
+        if (listed.aleo) {
+            setRoster(rememberAleo(listed.aleo, listed.name));
         }
-        if (target.kind === "gameId") {
-            return { gameId: target.gameId, tableName: roster.tables[String(target.gameId)] ?? `game ${target.gameId}` };
-        }
-        const table = await resolveTable(target.name);
-        setRoster(rememberTable(table.gameId, table.name));
-        if (table.profile.aleo) {
-            setRoster(rememberAleo(table.profile.aleo, table.name));
-        }
-        for (const [seat, seatName] of Object.entries(table.profile.seats)) {
+        for (const seatName of Object.values(listed.seats)) {
             if (!seatName) {
                 continue;
             }
-            try {
-                const seated = await resolveProfile(seatName);
-                if (seated.aleo) {
-                    setRoster(rememberAleo(seated.aleo, seated.name));
-                }
-            } catch {
-                setRoster(rememberAleo(`seat.${seat}`, seatName));
+            const aleo = seatName === listed.name ? listed.aleo : await resolveAleoRecord(seatName);
+            if (aleo) {
+                setRoster(rememberAleo(aleo, seatName));
             }
         }
-        return { gameId: table.gameId, tableName: table.name };
-    }, [roster.tables]);
+    }, []);
+
+    const hydrateDirectory = useCallback(
+        async (gameId: number) => {
+            const tableName = roster.tables[String(gameId)] ?? (profile?.gameId === gameId ? profile.name : null);
+            if (!tableName) {
+                return;
+            }
+            try {
+                const table = await resolveTable(tableName);
+                setRoster(rememberTable(table.gameId, table.name));
+                await bindDirectory(table.profile);
+            } catch {
+                if (profile?.name === tableName) {
+                    await bindDirectory(profile);
+                }
+            }
+        },
+        [bindDirectory, profile, roster.tables],
+    );
+
+    const resolveJoin = useCallback(
+        async (input: string) => {
+            const target = parseJoinTarget(input);
+            if (!target) {
+                throw new Error("Enter a game id or an ENS name");
+            }
+            if (target.kind === "gameId") {
+                return { gameId: target.gameId, tableName: roster.tables[String(target.gameId)] ?? `game ${target.gameId}` };
+            }
+            const table = await resolveTable(target.name);
+            setRoster(rememberTable(table.gameId, table.name));
+            await bindDirectory(table.profile);
+            return { gameId: table.gameId, tableName: table.name };
+        },
+        [bindDirectory, roster.tables],
+    );
 
     const writeRecords = useCallback(
         async (records: Array<readonly [string, string]>) => {
@@ -139,20 +179,27 @@ export function EnsProvider({ children }: { children: ReactNode }) {
 
     const publishBinding = useCallback(
         async (aleo: string) => {
-            await run("Publishing Aleo key", async () => {
+            if (!allowEthereum) {
+                return;
+            }
+            await run("Updating your ENS name", async () => {
                 await writeRecords([[RECORD.aleo, aleo]]);
                 if (profile) {
+                    invalidateEnsProfile(profile.name);
                     setRoster(rememberAleo(aleo, profile.name));
                     setProfile({ ...profile, aleo });
                 }
             });
         },
-        [profile, run, writeRecords],
+        [allowEthereum, profile, run, writeRecords],
     );
 
     const publishTable = useCallback(
         async (gameId: number, aleo: string, playerId: 1 | 2 | 3) => {
-            await run("Publishing table", async () => {
+            if (!allowEthereum) {
+                return;
+            }
+            await run("Updating your ENS name", async () => {
                 if (!profile?.name) {
                     throw new Error("Connect an Ethereum wallet that has a primary ENS name on Sepolia");
                 }
@@ -165,6 +212,7 @@ export function EnsProvider({ children }: { children: ReactNode }) {
                     [RECORD.agentEndpointWeb, typeof window === "undefined" ? "" : window.location.origin],
                 ];
                 await writeRecords(records);
+                invalidateEnsProfile(profile.name);
                 setRoster(rememberTable(gameId, profile.name));
                 setRoster(rememberAleo(aleo, profile.name));
                 setProfile({
@@ -176,10 +224,13 @@ export function EnsProvider({ children }: { children: ReactNode }) {
                 });
             });
         },
-        [profile, run, writeRecords],
+        [allowEthereum, profile, run, writeRecords],
     );
 
     const authorizePublisher = useCallback(async () => {
+        if (!allowEthereum) {
+            return;
+        }
         await run("Authorizing table publisher", async () => {
             if (!ethAddress || !profile?.name) {
                 throw new Error("Connect an ENS name you can write on Sepolia");
@@ -189,7 +240,7 @@ export function EnsProvider({ children }: { children: ReactNode }) {
             await grantPublisherSetterRoles(ownerWallet(ethAddress), profile.name, account);
             setPublisher(account);
         });
-    }, [ethAddress, profile, run]);
+    }, [allowEthereum, ethAddress, profile, run]);
 
     const claimSeat = useCallback(
         (aleo: string) => {
@@ -211,7 +262,7 @@ export function EnsProvider({ children }: { children: ReactNode }) {
             if (!aleo) {
                 return null;
             }
-            const name = roster.aleo[aleo];
+            const name = roster.aleo[aleo] ?? (profile?.aleo === aleo ? profile.name : null);
             if (!name) {
                 return null;
             }
@@ -237,6 +288,7 @@ export function EnsProvider({ children }: { children: ReactNode }) {
             connect,
             disconnect,
             resolveJoin,
+            hydrateDirectory,
             publishBinding,
             publishTable,
             authorizePublisher,
@@ -255,6 +307,7 @@ export function EnsProvider({ children }: { children: ReactNode }) {
             ethAddress,
             identityFor,
             profile,
+            hydrateDirectory,
             publishBinding,
             publishTable,
             resolveJoin,

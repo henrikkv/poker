@@ -12,7 +12,7 @@ const OPTIONS: { option: MenuOption; title: string; body: string; suit: string }
     {
         option: "joinGame",
         title: "Join a table",
-        body: "Enter a game id to take an open seat, or watch a game that has already started.",
+        body: "Enter a game id or an ENS name to take an open seat, or watch a game that has already started.",
         suit: "♥",
     },
 ];

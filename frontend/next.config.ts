@@ -9,6 +9,7 @@ const explorer = (process.env.ENDPOINT || "https://api.explorer.provable.com").r
 const provable = process.env.PROVABLE_API_URL ?? "https://api.provable.com";
 
 const nextConfig: NextConfig = {
+    serverExternalPackages: ["@provablehq/sdk", "@provablehq/wasm"],
     env: {
         CONSENSUS_HEIGHTS: process.env.CONSENSUS_HEIGHTS ?? "",
         NEXT_PUBLIC_SEPOLIA_RPC: process.env.NEXT_PUBLIC_SEPOLIA_RPC ?? "",

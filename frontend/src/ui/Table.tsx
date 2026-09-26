@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useEns } from "../ens/index.js";
 import { getOpponents, getViewCards } from "../game/cards.js";
 import type { GameMessage } from "../game/controller.js";
@@ -13,6 +13,13 @@ import { Spinner } from "./Spinner.js";
 export function Table({ model, busy, dispatch }: { model: GameModel; busy: boolean; dispatch: (msg: GameMessage) => void }) {
     const ens = useEns();
     const gameId = model.gameId;
+
+    useEffect(() => {
+        if (gameId === null) {
+            return;
+        }
+        void ens.hydrateDirectory(gameId);
+    }, [ens.hydrateDirectory, gameId, model.playerAddresses]);
     const tableName = ens.tableNameFor(gameId);
     const state = model.currentState;
     const description = state !== null ? describeGameState(state) : null;
@@ -26,9 +33,7 @@ export function Table({ model, busy, dispatch }: { model: GameModel; busy: boole
                         <>
                             <Spinner className="size-8 text-gold" />
                             <p className="font-display text-xl text-paper">{model.backgroundTask}</p>
-                            <p className="max-w-sm text-sm text-muted">
-                                Approve the transaction in Shield. The wallet proves it, then it lands on testnet.
-                            </p>
+                            <p className="max-w-sm text-sm text-muted">This can take a few minutes. You can leave this tab open.</p>
                         </>
                     ) : (
                         <>

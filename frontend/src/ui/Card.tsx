@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useId } from "react";
-import { cardInfo } from "../game/cards.js";
+import { cardInfo, type Suit } from "../game/cards.js";
+import { SuitIcon } from "./SuitIcon.js";
 
 type Size = "sm" | "md" | "lg";
 
@@ -25,7 +26,7 @@ export function Card({ index, size = "md", dim = false }: { index: number; size?
                     transition={{ duration: 0.22, ease: "easeOut" }}
                 >
                     {info.kind === "valid" ? (
-                        <CardFace value={info.value} symbol={info.symbol} red={info.isRed} />
+                        <CardFace value={info.value} suit={info.suit} red={info.isRed} />
                     ) : (
                         <CardBack />
                     )}
@@ -35,31 +36,30 @@ export function Card({ index, size = "md", dim = false }: { index: number; size?
     );
 }
 
-function CardFace({ value, symbol, red }: { value: string; symbol: string; red: boolean }) {
-    const color = red ? "var(--color-card-red)" : "var(--color-ink)";
+function CardFace({ value, suit, red }: { value: string; suit: Suit; red: boolean }) {
+    const tone = red ? "text-card-red" : "text-ink";
     return (
-        <svg viewBox="0 0 100 140" className="size-full" role="img" aria-label={`${value}${symbol}`}>
-            <rect x="1" y="1" width="98" height="138" rx="9" fill="#fbf8f1" stroke="#d8d0bf" strokeWidth="2" />
-            <g fill={color} fontFamily="var(--font-display)" fontWeight="700">
-                <text x="10" y="30" fontSize="26">
-                    {value}
-                </text>
-                <text x="11" y="52" fontSize="20">
-                    {symbol}
-                </text>
-                <text x="50" y="92" fontSize="54" textAnchor="middle">
-                    {symbol}
-                </text>
-                <g transform="rotate(180 50 70)">
-                    <text x="10" y="30" fontSize="26">
-                        {value}
-                    </text>
-                    <text x="11" y="52" fontSize="20">
-                        {symbol}
-                    </text>
-                </g>
-            </g>
-        </svg>
+        <div
+            role="img"
+            aria-label={`${value} of ${suit}`}
+            className="@container relative size-full overflow-hidden rounded-[8%] border-2 border-[#d8d0bf] bg-[#fbf8f1]"
+        >
+            <Pip value={value} suit={suit} className={`top-[6%] left-[8%] ${tone}`} />
+            <SuitIcon
+                suit={suit}
+                className={`absolute top-[52%] left-1/2 size-[40cqw] -translate-x-1/2 -translate-y-1/2 ${tone}`}
+            />
+            <Pip value={value} suit={suit} className={`right-[8%] bottom-[6%] rotate-180 ${tone}`} />
+        </div>
+    );
+}
+
+function Pip({ value, suit, className }: { value: string; suit: Suit; className: string }) {
+    return (
+        <span className={`absolute flex flex-col items-center font-display leading-none font-bold ${className}`}>
+            <span className="text-[26cqw]">{value}</span>
+            <SuitIcon suit={suit} className="mt-[1cqw] size-[18cqw]" />
+        </span>
     );
 }
 

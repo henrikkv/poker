@@ -35,6 +35,7 @@ import {
     type ChipView,
     type GameModel,
 } from "./model.js";
+import { sortLobby, toLobbyTable, type LobbyTable } from "./lobby.js";
 import {
     currentPlayer,
     decryptionLogMessage,
@@ -61,7 +62,8 @@ export interface SeatedGameInfo {
 }
 
 const LOOKUP_ATTEMPTS = 3;
-const SCAN_TAIL = 8;
+/** Recent games shown on the menu, plus any id this browser already joined. */
+const SCAN_TAIL = 16;
 
 function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -225,19 +227,8 @@ export class PokerGame {
     }
 
     async findSeatedGames(knownIds: number[] = []): Promise<SeatedGameInfo[]> {
-        let latest = 0;
-        try {
-            const next = (await this.poker.get_next_game_id(0)) ?? 0;
-            latest = next > 0 ? next - 1 : 0;
-        } catch {
-            latest = Math.max(0, ...knownIds);
-        }
-        const ids = new Set(knownIds.filter((id) => Number.isInteger(id) && id >= 0));
-        for (let id = latest; id >= Math.max(0, latest - SCAN_TAIL + 1); id -= 1) {
-            ids.add(id);
-        }
         const found: SeatedGameInfo[] = [];
-        for (const gameId of [...ids].sort((a, b) => b - a)) {
+        for (const gameId of await this.recentGameIds(knownIds)) {
             try {
                 const game = await this.poker.get_games(gameId);
                 if (!game) {
@@ -258,6 +249,39 @@ export class PokerGame {
             }
         }
         return found;
+    }
+
+    async listLobby(knownIds: number[] = []): Promise<LobbyTable[]> {
+        const ids = await this.recentGameIds(knownIds);
+        const rows = await Promise.all(
+            ids.map(async (gameId) => {
+                try {
+                    const game = await this.poker.get_games(gameId);
+                    if (!game) {
+                        return null;
+                    }
+                    return toLobbyTable(gameId, game, this.seatsFromGame(game));
+                } catch {
+                    return null;
+                }
+            }),
+        );
+        return sortLobby(rows.filter((row): row is LobbyTable => row !== null));
+    }
+
+    private async recentGameIds(knownIds: number[]): Promise<number[]> {
+        let latest = 0;
+        try {
+            const next = (await this.poker.get_next_game_id(0)) ?? 0;
+            latest = next > 0 ? next - 1 : 0;
+        } catch {
+            latest = Math.max(0, ...knownIds);
+        }
+        const ids = new Set(knownIds.filter((id) => Number.isInteger(id) && id >= 0));
+        for (let id = latest; id >= Math.max(0, latest - SCAN_TAIL + 1); id -= 1) {
+            ids.add(id);
+        }
+        return [...ids].sort((a, b) => b - a);
     }
 
     async findSeatedGame(knownIds: number[] = []): Promise<number | null> {

@@ -7,16 +7,13 @@ import {
     getOrInitConsensusVersionTestHeights,
 } from "@provablehq/sdk";
 import type { TransactionInput } from "@provablehq/aleo-types";
-import { publicBalance } from "./chain.js";
 import { PRIORITY_FEE_CREDITS, readMapping, waitUntilSettled, type Session } from "./aleo.js";
-import { clearTempAccount, rememberTempAccountHeight, tempAccountScanStart } from "./tempAccount.js";
+import { localAccountScanStart, rememberLocalAccountHeight } from "./signing.js";
 
 export interface LocalSessionOptions {
     account: Account;
     endpoint: string;
-    ethAddress: string;
     proveToken: string;
-    funderAddress: string;
 }
 
 function consensusHeights(): string | undefined {
@@ -34,12 +31,15 @@ export async function initAleoRuntime(): Promise<void> {
 /** ~10s testnet blocks. Do not walk the explorer further back than one day. */
 const RECORD_SCAN_BLOCKS = 8_640;
 
+/**
+ * Signs and builds proving requests with a private key held by the SDK.
+ * Proving still runs on the delegated prover; Shield is not asked to confirm.
+ */
 export class LocalSession implements Session {
     readonly kind = "local" as const;
     private readonly networkClient: AleoNetworkClient;
     private readonly programManager: ProgramManager;
     private readonly records: NetworkRecordProvider;
-    private returned = false;
 
     constructor(private readonly options: LocalSessionOptions) {
         this.networkClient = new AleoNetworkClient(options.endpoint);
@@ -49,7 +49,7 @@ export class LocalSession implements Session {
         this.programManager = new ProgramManager(options.endpoint, keys, this.records);
         this.programManager.setAccount(options.account);
         void this.networkClient.getLatestHeight().then((height) => {
-            rememberTempAccountHeight(this.options.ethAddress, height);
+            rememberLocalAccountHeight(height);
         });
     }
 
@@ -90,9 +90,9 @@ export class LocalSession implements Session {
 
     private async recordScanWindow(): Promise<{ startHeight: number; endHeight: number }> {
         const endHeight = await this.networkClient.getLatestHeight();
-        rememberTempAccountHeight(this.options.ethAddress, endHeight);
+        rememberLocalAccountHeight(endHeight);
         return {
-            startHeight: tempAccountScanStart(this.options.ethAddress, endHeight, RECORD_SCAN_BLOCKS),
+            startHeight: localAccountScanStart(endHeight, RECORD_SCAN_BLOCKS),
             endHeight,
         };
     }
@@ -119,27 +119,6 @@ export class LocalSession implements Session {
 
     async mapping(programName: string, mappingName: string, key: string): Promise<string | null> {
         return readMapping(this.networkClient, programName, mappingName, key);
-    }
-
-    async returnFunds(): Promise<void> {
-        if (this.returned) {
-            return;
-        }
-        const balance = await publicBalance(this, this.address());
-        const fee = 1_000_000n;
-        if (balance > fee) {
-            await this.execute("credits.aleo", "transfer_public", [
-                this.options.funderAddress,
-                `${balance - fee}u64`,
-            ]);
-        }
-        this.returned = true;
-        clearTempAccount(this.options.ethAddress);
-        await fetch("/api/fund", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: this.options.proveToken }),
-        });
     }
 
     private async resolveInputs(inputs: TransactionInput[]): Promise<string[]> {

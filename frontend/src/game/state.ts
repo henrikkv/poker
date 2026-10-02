@@ -110,6 +110,33 @@ export function isLobbyState(state: number): boolean {
     return state === GameState.P2Join || state === GameState.P3Join;
 }
 
+export type GameStage = "Waiting" | "Pre-flop" | "Flop" | "Turn" | "River" | "Showdown" | "New hand" | "Claim";
+
+export function gameStage(state: GameState): GameStage {
+    if (state <= GameState.P3Join) {
+        return "Waiting";
+    }
+    if (state <= GameState.P3BetPre) {
+        return "Pre-flop";
+    }
+    if (state <= GameState.P3BetFlop) {
+        return "Flop";
+    }
+    if (state <= GameState.P3BetTurn) {
+        return "Turn";
+    }
+    if (state <= GameState.P3BetRiver) {
+        return "River";
+    }
+    if (state <= GameState.Compare) {
+        return "Showdown";
+    }
+    if (state <= GameState.P3Shuffle) {
+        return "New hand";
+    }
+    return "Claim";
+}
+
 export function isNewHandState(state: GameState): boolean {
     return (
         state === GameState.P1NewShuffle ||

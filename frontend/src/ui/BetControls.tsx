@@ -54,7 +54,7 @@ export function BetControls({ ui, disabled, dispatch }: {
                         type="button"
                         disabled={disabled}
                         onClick={() => dispatch({ type: "allIn" })}
-                        className="rounded-lg border border-white/10 px-2.5 py-1 text-paper transition hover:border-gold/50 disabled:opacity-40"
+                        className="btn btn-ghost"
                     >
                         All in
                     </button>
@@ -72,18 +72,17 @@ function ActionButton({ selected, disabled, onClick, tone, children }: {
     children: ReactNode;
 }) {
     const tones = {
-        muted: "bg-white/5 text-paper hover:bg-white/10",
-        paper: "bg-paper text-ink hover:brightness-95",
-        gold: "bg-gold text-ink hover:brightness-110",
+        muted: "btn-ghost",
+        paper: "btn-ghost",
+        gold: "btn-gold",
     };
     return (
         <button
             type="button"
             disabled={disabled}
             onClick={onClick}
-            className={`rounded-xl px-4 py-3 text-sm font-semibold tabular-nums transition disabled:cursor-not-allowed disabled:opacity-40 ${tones[tone]} ${
-                selected ? "ring-2 ring-gold ring-offset-2 ring-offset-felt-deep" : ""
-            }`}
+            aria-pressed={selected}
+            className={`btn tabular-nums ${tones[tone]}`}
         >
             {children}
         </button>

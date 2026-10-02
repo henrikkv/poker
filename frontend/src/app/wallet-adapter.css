@@ -1,31 +1,31 @@
 
 :root {
   /* Primary Colors */
-  --wallet-adapter-primary: #9565fb; /* Main brand color for primary actions */
-  --wallet-adapter-primary-hover: #7952ca; /* Darker shade for hover states */
-  --wallet-adapter-primary-foreground: #ffffff; /* Text color on primary buttons */
+  --wallet-adapter-primary: #e6c36a;
+  --wallet-adapter-primary-hover: #d4b15a;
+  --wallet-adapter-primary-foreground: #1b1f1d;
 
   /* Background & Surface Colors */
-  --wallet-adapter-background: #0a0606; /* Main background color */
-  --wallet-adapter-surface: #0a0606; /* Surface color for cards/modals */
-  --wallet-adapter-surface-hover: #1a1616; /* Slightly lighter for hover states */
-  --wallet-adapter-surface-light: #2a2626; /* Lighter surface for contrast */
+  --wallet-adapter-background: #0c241b;
+  --wallet-adapter-surface: #0c241b;
+  --wallet-adapter-surface-hover: #174a34;
+  --wallet-adapter-surface-light: #1f5a40;
 
   /* Text and Border Colors */
-  --wallet-adapter-text: #f0e9e6; /* Main text color */
-  --wallet-adapter-text-secondary: #b3aea9; /* Secondary text color */
-  --wallet-adapter-border: #2a2626; /* Border color */
-  --wallet-adapter-border-light: #3a3636; /* Lighter border color */
+  --wallet-adapter-text: #f4efe4;
+  --wallet-adapter-text-secondary: #b7c9bf;
+  --wallet-adapter-border: rgba(255, 255, 255, 0.12);
+  --wallet-adapter-border-light: rgba(255, 255, 255, 0.2);
 
   /* Secondary Colors */
-  --wallet-adapter-secondary: #9565fb; /* Secondary action color */
-  --wallet-adapter-secondary-hover: #8555eb; /* Secondary hover state */
+  --wallet-adapter-secondary: #e6c36a;
+  --wallet-adapter-secondary-hover: #d4b15a;
 
   /* Accent Colors */
-  --wallet-adapter-accent-red: #fe514e; /* For important actions/alerts */
-  --wallet-adapter-accent-blue: #3f92ff; /* For links and info states */
-  --wallet-adapter-accent-yellow: #faad2b; /* For warnings and highlights */
-  --wallet-adapter-accent-green: #13bc80; /* For success states */
+  --wallet-adapter-accent-red: #c8372d;
+  --wallet-adapter-accent-blue: #7eb8a2;
+  --wallet-adapter-accent-yellow: #e6c36a;
+  --wallet-adapter-accent-green: #3dbe86;
 
   /* Shadows */
   --wallet-adapter-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -47,38 +47,42 @@
   cursor: pointer;
   display: flex;
   align-items: center;
-  font-family: 'Inter Tight', sans-serif;
-  font-size: 13px;
+  font-family: inherit;
+  font-size: 14px;
   font-weight: 600;
-  height: 38px;
-  line-height: 38px;
+  height: 44px;
+  line-height: 44px;
   padding: 0 16px;
-  border-radius: var(--wallet-adapter-radius-xl);
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 6px;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   letter-spacing: 0.01em;
   gap: 8px;
 }
 
 .wallet-adapter-button-trigger {
-  background-color: var(--wallet-adapter-primary);
-  color: var(--wallet-adapter-primary-foreground);
-  border: none;
-  box-shadow: var(--wallet-adapter-shadow);
-  height: 42px;
-  padding: 0 20px;
+  background-color: transparent;
+  color: var(--wallet-adapter-primary);
+  border: 1px solid var(--wallet-adapter-primary);
+  height: 44px;
+  padding: 0 22px;
   font-size: 14px;
+  box-shadow: none;
 }
 
 .wallet-adapter-button:not([disabled]):focus-visible {
   outline: 2px solid var(--wallet-adapter-primary);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(219, 51, 202, 0.1);
+  box-shadow: 0 0 0 4px rgba(230, 195, 106, 0.28);
 }
 
 .wallet-adapter-button:not([disabled]):hover {
-  background-color: var(--wallet-adapter-primary-hover);
-  /* transform: translateY(-1px); */
-  box-shadow: var(--wallet-adapter-shadow-lg);
+  border-color: var(--wallet-adapter-primary);
+  box-shadow: none;
+}
+
+.wallet-adapter-button-trigger:not([disabled]):hover {
+  background-color: var(--wallet-adapter-primary);
+  color: var(--wallet-adapter-primary-foreground);
 }
 
 .wallet-adapter-button[disabled] {
@@ -216,11 +220,11 @@
 .wallet-adapter-modal-button-close:focus {
   outline: 2px solid var(--wallet-adapter-primary);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(219, 51, 202, 0.1);
+  box-shadow: 0 0 0 4px rgba(230, 195, 106, 0.28);
 }
 
 .wallet-adapter-modal-button-close svg {
-  fill: #777;
+  fill: #b7c9bf;
   transition: fill 200ms ease 0s;
 }
 
@@ -415,7 +419,7 @@
 .wallet-adapter-modal-middle-button:focus {
   outline: 2px solid var(--wallet-adapter-primary);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(219, 51, 202, 0.1);
+  box-shadow: 0 0 0 4px rgba(230, 195, 106, 0.28);
 }
 
 /* .wallet-adapter-button:hover {

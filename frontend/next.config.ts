@@ -12,7 +12,6 @@ const nextConfig: NextConfig = {
     serverExternalPackages: ["@provablehq/sdk", "@provablehq/wasm"],
     env: {
         CONSENSUS_HEIGHTS: process.env.CONSENSUS_HEIGHTS ?? "",
-        NEXT_PUBLIC_SEPOLIA_RPC: process.env.NEXT_PUBLIC_SEPOLIA_RPC ?? "",
     },
     async rewrites() {
         return [

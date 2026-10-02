@@ -1,34 +1,41 @@
 import { motion } from "motion/react";
+import type { Suit } from "../game/cards.js";
 import type { GameMessage } from "../game/controller.js";
+import type { LobbyTable } from "../game/lobby.js";
 import type { MenuOption, SeatedTableView } from "../game/model.js";
+import { SuitIcon } from "./SuitIcon.js";
 
-const OPTIONS: { option: MenuOption; title: string; body: string; suit: string }[] = [
+const OPTIONS: { option: MenuOption; title: string; body: string; suit: Suit }[] = [
     {
         option: "createGame",
         title: "Create a table",
-        body: "Shuffle a fresh encrypted deck, set the buy-in and blinds, and wait for two players.",
-        suit: "♠",
+        body: "Shuffle a fresh encrypted deck, set the buy-in and blinds, and wait for two more players.",
+        suit: "spades",
     },
     {
         option: "joinGame",
         title: "Join a table",
-        body: "Enter a game id or an ENS name to take an open seat, or watch a game that has already started.",
-        suit: "♥",
+        body: "Enter a game id to take an open seat, or watch a game that has already started.",
+        suit: "hearts",
     },
 ];
 
 export function Menu({
     selected,
     seatedTables,
+    lobbyTables,
+    lobbyReady,
     blockedGameId,
     dispatch,
 }: {
     selected: MenuOption;
     seatedTables: SeatedTableView[];
+    lobbyTables: LobbyTable[];
+    lobbyReady: boolean;
     blockedGameId: number | null;
     dispatch: (msg: GameMessage) => void;
 }) {
-    const live = seatedTables.filter((table) => table.unfinished);
+    const tables = lobbyReady ? lobbyTables : seatedTables.filter((table) => table.unfinished).map(pendingRow);
     return (
         <div className="space-y-6">
             {blockedGameId !== null && (
@@ -49,34 +56,23 @@ export function Menu({
                 </div>
             )}
 
-            {live.length > 0 && (
-                <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                    <p className="text-[11px] font-semibold tracking-[0.2em] text-gold/80 uppercase">Your tables</p>
+            <section className="rounded-3xl border border-white/10 bg-felt-deep p-5">
+                <div className="flex items-baseline justify-between gap-3">
+                    <h2 className="font-display text-xl text-paper">Tables</h2>
+                    {!lobbyReady && <p className="text-sm text-muted">Looking up tables</p>}
+                </div>
+                {tables.length === 0 ? (
+                    <p className="mt-3 text-sm text-muted">
+                        {lobbyReady ? "No open tables." : "Recent tables will show up here."}
+                    </p>
+                ) : (
                     <ul className="mt-3 space-y-2">
-                        {live.map((table) => (
-                            <li
-                                key={table.gameId}
-                                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 px-4 py-3"
-                            >
-                                <div>
-                                    <p className="font-display text-lg text-paper">Resume table {table.gameId}</p>
-                                    <p className="text-xs text-muted">
-                                        Seated as Player {table.playerIds.join(" and ")}
-                                    </p>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    <GoldButton onClick={() => dispatch({ type: "resumeTable", gameId: table.gameId })}>
-                                        Resume
-                                    </GoldButton>
-                                    <GhostButton onClick={() => dispatch({ type: "hideTable", gameId: table.gameId })}>
-                                        Hide this table locally
-                                    </GhostButton>
-                                </div>
-                            </li>
+                        {tables.map((table) => (
+                            <TableRow key={table.gameId} table={table} canHide={!lobbyReady} dispatch={dispatch} />
                         ))}
                     </ul>
-                </div>
-            )}
+                )}
+            </section>
 
             <div className="grid gap-5 sm:grid-cols-2">
                 {OPTIONS.map(({ option, title, body, suit }, i) => {
@@ -90,20 +86,16 @@ export function Menu({
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.06 }}
                             whileHover={{ y: -3 }}
-                            className={`group relative overflow-hidden rounded-3xl border p-7 text-left transition ${
+                            className={`rounded-3xl border p-7 text-left transition ${
                                 active
-                                    ? "border-gold/60 bg-felt/80 shadow-[0_0_0_1px_rgba(230,195,106,0.35),0_20px_50px_rgba(0,0,0,0.35)]"
-                                    : "border-white/10 bg-black/20 hover:border-white/25"
+                                    ? "border-gold/70 bg-felt shadow-[0_16px_36px_rgba(0,0,0,0.35)]"
+                                    : "border-white/10 bg-felt-deep hover:border-white/25"
                             }`}
                         >
-                            <span
-                                className={`absolute -top-6 -right-2 font-display text-[9rem] leading-none transition ${
-                                    suit === "♥" ? "text-card-red/20" : "text-paper/10"
-                                } group-hover:scale-105`}
-                                aria-hidden
-                            >
-                                {suit}
-                            </span>
+                            <SuitIcon
+                                suit={suit}
+                                className={`mb-4 size-7 ${suit === "hearts" ? "text-card-red" : "text-paper"}`}
+                            />
                             <h2 className="font-display text-2xl text-paper">{title}</h2>
                             <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted">{body}</p>
                         </motion.button>
@@ -114,12 +106,75 @@ export function Menu({
     );
 }
 
+function pendingRow(table: SeatedTableView): LobbyTable {
+    const playerIds = table.playerIds.filter((id): id is 1 | 2 | 3 => id === 1 || id === 2 || id === 3);
+    return {
+        gameId: table.gameId,
+        state: 0,
+        stage: "Waiting",
+        progress: "Checking this table",
+        waiting: false,
+        yours: true,
+        seatsFilled: Math.min(3, Math.max(playerIds.length, 1)),
+        playerIds,
+    };
+}
+
+function TableRow({
+    table,
+    canHide,
+    dispatch,
+}: {
+    table: LobbyTable;
+    canHide: boolean;
+    dispatch: (msg: GameMessage) => void;
+}) {
+    const seats = `${table.seatsFilled} of 3 seated`;
+    return (
+        <li className="flex flex-col gap-3 rounded-2xl border border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-2">
+                    <span className="font-display text-lg text-paper">Table {table.gameId}</span>
+                    {table.yours && <span className="text-sm text-gold">You</span>}
+                    {table.progress !== "Checking this table" && (
+                        <span className="rounded-full border border-white/15 px-2 py-0.5 text-xs text-muted">{table.stage}</span>
+                    )}
+                </p>
+                <p className="mt-1 text-sm text-paper">{table.progress}</p>
+                <p className="text-xs text-muted">{seats}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+                {table.yours ? (
+                    <>
+                        <GoldButton onClick={() => dispatch({ type: "resumeTable", gameId: table.gameId })}>
+                            Resume
+                        </GoldButton>
+                        {canHide && (
+                            <GhostButton onClick={() => dispatch({ type: "hideTable", gameId: table.gameId })}>
+                                Hide
+                            </GhostButton>
+                        )}
+                    </>
+                ) : table.waiting ? (
+                    <GoldButton onClick={() => dispatch({ type: "openListedTable", gameId: table.gameId })}>
+                        Join
+                    </GoldButton>
+                ) : (
+                    <GhostButton onClick={() => dispatch({ type: "watchTable", gameId: table.gameId })}>
+                        Watch
+                    </GhostButton>
+                )}
+            </div>
+        </li>
+    );
+}
+
 function GoldButton({ children, onClick }: { children: string; onClick: () => void }) {
     return (
         <button
             type="button"
             onClick={onClick}
-            className="rounded-xl bg-gold px-4 py-2 text-sm font-semibold text-ink shadow-[0_8px_20px_rgba(230,195,106,0.25)]"
+            className="btn btn-gold"
         >
             {children}
         </button>
@@ -131,7 +186,7 @@ function GhostButton({ children, onClick }: { children: string; onClick: () => v
         <button
             type="button"
             onClick={onClick}
-            className="rounded-xl border border-white/15 px-4 py-2 text-sm text-paper transition hover:border-gold/50"
+            className="btn btn-ghost"
         >
             {children}
         </button>

@@ -9,10 +9,8 @@ export function LogPanel({ logs }: { logs: LogEntry[] }) {
     }, [logs.length]);
 
     return (
-        <section className="flex min-h-0 flex-col rounded-2xl border border-white/10 bg-black/25 backdrop-blur">
-            <h2 className="border-b border-white/10 px-4 py-2.5 text-[11px] font-semibold tracking-[0.2em] text-muted uppercase">
-                Activity
-            </h2>
+        <section className="flex min-h-0 flex-col rounded-2xl border border-white/10 bg-felt-deep">
+            <h2 className="border-b border-white/10 px-4 py-3 font-display text-lg text-paper">Activity</h2>
             <div ref={scroller} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-3 text-sm">
                 {logs.map((entry) => (
                     <div key={entry.id} className="flex items-start gap-2.5">

@@ -26,6 +26,22 @@ body {
     color: var(--color-paper);
     font-family: var(--font-sans);
     color-scheme: dark;
+    caret-color: var(--color-gold);
+}
+
+::selection {
+    background: var(--color-gold);
+    color: var(--color-ink);
+}
+
+button:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 3px;
+}
+
+* {
+    scrollbar-color: var(--color-felt-line) transparent;
 }
 
 .felt {
@@ -42,14 +58,64 @@ input[type="range"] {
     accent-color: var(--color-gold);
 }
 
-:root {
-    --wallet-adapter-primary: var(--color-gold);
-    --wallet-adapter-primary-hover: #d4b15a;
-    --wallet-adapter-primary-foreground: var(--color-ink);
-    --wallet-adapter-background: var(--color-felt-deep);
-    --wallet-adapter-surface: #0c241b;
-    --wallet-adapter-surface-hover: #174a34;
-    --wallet-adapter-text: var(--color-paper);
-    --wallet-adapter-text-secondary: var(--color-muted);
-    --wallet-adapter-border: rgba(255, 255, 255, 0.12);
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        border-color 150ms ease;
+}
+
+.btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
+.btn-gold {
+    border-color: var(--color-gold);
+    background: transparent;
+    color: var(--color-gold);
+}
+
+.btn-gold:hover:not(:disabled) {
+    background: var(--color-gold);
+    color: var(--color-ink);
+}
+
+.btn-ghost {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: transparent;
+    color: var(--color-paper);
+}
+
+.btn-ghost:hover:not(:disabled) {
+    border-color: var(--color-gold);
+    color: var(--color-gold);
+}
+
+.btn[aria-pressed="true"] {
+    border-color: var(--color-gold);
+    background: var(--color-gold);
+    color: var(--color-ink);
+}
+
+.btn-quiet {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    color: var(--color-muted);
+    font-size: 0.875rem;
+}
+
+.btn-quiet:hover {
+    color: var(--color-paper);
 }

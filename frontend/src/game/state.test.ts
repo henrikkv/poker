@@ -16,6 +16,7 @@ import {
     currentPlayer,
     describeGameState,
     GameState,
+    gameStage,
     gameStateFromU8,
     isBettingState,
     isLobbyState,
@@ -37,6 +38,18 @@ describe("GameState", () => {
         expect(isUnfinishedState(GameState.P1Claim)).toBe(false);
         expect(isLobbyState(GameState.P2Join)).toBe(true);
         expect(isLobbyState(GameState.P1DecHand)).toBe(false);
+    });
+
+    it("names the street each state belongs to", () => {
+        expect(gameStage(GameState.P3Join)).toBe("Waiting");
+        expect(gameStage(GameState.P1DecHand)).toBe("Pre-flop");
+        expect(gameStage(GameState.P3BetPre)).toBe("Pre-flop");
+        expect(gameStage(GameState.P1DecFlop)).toBe("Flop");
+        expect(gameStage(GameState.P2BetTurn)).toBe("Turn");
+        expect(gameStage(GameState.P3BetRiver)).toBe("River");
+        expect(gameStage(GameState.Compare)).toBe("Showdown");
+        expect(gameStage(GameState.P3Shuffle)).toBe("New hand");
+        expect(gameStage(GameState.P2Claim)).toBe("Claim");
     });
 
     it("identifies betting states", () => {

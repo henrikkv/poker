@@ -4,7 +4,6 @@ import { Card } from "./Card.js";
 
 export interface SeatProps {
     playerId: number;
-    ensName?: string | null;
     cards: [number, number];
     chips: number;
     bet: number;
@@ -18,17 +17,17 @@ export interface SeatProps {
 }
 
 export function PlayerSeat(props: SeatProps) {
-    const { playerId, ensName, cards, chips, bet, isYou, isEliminated, keepCardsVisible, isDealer, isActive, provingLabel } = props;
+    const { playerId, cards, chips, bet, isYou, isEliminated, keepCardsVisible, isDealer, isActive, provingLabel } = props;
     const fadeSeat = isEliminated && !keepCardsVisible;
     return (
         <div className="relative flex flex-col items-center gap-2">
             <motion.div
-                animate={isActive ? { boxShadow: "0 0 0 2px rgba(230,195,106,0.9), 0 0 32px rgba(230,195,106,0.35)" } : { boxShadow: "0 0 0 1px rgba(255,255,255,0.08), 0 0 0 rgba(0,0,0,0)" }}
+                animate={isActive ? { boxShadow: "0 0 0 2px rgba(230,195,106,0.95)" } : { boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
                 className={`relative min-w-44 rounded-2xl bg-felt-deep/90 px-4 pt-3 pb-3 backdrop-blur ${fadeSeat ? "opacity-45 grayscale" : ""}`}
             >
                 <div className="flex items-center justify-between gap-3">
                     <span className="font-display text-lg text-paper">
-                        {ensName ?? (isYou ? "You" : `Player ${playerId}`)}
+                        {isYou ? "You" : `Player ${playerId}`}
                         <span className="ml-1.5 text-xs font-sans text-muted">P{playerId}</span>
                     </span>
                     {isEliminated ? (

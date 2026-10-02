@@ -1,4 +1,4 @@
-/** Drop any leftover Shield session so the Ethereum path never shares a wallet. */
+/** Drop a leftover Shield session when local signing takes over. */
 export async function disconnectShieldWallet(): Promise<void> {
     try {
         const { ShieldWalletAdapter } = await import("@provablehq/aleo-wallet-adapter-shield");

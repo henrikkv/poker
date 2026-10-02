@@ -2,14 +2,13 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect } from "react";
 import type { GameController, GameMessage } from "../game/controller.js";
 import { config } from "../net/session.js";
+import type { SigningMode } from "../net/signing.js";
 import { CreateGameForm, JoinGameForm } from "./Forms.js";
 import { Header } from "./Header.js";
-import { EnsPanel } from "./EnsPanel.js";
 import { LogPanel } from "./LogPanel.js";
 import { Menu } from "./Menu.js";
 import { Table } from "./Table.js";
 import { useController } from "./useController.js";
-import type { PlayPath } from "./playPath.js";
 
 const KEYS: Record<string, GameMessage> = {
     ArrowLeft: { type: "left" },
@@ -26,12 +25,12 @@ function isTyping(target: EventTarget | null): boolean {
 
 export function App({
     controller,
-    playPath,
-    onChangeWallet,
+    signingMode,
+    onOpenSettings,
 }: {
     controller: GameController;
-    playPath: PlayPath;
-    onChangeWallet: () => void;
+    signingMode: SigningMode;
+    onOpenSettings: () => void;
 }) {
     const { model, status, busy } = useController(controller);
     const dispatch = controller.dispatch;
@@ -60,10 +59,8 @@ export function App({
             <Header
                 status={status}
                 networkName={config.networkName}
-                playPath={playPath}
-                onChangeWallet={onChangeWallet}
-                gameId={model.gameId}
-                inviteGameId={model.inviteGameId}
+                signingMode={signingMode}
+                onOpenSettings={onOpenSettings}
             />
 
             <div className="grid flex-1 gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -80,6 +77,8 @@ export function App({
                                 <Menu
                                     selected={model.selectedMenuOption}
                                     seatedTables={model.seatedTables}
+                                    lobbyTables={model.lobbyTables}
+                                    lobbyReady={model.lobbyReady}
                                     blockedGameId={model.blockedGameId}
                                     dispatch={dispatch}
                                 />
@@ -97,16 +96,11 @@ export function App({
 
                 <aside className="flex max-h-[70vh] min-h-64 flex-col lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)]">
                     <LogPanel logs={model.logs} />
-                    <EnsPanel
-                        aleo={status.address}
-                        gameId={model.gameId}
-                        playerId={model.currentPlayerId}
-                        playPath={playPath}
-                    />
-                    <p className="mt-3 px-1 text-xs leading-relaxed text-muted/70">
-                        Friends can join this table by game id
-                        {playPath === "ethereum" ? " or by your ENS name after you publish it." : "."}
-                    </p>
+                    {model.screen === "inGame" && (
+                        <p className="mt-3 px-1 text-sm leading-relaxed text-muted">
+                            Friends can join this table by game id.
+                        </p>
+                    )}
                 </aside>
             </div>
         </div>

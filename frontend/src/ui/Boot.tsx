@@ -2,68 +2,87 @@
 
 import { WalletMultiButton } from "@provablehq/aleo-wallet-adapter-react-ui";
 import { useWallet } from "@provablehq/aleo-wallet-adapter-react";
-import { useEffect, useRef, useState } from "react";
-import { EnsProvider, useEns } from "../ens/index.js";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { GameController } from "../game/controller.js";
-import { requestHouseFunds } from "../net/fund.js";
 import { initAleoRuntime } from "../net/localSession.js";
+import { setLiveLocal, stopLiveLocal, takeLiveLocal } from "../net/liveLocal.js";
+import { requestProveSession } from "../net/proveSession.js";
 import { config, openLocalSession, openWalletSession } from "../net/session.js";
-import { setLiveEthereum, stopLiveEthereum, takeLiveEthereum } from "../net/liveEthereum.js";
 import { disconnectShieldWallet } from "../net/shieldWallet.js";
-import { loadTempAccount } from "../net/tempAccount.js";
+import {
+    loadLocalAccount,
+    loadSigningMode,
+    peekLocalPrivateKey,
+    saveLocalAccount,
+    saveSigningMode,
+    type SigningMode,
+} from "../net/signing.js";
 import { App } from "./App.js";
-import type { PlayPath } from "./playPath.js";
+import { SettingsButton, SettingsDialog } from "./Settings.js";
 import { Spinner } from "./Spinner.js";
 import { WalletRoot } from "./WalletRoot.js";
 
-function Chooser({ onChoose }: { onChoose: (path: PlayPath) => void }) {
+export function Boot() {
+    const [mode, setMode] = useState<SigningMode>("shield");
+    const [ready, setReady] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [epoch, setEpoch] = useState(0);
+
+    useEffect(() => {
+        setMode(loadSigningMode());
+        setReady(true);
+    }, []);
+
+    const saveSettings = (next: SigningMode, privateKey: string) => {
+        const modeChanged = next !== mode;
+        const keyChanged = next === "local" && privateKey !== peekLocalPrivateKey();
+        if (!modeChanged && !keyChanged) {
+            return;
+        }
+        if (keyChanged) {
+            saveLocalAccount(privateKey);
+        }
+        if (modeChanged) {
+            saveSigningMode(next);
+        }
+        stopLiveLocal();
+        if (next === "local") {
+            void disconnectShieldWallet();
+        }
+        setMode(next);
+        setEpoch((current) => current + 1);
+    };
+
+    if (!ready) {
+        return null;
+    }
+
+    const settings = settingsOpen ? (
+        <SettingsDialog mode={mode} onClose={() => setSettingsOpen(false)} onSave={saveSettings} />
+    ) : null;
+    const openSettings = () => setSettingsOpen(true);
+
+    if (mode === "local") {
+        return (
+            <>
+                <LocalBoot epoch={epoch} onOpenSettings={openSettings} />
+                {settings}
+            </>
+        );
+    }
+
     return (
-        <div className="grid min-h-screen place-items-center p-8">
-            <div className="flex flex-col items-center gap-5 text-center">
-                <p className="text-[11px] font-semibold tracking-[0.25em] text-gold/80 uppercase">
-                    Aleo · {config.networkName}
-                </p>
-                <h1 className="font-display text-4xl text-paper">Mental Poker</h1>
-                <p className="max-w-md text-sm text-muted">
-                    Choose one wallet. Play with Ethereum if you have a Sepolia ENS name. Play with Shield if
-                    you use an Aleo wallet.
-                </p>
-                <div className="flex flex-wrap justify-center gap-3">
-                    <button
-                        type="button"
-                        onClick={() => onChoose("ethereum")}
-                        className="rounded-xl bg-gold px-6 py-2.5 text-sm font-semibold text-ink shadow-[0_8px_20px_rgba(230,195,106,0.25)]"
-                    >
-                        Play with Ethereum
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onChoose("shield")}
-                        className="rounded-xl border border-white/15 px-6 py-2.5 text-sm text-paper"
-                    >
-                        Play with Shield
-                    </button>
-                </div>
-            </div>
-        </div>
+        <WalletRoot>
+            <ShieldBoot onOpenSettings={openSettings} />
+            {settings}
+        </WalletRoot>
     );
 }
 
-function ChangeWalletButton({ onChange }: { onChange: () => void }) {
-    return (
-        <button type="button" onClick={onChange} className="text-xs text-muted transition hover:text-paper">
-            Use a different wallet
-        </button>
-    );
-}
-
-function ShieldBoot({ onChangeWallet }: { onChangeWallet: () => void }) {
+function ShieldBoot({ onOpenSettings }: { onOpenSettings: () => void }) {
     const wallet = useWallet();
     const walletRef = useRef(wallet);
     walletRef.current = wallet;
-    const ens = useEns();
-    const resolveJoin = useRef(ens.resolveJoin);
-    resolveJoin.current = ens.resolveJoin;
     const [controller, setController] = useState<GameController | null>(null);
 
     useEffect(() => {
@@ -74,37 +93,20 @@ function ShieldBoot({ onChangeWallet }: { onChangeWallet: () => void }) {
             });
             return;
         }
-        const next = new GameController(
-            openWalletSession(walletRef),
-            config.networkName,
-            config.endpoint,
-            (input) => resolveJoin.current(input),
-        );
+        const next = new GameController(openWalletSession(walletRef), config.networkName, config.endpoint);
         next.start();
         setController(next);
         return () => next.stop();
     }, [wallet.connected, wallet.address]);
 
-    const leave = () => {
-        if (wallet.connected) {
-            void wallet.disconnect();
-        }
-        onChangeWallet();
-    };
-
     if (!wallet.connected || !wallet.address) {
         return (
-            <div className="grid min-h-screen place-items-center p-8">
-                <div className="flex flex-col items-center gap-5 text-center">
-                    <p className="text-[11px] font-semibold tracking-[0.25em] text-gold/80 uppercase">
-                        Aleo · {config.networkName}
-                    </p>
-                    <h1 className="font-display text-4xl text-paper">Mental Poker</h1>
-                    <p className="max-w-md text-sm text-muted">Connect Shield to play.</p>
-                    <WalletMultiButton />
-                    <ChangeWalletButton onChange={leave} />
-                </div>
-            </div>
+            <Gate
+                title={`Connect Shield to play on ${config.networkName}.`}
+                onOpenSettings={onOpenSettings}
+            >
+                <WalletMultiButton />
+            </Gate>
         );
     }
 
@@ -118,171 +120,102 @@ function ShieldBoot({ onChangeWallet }: { onChangeWallet: () => void }) {
         );
     }
 
-    return <App controller={controller} playPath="shield" onChangeWallet={leave} />;
+    return <App controller={controller} signingMode="shield" onOpenSettings={onOpenSettings} />;
 }
 
-function EthereumBoot({ onChangeWallet }: { onChangeWallet: () => void }) {
-    const ens = useEns();
-    const resolveJoin = useRef(ens.resolveJoin);
-    resolveJoin.current = ens.resolveJoin;
-    const joinIdentity = useRef(() => ({ name: ens.name, aleo: ens.profile?.aleo ?? null }));
-    joinIdentity.current = () => ({ name: ens.name, aleo: ens.profile?.aleo ?? null });
-    const [phase, setPhase] = useState<"connect" | "fund" | "play">("connect");
-    const [status, setStatus] = useState("Connect the wallet that owns your ENS name");
-    const [error, setError] = useState<string | null>(null);
+function LocalBoot({ epoch, onOpenSettings }: { epoch: number; onOpenSettings: () => void }) {
     const [controller, setController] = useState<GameController | null>(null);
-    const [bootAttempt, setBootAttempt] = useState(0);
-    const funding = useRef(false);
+    const [error, setError] = useState<string | null>(null);
+    const [attempt, setAttempt] = useState(0);
 
     useEffect(() => {
-        void disconnectShieldWallet();
-    }, []);
-
-    useEffect(() => {
-        if (!ens.ethAddress) {
-            funding.current = false;
+        const account = loadLocalAccount();
+        if (!account) {
+            setController(null);
+            setError("Add a private key in settings.");
             return;
         }
-        const existing = takeLiveEthereum(ens.ethAddress);
+        const address = account.toString();
+        const existing = takeLiveLocal(address);
         if (existing) {
+            setError(null);
             setController(existing);
-            setPhase("play");
             return;
         }
-        if (funding.current) {
-            return;
-        }
-        funding.current = true;
         let cancelled = false;
-        setPhase("fund");
-        setStatus("Preparing your session");
+        setController(null);
+        setError(null);
         void (async () => {
             try {
                 await initAleoRuntime();
-                const account = loadTempAccount(ens.ethAddress!);
-                const funded = await requestHouseFunds(ens.ethAddress!, account.toString());
+                const token = await requestProveSession(address);
                 if (cancelled) {
                     return;
                 }
-                const session = openLocalSession({
-                    account,
-                    ethAddress: ens.ethAddress!,
-                    proveToken: funded.token,
-                    funderAddress: funded.funderAddress,
-                });
-                const next = new GameController(
-                    session,
-                    config.networkName,
-                    config.endpoint,
-                    (input) => resolveJoin.current(input),
-                    () => joinIdentity.current(),
-                );
+                const session = openLocalSession({ account, proveToken: token });
+                const next = new GameController(session, config.networkName, config.endpoint);
                 next.start();
-                setLiveEthereum(ens.ethAddress!, next);
+                if (cancelled) {
+                    next.stop();
+                    return;
+                }
+                setLiveLocal(address, next);
                 setController(next);
-                setPhase("play");
             } catch (caught) {
                 if (!cancelled) {
-                    funding.current = false;
                     setError(caught instanceof Error ? caught.message : String(caught));
-                    setPhase("connect");
                 }
             }
         })();
         return () => {
             cancelled = true;
         };
-    }, [ens.ethAddress, bootAttempt]);
+    }, [epoch, attempt]);
 
-    const leave = () => {
-        stopLiveEthereum(true);
-        setController(null);
-        ens.disconnect();
-        onChangeWallet();
-    };
+    if (error) {
+        return (
+            <Gate title={error} onOpenSettings={onOpenSettings}>
+                <button type="button" onClick={() => setAttempt((current) => current + 1)} className="btn btn-gold">
+                    Try again
+                </button>
+            </Gate>
+        );
+    }
 
-    if (phase !== "play" || !controller) {
+    if (!controller) {
         return (
             <div className="grid min-h-screen place-items-center p-8">
-                <div className="flex flex-col items-center gap-5 text-center">
-                    <p className="text-[11px] font-semibold tracking-[0.25em] text-gold/80 uppercase">
-                        Ethereum · Sepolia
-                    </p>
-                    <h1 className="font-display text-4xl text-paper">Mental Poker</h1>
-                    <p className="max-w-md text-sm text-muted">{error ?? status}</p>
-                    {!ens.ethAddress && (
-                        <button
-                            type="button"
-                            onClick={() => void ens.connect()}
-                            className="rounded-xl bg-gold px-6 py-2.5 text-sm font-semibold text-ink"
-                        >
-                            Connect Ethereum
-                        </button>
-                    )}
-                    {ens.busy && (
-                        <p className="flex items-center gap-2 text-sm text-gold">
-                            <Spinner /> {ens.busy}
-                        </p>
-                    )}
-                    {phase === "fund" && !error && (
-                        <p className="flex items-center gap-2 text-sm text-gold">
-                            <Spinner /> Confirm in your wallet, then wait a moment
-                        </p>
-                    )}
-                    {error && ens.ethAddress && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setError(null);
-                                funding.current = false;
-                                setBootAttempt((current) => current + 1);
-                            }}
-                            className="rounded-xl bg-gold px-6 py-2.5 text-sm font-semibold text-ink"
-                        >
-                            Try again
-                        </button>
-                    )}
-                    <ChangeWalletButton onChange={leave} />
-                </div>
+                <p className="flex items-center gap-2 text-sm text-muted">
+                    <Spinner /> Opening your signing session
+                </p>
             </div>
         );
     }
 
-    return <App controller={controller} playPath="ethereum" onChangeWallet={leave} />;
+    return <App controller={controller} signingMode="local" onOpenSettings={onOpenSettings} />;
 }
 
-export function Boot() {
-    const [path, setPath] = useState<PlayPath | null>(null);
-
-    const choose = (next: PlayPath) => {
-        if (next === "ethereum") {
-            void disconnectShieldWallet();
-        }
-        setPath(next);
-    };
-
-    const leavePath = () => {
-        void disconnectShieldWallet();
-        setPath(null);
-    };
-
-    if (!path) {
-        return <Chooser onChoose={choose} />;
-    }
-
-    if (path === "shield") {
-        return (
-            <WalletRoot>
-                <EnsProvider allowEthereum={false}>
-                    <ShieldBoot onChangeWallet={leavePath} />
-                </EnsProvider>
-            </WalletRoot>
-        );
-    }
-
+function Gate({
+    title,
+    onOpenSettings,
+    children,
+}: {
+    title: string;
+    onOpenSettings: () => void;
+    children: ReactNode;
+}) {
     return (
-        <EnsProvider allowEthereum>
-            <EthereumBoot onChangeWallet={leavePath} />
-        </EnsProvider>
+        <div className="flex min-h-screen flex-col px-5 py-8 lg:px-10">
+            <SettingsButton onClick={onOpenSettings} className="self-start" />
+            <div className="grid flex-1 place-items-center">
+                <div className="flex w-full max-w-md flex-col items-center gap-8 text-center">
+                    <div>
+                        <h1 className="font-display text-5xl text-balance text-paper sm:text-6xl">Mental Poker</h1>
+                        <p className="mx-auto mt-4 max-w-sm text-base leading-relaxed text-muted">{title}</p>
+                    </div>
+                    {children}
+                </div>
+            </div>
+        </div>
     );
 }

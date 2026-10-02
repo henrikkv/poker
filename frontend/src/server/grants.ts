@@ -2,7 +2,6 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export interface Grant {
-    eth: string;
     aleo: string;
     at: number;
 }
@@ -54,5 +53,3 @@ export function grantToken(): string {
     crypto.getRandomValues(bytes);
     return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
-
-export const fundingInFlight = new Set<string>();

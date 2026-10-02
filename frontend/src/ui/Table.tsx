@@ -1,6 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, type ReactNode } from "react";
-import { useEns } from "../ens/index.js";
+import type { ReactNode } from "react";
 import { getOpponents, getViewCards } from "../game/cards.js";
 import type { GameMessage } from "../game/controller.js";
 import { getChips, getCurrentBet, isPlayerEliminated, type GameModel } from "../game/model.js";
@@ -11,17 +10,7 @@ import { ChipIcon, PlayerSeat } from "./PlayerSeat.js";
 import { Spinner } from "./Spinner.js";
 
 export function Table({ model, busy, dispatch }: { model: GameModel; busy: boolean; dispatch: (msg: GameMessage) => void }) {
-    const ens = useEns();
     const gameId = model.gameId;
-
-    useEffect(() => {
-        if (gameId === null) {
-            return;
-        }
-        void ens.hydrateDirectory(gameId);
-    }, [ens.hydrateDirectory, gameId]);
-    const tableName = ens.tableNameFor(gameId) ?? model.tableName;
-    const inviteGameId = model.inviteGameId ?? ens.profile?.gameId ?? null;
     const state = model.currentState;
     const description = state !== null ? describeGameState(state) : null;
     const lobby = state !== null && isLobbyState(state);
@@ -33,8 +22,6 @@ export function Table({ model, busy, dispatch }: { model: GameModel; busy: boole
         return (
             <TableShell
                 gameId={gameId}
-                tableName={tableName}
-                inviteGameId={inviteGameId}
                 description={description}
                 spectator={spectator}
                 lobby={lobby}
@@ -68,7 +55,6 @@ export function Table({ model, busy, dispatch }: { model: GameModel; busy: boole
     const seat = (playerId: PlayerId, isYou: boolean) => (
         <PlayerSeat
             playerId={playerId}
-            ensName={ens.identityFor(model.playerAddresses?.[playerId - 1])?.name}
             cards={getViewCards(cards, playerId)}
             chips={getChips(chips, playerId)}
             bet={betting ? getCurrentBet(chips, playerId) : 0}
@@ -85,8 +71,6 @@ export function Table({ model, busy, dispatch }: { model: GameModel; busy: boole
     return (
         <TableShell
             gameId={gameId}
-            tableName={tableName}
-            inviteGameId={inviteGameId}
             description={description}
             spectator={spectator}
             lobby={lobby}
@@ -105,8 +89,7 @@ export function Table({ model, busy, dispatch }: { model: GameModel; busy: boole
                             animate={{ opacity: 1, y: 0 }}
                             className="text-center"
                         >
-                            <p className="text-xs font-semibold tracking-[0.3em] text-gold uppercase">Game over</p>
-                            <p className="mt-1 font-display text-3xl text-paper">
+                            <p className="font-display text-3xl text-paper">
                                 {model.gameWinner === model.currentPlayerId ? "You win the table" : `Player ${model.gameWinner} wins`}
                             </p>
                         </motion.div>
@@ -153,8 +136,6 @@ export function Table({ model, busy, dispatch }: { model: GameModel; busy: boole
 
 function TableShell({
     gameId,
-    tableName,
-    inviteGameId,
     description,
     spectator,
     lobby,
@@ -162,21 +143,17 @@ function TableShell({
     children,
 }: {
     gameId: number | null;
-    tableName: string | null;
-    inviteGameId: number | null;
     description: string | null;
     spectator: boolean;
     lobby: boolean;
     dispatch: (msg: GameMessage) => void;
     children: ReactNode;
 }) {
-    const inviteMismatch = inviteGameId !== null && gameId !== null && inviteGameId !== gameId;
-
     return (
         <section>
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="font-display text-2xl text-paper">
-                    {tableName ?? "Table"} <span className="text-gold">#{gameId ?? "…"}</span>
+                    Table <span className="text-gold">#{gameId ?? "…"}</span>
                     {spectator && <span className="ml-2 text-sm font-sans text-muted">Spectating</span>}
                 </h2>
                 {description && <p className="text-sm text-muted">{description}</p>}
@@ -186,31 +163,23 @@ function TableShell({
                     <button
                         type="button"
                         onClick={() => void navigator.clipboard.writeText(String(gameId))}
-                        className="rounded-full border border-white/15 px-3 py-1.5 text-paper transition hover:border-gold/50"
+                        className="btn btn-ghost"
                     >
                         Copy game {gameId}
                     </button>
                 )}
-                {tableName && (
-                    <span className="rounded-full border border-white/10 px-3 py-1.5 text-muted">{tableName}</span>
-                )}
-                {inviteMismatch && (
-                    <span className="rounded-full border border-gold/30 px-3 py-1.5 text-gold">
-                        Invite now points at game {inviteGameId}
-                    </span>
-                )}
                 <button
                     type="button"
                     onClick={() => dispatch({ type: "leaveLocally" })}
-                    className="rounded-full border border-white/15 px-3 py-1.5 text-muted transition hover:border-gold/50 hover:text-paper"
+                    className="btn btn-ghost"
                 >
                     Leave locally
                 </button>
             </div>
             {lobby && (
                 <p className="mb-4 max-w-xl text-sm text-muted">
-                    Share the game id{tableName ? ` or ${tableName}` : ""} so the next player can join. Leave locally
-                    returns to the menu without refunding on-chain credits.
+                    Share the game id so the next player can join. Leave locally returns to the menu without
+                    refunding on-chain credits.
                 </p>
             )}
             {children}

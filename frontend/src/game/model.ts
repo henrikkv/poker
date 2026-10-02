@@ -1,5 +1,6 @@
 import type { Chips } from "./program.js";
 import type { CardView } from "./cards.js";
+import type { LobbyTable } from "./lobby.js";
 import type { GameState, PlayerId } from "./state.js";
 
 export const POLL_INTERVAL_MS = 1000;
@@ -150,9 +151,9 @@ export interface GameModel {
     lastKnownGameId: number;
 
     seatedTables: SeatedTableView[];
+    lobbyTables: LobbyTable[];
+    lobbyReady: boolean;
     blockedGameId: number | null;
-    inviteGameId: number | null;
-    tableName: string | null;
     spectating: boolean;
 
     playerAddresses: [string, string, string] | null;
@@ -188,9 +189,9 @@ export function newGameModel(networkName: string): GameModel {
         bettingUi: null,
         lastKnownGameId: 0,
         seatedTables: [],
+        lobbyTables: [],
+        lobbyReady: false,
         blockedGameId: null,
-        inviteGameId: null,
-        tableName: null,
         spectating: false,
         playerAddresses: null,
         eliminatedPlayers: [false, false, false],

@@ -20,7 +20,6 @@ export interface Session {
     ): Promise<string[]>;
     requestRecords(programName: string): Promise<unknown[]>;
     mapping(programName: string, mappingName: string, key: string): Promise<string | null>;
-    returnFunds?(): Promise<void>;
 }
 
 /**

@@ -242,6 +242,7 @@ program mental_poker2.aleo {
         secret: scalar,
         secret_inv: scalar,
     }
+
     fn create_game(buy_in: u64, control_bits: [bool; 249], secret: scalar, secret_inv: scalar, password: u128, blind_frequency: u8) -> (Keys, Final) {
         let deck: [group; 52] = initialize_deck();
 
@@ -260,38 +261,38 @@ program mental_poker2.aleo {
 
         let transfer_future: Final = credits.aleo::transfer_public_as_signer(mental_poker2.aleo, buy_in);
 
-        return (keys, final { finalize_new_game(deck_enc, signer, buy_in, password_hash, blind_frequency, transfer_future); });
-    }
-    final fn finalize_new_game(deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, blind_frequency: u8, transfer_future: Final) {
-        transfer_future.run();
-        
-        let game_id = Mapping::get_or_use(next_game_id, 0u32, 0u32);
-        let next_id =  game_id + 1u32;
-        Mapping::set(next_game_id, 0u32, next_id);
+        return (keys, final {
+            let game_id = Mapping::get_or_use(next_game_id, 0u32, 0u32);
+            let next_id =  game_id + 1u32;
+            Mapping::set(next_game_id, 0u32, next_id);
 
-        let game: Game = Game {
-            player1: signer,
-            player2: 0u128 as address,
-            player3: 0u128 as address,
-            buy_in: buy_in,
-            password_hash: password_hash,
-            state: 0u8,
-            dealer_button: player3(),
-            players_out: 0u8,
-            players_folded: 0u8,
-            last_bet: 0u8,
-            sb: 5u16,
-            bb: 10u16,
-            blind_frequency: blind_frequency,
-            remaining_hands: blind_frequency,
-            hands_played: 0u8,
-            last_raise_size: 0u16,
-        };
-        Mapping::set(games, game_id, game);
-        Mapping::set(decks, game_id, deck);
+            let game: Game = Game {
+                player1: signer,
+                player2: 0u128 as address,
+                player3: 0u128 as address,
+                buy_in: buy_in,
+                password_hash: password_hash,
+                state: 0u8,
+                dealer_button: player3(),
+                players_out: 0u8,
+                players_folded: 0u8,
+                last_bet: 0u8,
+                sb: 5u16,
+                bb: 10u16,
+                blind_frequency: blind_frequency,
+                remaining_hands: blind_frequency,
+                hands_played: 0u8,
+                last_raise_size: 0u16,
+            };
+            Mapping::set(games, game_id, game);
+            Mapping::set(decks, game_id, deck_enc);
+
+            transfer_future.run();
+        });
     }
+
     fn join_game(game_id: u32, buy_in: u64, deck: [group; 52], control_bits: [bool; 249], secret: scalar, secret_inv: scalar, password: u128) -> (Keys, Final) {
-        let deck_enc: [group; 52] = waksman::shuffle_and_encrypt(deck, secret, control_bits);
+        let new_deck: [group; 52] = waksman::shuffle_and_encrypt(deck, secret, control_bits);
 
         assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
 
@@ -306,295 +307,292 @@ program mental_poker2.aleo {
 
         let transfer_future: Final = credits.aleo::transfer_public_as_signer(mental_poker2.aleo, buy_in);
 
-        return (keys, final { finalize_join_game(game_id, deck, deck_enc, signer, buy_in, password_hash, transfer_future); });
-    }
-    final fn finalize_join_game(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address, buy_in: u64, password_hash: u128, transfer_future: Final) {
-
-        transfer_future.run();
-
-        let game: Game = Mapping::get(games, game_id);
-        let previous_deck: [group; 52] = Mapping::get(decks, game_id);
-        
-        assert_eq(previous_deck, deck);
-        assert_eq(buy_in, game.buy_in);
-        assert_eq(password_hash, game.password_hash);
-
-        let player2_joining: bool = game.state == p2_join;
-        assert(player2_joining || game.state == p3_join);
-
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: player2_joining ? signer : game.player2,
-            player3: !player2_joining ? signer : 0u128 as address,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: player2_joining ? p3_join : p1_dec_hand,
-            dealer_button: game.dealer_button,
-            players_out: 0u8,
-            players_folded: 0u8,
-            last_bet: 0u8,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: game.remaining_hands,
-            hands_played: 0u8,
-            last_raise_size: 0u16,
-        };
-
-        Mapping::set(games, game_id, new_game);
-        Mapping::set(decks, game_id, new_deck);
-        
-        if (!player2_joining) {
-            let chip: Chips = Chips {
-                player1: 1000u16 - game.sb,
-                player2: 1000u16 - game.bb,
-                player3: 1000u16,
-                player1_bet: game.sb,
-                player2_bet: game.bb,
-                player3_bet: 0u16,
-            };
+        return (keys, final {
+            let game: Game = Mapping::get(games, game_id);
+            let previous_deck: [group; 52] = Mapping::get(decks, game_id);
             
-            let card: Cards = Cards {
-                player1: [new_deck[0u8], new_deck[3u8]],
-                player2: [new_deck[1u8], new_deck[4u8]],
-                player3: [new_deck[2u8], new_deck[5u8]],
-                flop: [new_deck[7u8], new_deck[8u8], new_deck[9u8]],
-                turn: new_deck[11u8],
-                river: new_deck[13u8],
-            };
+            assert_eq(previous_deck, deck);
+            assert_eq(buy_in, game.buy_in);
+            assert_eq(password_hash, game.password_hash);
 
-            let revealed: RevealedCards = RevealedCards {
-                player1: [255u8, 255u8],
-                player2: [255u8, 255u8],
-                player3: [255u8, 255u8],
-                flop: [255u8, 255u8, 255u8],
-                turn: 255u8,
-                river: 255u8,
-            };
-
-            Mapping::set(chips, game_id, chip);
-            Mapping::set(cards, game_id, card);
-            Mapping::set(revealed_cards, game_id, revealed);
-        }
-    }
-    fn bet(game_id: u32, amount: u16) -> Final {
-        let signer: address = std::ctx::signer();
-        return final { finalize_bet(game_id, amount, signer); };
-    }
-    final fn finalize_bet(game_id: u32, amount: u16, signer: address) {
-        let game: Game = Mapping::get(games, game_id);
-        let chip: Chips = Mapping::get(chips, game_id);
-
-        let is_p1: bool = game.player1 == signer && (game.state == p1_bet_pre ||
-                                                     game.state == p1_bet_flop ||
-                                                     game.state == p1_bet_turn ||
-                                                     game.state == p1_bet_river);
-
-        let is_p2: bool = game.player2 == signer && (game.state == p2_bet_pre ||
-                                                     game.state == p2_bet_flop ||
-                                                     game.state == p2_bet_turn ||
-                                                     game.state == p2_bet_river);
-
-        let is_p3: bool = game.player3 == signer && (game.state == p3_bet_pre ||
-                                                     game.state == p3_bet_flop ||
-                                                     game.state == p3_bet_turn ||
-                                                     game.state == p3_bet_river);
-
-        assert(is_p1 || is_p2 || is_p3);
-        let (current_chips, current_bet): (u16, u16) = is_p1 ? (chip.player1, chip.player1_bet) :
-                                                       is_p2 ? (chip.player2, chip.player2_bet) :
-                                                               (chip.player3, chip.player3_bet);
-
-        let highest_bet: u16 = (chip.player1_bet >= chip.player2_bet && chip.player1_bet >= chip.player3_bet) ? chip.player1_bet :
-                               (chip.player2_bet >= chip.player3_bet) ? chip.player2_bet :
-                                                                        chip.player3_bet;
-        let min_raise_size: u16 = highest_bet == 0u16 ? game.bb :
-                                  game.last_raise_size == 0u16 ? game.bb :
-                                                                 game.last_raise_size;
-        let min_raise_to: u16 = highest_bet + min_raise_size;
-        let call_amount: u16 = highest_bet - current_bet;
-        let min_bet: u16 = highest_bet == 0u16 ? game.bb : call_amount;
-
-        assert(amount == current_chips || amount >= min_bet);
-
-        let new_amount: u16 = current_bet + amount;
-        let new_remaining: u16 = current_chips - amount;
-        let is_going_allin: bool = new_remaining == 0u16;
-
-        let reopens_action: bool = new_amount >= min_raise_to;
-
-        let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded) || is_player1(game.players_out);
-        let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded) || is_player2(game.players_out);
-        let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded) || is_player3(game.players_out);
-
-        let is_current_last_bet: bool = (is_p1 && is_player1(game.last_bet)) ||
-                                        (is_p2 && is_player2(game.last_bet)) ||
-                                        (is_p3 && is_player3(game.last_bet));
-
-        let p1_matched: bool = is_p1_inactive ||
-                               (is_p1 ? (new_amount == highest_bet || (is_going_allin && !reopens_action)) : chip.player1_bet == highest_bet);
-        let p2_matched: bool = is_p2_inactive ||
-                               (is_p2 ? (new_amount == highest_bet || (is_going_allin && !reopens_action)) : chip.player2_bet == highest_bet);
-        let p3_matched: bool = is_p3_inactive ||
-                               (is_p3 ? (new_amount == highest_bet || (is_going_allin && !reopens_action)) : chip.player3_bet == highest_bet);
-
-        let all_players_matched: bool = p1_matched && p2_matched && p3_matched;
-
-        let other_players_matched: bool = is_p1 ? (p2_matched && p3_matched) :
-                                          is_p2 ? (p1_matched && p3_matched) :
-                                                  (p1_matched && p2_matched);
-
-        let is_preflop_round: bool = game.state >= p1_bet_pre && game.state <= p3_bet_pre;
-        let big_blind_has_option: bool = is_preflop_round && current_bet == game.bb && highest_bet == game.bb;
-
-        let is_flop_round: bool = game.state >= p1_bet_flop && game.state <= p3_bet_flop;
-        let is_turn_round: bool = game.state >= p1_bet_turn && game.state <= p3_bet_turn;
-
-        let is_p1_out: bool = is_player1(game.players_out);
-        let is_p2_out: bool = is_player2(game.players_out);
-        let is_p3_out: bool = is_player3(game.players_out);
-
-        let first_active_flop_decrypt: u8 = is_p1_out ? (is_p2_out ? p3_dec_flop : p2_dec_flop) : p1_dec_flop;
-        let first_active_turn_decrypt: u8 = is_p1_out ? (is_p2_out ? p3_dec_turn : p2_dec_turn) : p1_dec_turn;
-        let first_active_river_decrypt: u8 = is_p1_out ? (is_p2_out ? p3_dec_river : p2_dec_river) : p1_dec_river;
-        let first_active_showdown: u8 = is_p1_inactive ? (is_p2_inactive ? p3_showdown : p2_showdown) : p1_showdown;
-
-        let next_round_state: u8 = is_preflop_round ? first_active_flop_decrypt :
-                                   is_flop_round ? first_active_turn_decrypt :
-                                   is_turn_round ? first_active_river_decrypt :
-                                   first_active_showdown;
-
-        let current_round_base_state: u8 = is_preflop_round ? p1_bet_pre :
-                                           is_flop_round ? p1_bet_flop :
-                                           is_turn_round ? p1_bet_turn :
-                                           p1_bet_river;
-
-        let next_player_offset: u8 = is_p1 ? (is_p2_inactive ? 2u8 : 1u8) :
-                                     is_p2 ? (is_p3_inactive ? 0u8 : 2u8) :
-                                             (is_p1_inactive ? 1u8 : 0u8);
-
-        let next_player_state: u8 = current_round_base_state + next_player_offset;
-
-        let next_player_is_last_raiser: bool = (next_player_offset == 0u8 && is_player1(game.last_bet)) ||
-                                                (next_player_offset == 1u8 && is_player2(game.last_bet)) ||
-                                                (next_player_offset == 2u8 && is_player3(game.last_bet));
-
-        let is_first_postflop_action: bool = !is_preflop_round && game.last_bet == 0u8;
-
-        let action_returns_to_last_raiser: bool = next_player_is_last_raiser && all_players_matched && !(is_preflop_round && highest_bet == game.bb);
-
-        let last_raiser_completed_action: bool = is_current_last_bet && other_players_matched && !reopens_action;
-
-        let last_raiser_is_inactive: bool = (is_player1(game.last_bet) && is_p1_inactive) ||
-                                             (is_player2(game.last_bet) && is_p2_inactive) ||
-                                             (is_player3(game.last_bet) && is_p3_inactive);
-
-        let betting_round_should_end: bool = action_returns_to_last_raiser ||
-                                              last_raiser_completed_action ||
-                                              (last_raiser_is_inactive && all_players_matched);
-
-        let is_p1_inactive_after_bet: bool = (is_p1 && new_remaining == 0u16) || is_p1_inactive;
-        let is_p2_inactive_after_bet: bool = (is_p2 && new_remaining == 0u16) || is_p2_inactive;
-        let is_p3_inactive_after_bet: bool = (is_p3 && new_remaining == 0u16) || is_p3_inactive;
-
-        let is_p1_folded_or_out: bool = is_player1(game.players_folded) || is_player1(game.players_out);
-        let is_p2_folded_or_out: bool = is_player2(game.players_folded) || is_player2(game.players_out);
-        let is_p3_folded_or_out: bool = is_player3(game.players_folded) || is_player3(game.players_out);
-
-        let players_in_hand_count: u8 = (!is_p1_folded_or_out as u8) +
-                                         (!is_p2_folded_or_out as u8) +
-                                         (!is_p3_folded_or_out as u8);
-
-        if (players_in_hand_count == 1u8) {
-            let pot_size: u16 = (is_p1 ? new_amount : chip.player1_bet) +
-                                (is_p2 ? new_amount : chip.player2_bet) +
-                                (is_p3 ? new_amount : chip.player3_bet);
-
-            let new_chips: Chips = Chips {
-                player1: !is_p1_folded_or_out ? (is_p1 ? new_remaining : chip.player1) + pot_size : (is_p1 ? new_remaining : chip.player1),
-                player2: !is_p2_folded_or_out ? (is_p2 ? new_remaining : chip.player2) + pot_size : (is_p2 ? new_remaining : chip.player2),
-                player3: !is_p3_folded_or_out ? (is_p3 ? new_remaining : chip.player3) + pot_size : (is_p3 ? new_remaining : chip.player3),
-                player1_bet: 0u16,
-                player2_bet: 0u16,
-                player3_bet: 0u16,
-            };
-
-            let next_shuffle_state: u8 = !is_player1(game.players_out) ? p1_new_shuffle : p2_new_shuffle;
-
-            let new_remaining_hands: u8 = game.remaining_hands - 1u8;
-            let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
-                                                                            (game.sb, game.bb);
+            let player2_joining: bool = game.state == p2_join;
+            assert(player2_joining || game.state == p3_join);
 
             let new_game: Game = Game {
                 player1: game.player1,
-                player2: game.player2,
-                player3: game.player3,
+                player2: player2_joining ? signer : game.player2,
+                player3: !player2_joining ? signer : 0u128 as address,
                 buy_in: game.buy_in,
                 password_hash: game.password_hash,
-                state: next_shuffle_state,
+                state: player2_joining ? p3_join : p1_dec_hand,
                 dealer_button: game.dealer_button,
-                players_out: game.players_out,
-                players_folded: game.players_folded,
+                players_out: 0u8,
+                players_folded: 0u8,
                 last_bet: 0u8,
-                sb: new_sb,
-                bb: new_bb,
+                sb: game.sb,
+                bb: game.bb,
                 blind_frequency: game.blind_frequency,
-                remaining_hands: new_remaining_hands == 0u8 ? game.blind_frequency : new_remaining_hands,
-                hands_played: game.hands_played + 1u8,
+                remaining_hands: game.remaining_hands,
+                hands_played: 0u8,
                 last_raise_size: 0u16,
             };
 
-            Mapping::set(chips, game_id, new_chips);
             Mapping::set(games, game_id, new_game);
-            return;
-        }
+            Mapping::set(decks, game_id, new_deck);
+            
+            if (!player2_joining) {
+                let chip: Chips = Chips {
+                    player1: 1000u16 - game.sb,
+                    player2: 1000u16 - game.bb,
+                    player3: 1000u16,
+                    player1_bet: game.sb,
+                    player2_bet: game.bb,
+                    player3_bet: 0u16,
+                };
+                
+                let card: Cards = Cards {
+                    player1: [new_deck[0u8], new_deck[3u8]],
+                    player2: [new_deck[1u8], new_deck[4u8]],
+                    player3: [new_deck[2u8], new_deck[5u8]],
+                    flop: [new_deck[7u8], new_deck[8u8], new_deck[9u8]],
+                    turn: new_deck[11u8],
+                    river: new_deck[13u8],
+                };
 
-        let next_state: u8 = betting_round_should_end ? next_round_state : next_player_state;
+                let revealed: RevealedCards = RevealedCards {
+                    player1: [255u8, 255u8],
+                    player2: [255u8, 255u8],
+                    player3: [255u8, 255u8],
+                    flop: [255u8, 255u8, 255u8],
+                    turn: 255u8,
+                    river: 255u8,
+                };
 
-        let current_player: u8 = is_p1 ? player1() :
-                                 is_p2 ? player2() :
-                                         player3();
-
-        let should_set_current_as_raiser: bool = reopens_action || is_first_postflop_action;
-        let big_blind_used_option: bool = is_current_last_bet && big_blind_has_option && !reopens_action;
-
-        let new_last_bet: u8 = should_set_current_as_raiser ? current_player :
-                                      big_blind_used_option ? 0u8 :
-                                      game.last_bet;
-
-        let new_chips: Chips = Chips {
-            player1: is_p1 ? new_remaining : chip.player1,
-            player2: is_p2 ? new_remaining : chip.player2,
-            player3: is_p3 ? new_remaining : chip.player3,
-            player1_bet: is_p1 ? new_amount : chip.player1_bet,
-            player2_bet: is_p2 ? new_amount : chip.player2_bet,
-            player3_bet: is_p3 ? new_amount : chip.player3_bet,
-        };
-
-        let new_last_raise_size: u16 = reopens_action ? (new_amount - highest_bet) : game.last_raise_size;
-
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: next_state,
-            dealer_button: game.dealer_button,
-            players_out: game.players_out,
-            players_folded: game.players_folded,
-            last_bet: new_last_bet,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: game.remaining_hands,
-            hands_played: game.hands_played,
-            last_raise_size: new_last_raise_size,
-        };
-
-        Mapping::set(chips, game_id, new_chips);
-        Mapping::set(games, game_id, new_game);
+                Mapping::set(chips, game_id, chip);
+                Mapping::set(cards, game_id, card);
+                Mapping::set(revealed_cards, game_id, revealed);
+            }
+            transfer_future.run();
+        });
     }
+
+    fn bet(game_id: u32, amount: u16) -> Final {
+        let signer: address = std::ctx::signer();
+        return final {
+            let game: Game = Mapping::get(games, game_id);
+            let chip: Chips = Mapping::get(chips, game_id);
+
+            let is_p1: bool = game.player1 == signer && (game.state == p1_bet_pre ||
+                                                         game.state == p1_bet_flop ||
+                                                         game.state == p1_bet_turn ||
+                                                         game.state == p1_bet_river);
+
+            let is_p2: bool = game.player2 == signer && (game.state == p2_bet_pre ||
+                                                         game.state == p2_bet_flop ||
+                                                         game.state == p2_bet_turn ||
+                                                         game.state == p2_bet_river);
+
+            let is_p3: bool = game.player3 == signer && (game.state == p3_bet_pre ||
+                                                         game.state == p3_bet_flop ||
+                                                         game.state == p3_bet_turn ||
+                                                         game.state == p3_bet_river);
+
+            assert(is_p1 || is_p2 || is_p3);
+            let (current_chips, current_bet): (u16, u16) = is_p1 ? (chip.player1, chip.player1_bet) :
+                                                           is_p2 ? (chip.player2, chip.player2_bet) :
+                                                                   (chip.player3, chip.player3_bet);
+
+            let highest_bet: u16 = (chip.player1_bet >= chip.player2_bet && chip.player1_bet >= chip.player3_bet) ? chip.player1_bet :
+                                   (chip.player2_bet >= chip.player3_bet) ? chip.player2_bet :
+                                                                            chip.player3_bet;
+            let min_raise_size: u16 = highest_bet == 0u16 ? game.bb :
+                                      game.last_raise_size == 0u16 ? game.bb :
+                                                                     game.last_raise_size;
+            let min_raise_to: u16 = highest_bet + min_raise_size;
+            let call_amount: u16 = highest_bet - current_bet;
+            let min_bet: u16 = highest_bet == 0u16 ? game.bb : call_amount;
+
+            assert(amount == current_chips || amount >= min_bet);
+
+            let new_amount: u16 = current_bet + amount;
+            let new_remaining: u16 = current_chips - amount;
+            let is_going_allin: bool = new_remaining == 0u16;
+
+            let reopens_action: bool = new_amount >= min_raise_to;
+
+            let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded) || is_player1(game.players_out);
+            let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded) || is_player2(game.players_out);
+            let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded) || is_player3(game.players_out);
+
+            let is_current_last_bet: bool = (is_p1 && is_player1(game.last_bet)) ||
+                                            (is_p2 && is_player2(game.last_bet)) ||
+                                            (is_p3 && is_player3(game.last_bet));
+
+            let p1_matched: bool = is_p1_inactive ||
+                                   (is_p1 ? (new_amount == highest_bet || (is_going_allin && !reopens_action)) : chip.player1_bet == highest_bet);
+            let p2_matched: bool = is_p2_inactive ||
+                                   (is_p2 ? (new_amount == highest_bet || (is_going_allin && !reopens_action)) : chip.player2_bet == highest_bet);
+            let p3_matched: bool = is_p3_inactive ||
+                                   (is_p3 ? (new_amount == highest_bet || (is_going_allin && !reopens_action)) : chip.player3_bet == highest_bet);
+
+            let all_players_matched: bool = p1_matched && p2_matched && p3_matched;
+
+            let other_players_matched: bool = is_p1 ? (p2_matched && p3_matched) :
+                                              is_p2 ? (p1_matched && p3_matched) :
+                                                      (p1_matched && p2_matched);
+
+            let is_preflop_round: bool = game.state >= p1_bet_pre && game.state <= p3_bet_pre;
+            let big_blind_has_option: bool = is_preflop_round && current_bet == game.bb && highest_bet == game.bb;
+
+            let is_flop_round: bool = game.state >= p1_bet_flop && game.state <= p3_bet_flop;
+            let is_turn_round: bool = game.state >= p1_bet_turn && game.state <= p3_bet_turn;
+
+            let is_p1_out: bool = is_player1(game.players_out);
+            let is_p2_out: bool = is_player2(game.players_out);
+            let is_p3_out: bool = is_player3(game.players_out);
+
+            let first_active_flop_decrypt: u8 = is_p1_out ? (is_p2_out ? p3_dec_flop : p2_dec_flop) : p1_dec_flop;
+            let first_active_turn_decrypt: u8 = is_p1_out ? (is_p2_out ? p3_dec_turn : p2_dec_turn) : p1_dec_turn;
+            let first_active_river_decrypt: u8 = is_p1_out ? (is_p2_out ? p3_dec_river : p2_dec_river) : p1_dec_river;
+            let first_active_showdown: u8 = is_p1_inactive ? (is_p2_inactive ? p3_showdown : p2_showdown) : p1_showdown;
+
+            let next_round_state: u8 = is_preflop_round ? first_active_flop_decrypt :
+                                       is_flop_round ? first_active_turn_decrypt :
+                                       is_turn_round ? first_active_river_decrypt :
+                                       first_active_showdown;
+
+            let current_round_base_state: u8 = is_preflop_round ? p1_bet_pre :
+                                               is_flop_round ? p1_bet_flop :
+                                               is_turn_round ? p1_bet_turn :
+                                               p1_bet_river;
+
+            let next_player_offset: u8 = is_p1 ? (is_p2_inactive ? 2u8 : 1u8) :
+                                         is_p2 ? (is_p3_inactive ? 0u8 : 2u8) :
+                                                 (is_p1_inactive ? 1u8 : 0u8);
+
+            let next_player_state: u8 = current_round_base_state + next_player_offset;
+
+            let next_player_is_last_raiser: bool = (next_player_offset == 0u8 && is_player1(game.last_bet)) ||
+                                                    (next_player_offset == 1u8 && is_player2(game.last_bet)) ||
+                                                    (next_player_offset == 2u8 && is_player3(game.last_bet));
+
+            let is_first_postflop_action: bool = !is_preflop_round && game.last_bet == 0u8;
+
+            let action_returns_to_last_raiser: bool = next_player_is_last_raiser && all_players_matched && !(is_preflop_round && highest_bet == game.bb);
+
+            let last_raiser_completed_action: bool = is_current_last_bet && other_players_matched && !reopens_action;
+
+            let last_raiser_is_inactive: bool = (is_player1(game.last_bet) && is_p1_inactive) ||
+                                                 (is_player2(game.last_bet) && is_p2_inactive) ||
+                                                 (is_player3(game.last_bet) && is_p3_inactive);
+
+            let betting_round_should_end: bool = action_returns_to_last_raiser ||
+                                                  last_raiser_completed_action ||
+                                                  (last_raiser_is_inactive && all_players_matched);
+
+            let is_p1_inactive_after_bet: bool = (is_p1 && new_remaining == 0u16) || is_p1_inactive;
+            let is_p2_inactive_after_bet: bool = (is_p2 && new_remaining == 0u16) || is_p2_inactive;
+            let is_p3_inactive_after_bet: bool = (is_p3 && new_remaining == 0u16) || is_p3_inactive;
+
+            let is_p1_folded_or_out: bool = is_player1(game.players_folded) || is_player1(game.players_out);
+            let is_p2_folded_or_out: bool = is_player2(game.players_folded) || is_player2(game.players_out);
+            let is_p3_folded_or_out: bool = is_player3(game.players_folded) || is_player3(game.players_out);
+
+            let players_in_hand_count: u8 = (!is_p1_folded_or_out as u8) +
+                                             (!is_p2_folded_or_out as u8) +
+                                             (!is_p3_folded_or_out as u8);
+
+            if (players_in_hand_count == 1u8) {
+                let pot_size: u16 = (is_p1 ? new_amount : chip.player1_bet) +
+                                    (is_p2 ? new_amount : chip.player2_bet) +
+                                    (is_p3 ? new_amount : chip.player3_bet);
+
+                let new_chips: Chips = Chips {
+                    player1: !is_p1_folded_or_out ? (is_p1 ? new_remaining : chip.player1) + pot_size : (is_p1 ? new_remaining : chip.player1),
+                    player2: !is_p2_folded_or_out ? (is_p2 ? new_remaining : chip.player2) + pot_size : (is_p2 ? new_remaining : chip.player2),
+                    player3: !is_p3_folded_or_out ? (is_p3 ? new_remaining : chip.player3) + pot_size : (is_p3 ? new_remaining : chip.player3),
+                    player1_bet: 0u16,
+                    player2_bet: 0u16,
+                    player3_bet: 0u16,
+                };
+
+                let next_shuffle_state: u8 = !is_player1(game.players_out) ? p1_new_shuffle : p2_new_shuffle;
+
+                let new_remaining_hands: u8 = game.remaining_hands - 1u8;
+                let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
+                                                                                (game.sb, game.bb);
+
+                let new_game: Game = Game {
+                    player1: game.player1,
+                    player2: game.player2,
+                    player3: game.player3,
+                    buy_in: game.buy_in,
+                    password_hash: game.password_hash,
+                    state: next_shuffle_state,
+                    dealer_button: game.dealer_button,
+                    players_out: game.players_out,
+                    players_folded: game.players_folded,
+                    last_bet: 0u8,
+                    sb: new_sb,
+                    bb: new_bb,
+                    blind_frequency: game.blind_frequency,
+                    remaining_hands: new_remaining_hands == 0u8 ? game.blind_frequency : new_remaining_hands,
+                    hands_played: game.hands_played + 1u8,
+                    last_raise_size: 0u16,
+                };
+
+                Mapping::set(chips, game_id, new_chips);
+                Mapping::set(games, game_id, new_game);
+            } else {
+                let next_state: u8 = betting_round_should_end ? next_round_state : next_player_state;
+
+                let current_player: u8 = is_p1 ? player1() :
+                                         is_p2 ? player2() :
+                                                 player3();
+
+                let should_set_current_as_raiser: bool = reopens_action || is_first_postflop_action;
+                let big_blind_used_option: bool = is_current_last_bet && big_blind_has_option && !reopens_action;
+
+                let new_last_bet: u8 = should_set_current_as_raiser ? current_player :
+                                              big_blind_used_option ? 0u8 :
+                                              game.last_bet;
+
+                let new_chips: Chips = Chips {
+                    player1: is_p1 ? new_remaining : chip.player1,
+                    player2: is_p2 ? new_remaining : chip.player2,
+                    player3: is_p3 ? new_remaining : chip.player3,
+                    player1_bet: is_p1 ? new_amount : chip.player1_bet,
+                    player2_bet: is_p2 ? new_amount : chip.player2_bet,
+                    player3_bet: is_p3 ? new_amount : chip.player3_bet,
+                };
+
+                let new_last_raise_size: u16 = reopens_action ? (new_amount - highest_bet) : game.last_raise_size;
+
+                let new_game: Game = Game {
+                    player1: game.player1,
+                    player2: game.player2,
+                    player3: game.player3,
+                    buy_in: game.buy_in,
+                    password_hash: game.password_hash,
+                    state: next_state,
+                    dealer_button: game.dealer_button,
+                    players_out: game.players_out,
+                    players_folded: game.players_folded,
+                    last_bet: new_last_bet,
+                    sb: game.sb,
+                    bb: game.bb,
+                    blind_frequency: game.blind_frequency,
+                    remaining_hands: game.remaining_hands,
+                    hands_played: game.hands_played,
+                    last_raise_size: new_last_raise_size,
+                };
+
+                Mapping::set(chips, game_id, new_chips);
+                Mapping::set(games, game_id, new_game);
+            }
+        };
+    }
+
     fn decrypt_hands(game_id: u32, other1: [group; 2], other2: [group; 2], keys: Keys) -> (Keys, Final) {
 
         let other1_card0_dec: group = decrypt_card(keys.secret_inv, other1[0u8]);
@@ -606,89 +604,88 @@ program mental_poker2.aleo {
         let new_other2: [group; 2] = [other2_card0_dec, other2_card1_dec];
         
         let signer: address = std::ctx::signer();
-        return (keys, final { finalize_decrypt_hands(game_id, other1, other2, new_other1, new_other2, signer); });
+        return (keys, final {
+            let old_card: Cards = Mapping::get(cards, game_id);
+            let game: Game = Mapping::get(games, game_id);
+
+            let is_p1: bool = game.player1 == signer && game.state == p1_dec_hand;
+            let is_p2: bool = game.player2 == signer && game.state == p2_dec_hand;
+            let is_p3: bool = game.player3 == signer && game.state == p3_dec_hand;
+
+            assert(is_p1 || is_p2 || is_p3);
+            assert((is_p1 && old_card.player2 == other1 && old_card.player3 == other2) ||
+                   (is_p2 && old_card.player3 == other1 && old_card.player1 == other2) ||
+                   (is_p3 && old_card.player1 == other1 && old_card.player2 == other2));
+
+            let final_card: Cards = Cards {
+                player1: is_p1 ? old_card.player1 : (is_p2 ? new_other2 : new_other1),
+                player2: is_p2 ? old_card.player2 : (is_p1 ? new_other1 : new_other2),
+                player3: is_p3 ? old_card.player3 : (is_p2 ? new_other1 : new_other2),
+                flop: old_card.flop,
+                turn: old_card.turn,
+                river: old_card.river,
+            };
+
+            let is_p1_out: bool = is_player1(game.players_out);
+            let is_p2_out: bool = is_player2(game.players_out);
+            let is_p3_out: bool = is_player3(game.players_out);
+            let is_p1_folded: bool = is_player1(game.players_folded);
+            let is_p2_folded: bool = is_player2(game.players_folded);
+            let is_p3_folded: bool = is_player3(game.players_folded);
+            let is_dealer_p1: bool = is_player1(game.dealer_button);
+            let is_dealer_p2: bool = is_player2(game.dealer_button);
+
+
+            let is_p1_active: bool = !is_p1_out && !is_p1_folded;
+            let is_p2_active: bool = !is_p2_out && !is_p2_folded;
+            let is_p3_active: bool = !is_p3_out && !is_p3_folded;
+
+            let first_bettor_state: u8 = is_dealer_p1 ? (is_p1_active ? p1_bet_pre : (is_p2_active ? p2_bet_pre : p3_bet_pre)) :
+                                         is_dealer_p2 ? (is_p2_active ? p2_bet_pre : (is_p3_active ? p3_bet_pre : p1_bet_pre)) :
+                                                        (is_p3_active ? p3_bet_pre : (is_p1_active ? p1_bet_pre : p2_bet_pre));
+
+            let first_bettor_player: u8 = first_bettor_state == p1_bet_pre ? player1() :
+                                          first_bettor_state == p2_bet_pre ? player2() :
+                                                                             player3();
+
+            let big_blind_player: u8 = is_dealer_p1 ? player3() :
+                                       is_dealer_p2 ? player1() :
+                                                      player2();
+
+            let next_state: u8 =
+                is_p1 ? (is_p2_out ? first_bettor_state : p2_dec_hand) :
+                is_p2 ? (is_p3_out ? first_bettor_state : p3_dec_hand) :
+                first_bettor_state;
+
+            let new_last_bet: u8 =
+                is_p1 ? game.last_bet :
+                is_p2 ? (is_p3_out ? big_blind_player : game.last_bet) :
+                big_blind_player;
+
+            let new_game: Game = Game {
+                player1: game.player1,
+                player2: game.player2,
+                player3: game.player3,
+                buy_in: game.buy_in,
+                password_hash: game.password_hash,
+                state: next_state,
+                dealer_button: game.dealer_button,
+                players_out: game.players_out,
+                players_folded: game.players_folded,
+                last_bet: new_last_bet,
+                sb: game.sb,
+                bb: game.bb,
+                blind_frequency: game.blind_frequency,
+                remaining_hands: game.remaining_hands,
+                hands_played: game.hands_played,
+                last_raise_size: game.last_raise_size,
+            };
+
+            Mapping::set(cards, game_id, final_card);
+            Mapping::set(games, game_id, new_game);
+        });
     }
-    final fn finalize_decrypt_hands(game_id: u32, other1: [group; 2], other2: [group; 2], new_other1: [group; 2], new_other2: [group; 2], signer: address) {
 
-        let old_card: Cards = Mapping::get(cards, game_id);
-        let game: Game = Mapping::get(games, game_id);
-
-        let is_p1: bool = game.player1 == signer && game.state == p1_dec_hand;
-        let is_p2: bool = game.player2 == signer && game.state == p2_dec_hand;
-        let is_p3: bool = game.player3 == signer && game.state == p3_dec_hand;
-
-        assert(is_p1 || is_p2 || is_p3);
-        assert((is_p1 && old_card.player2 == other1 && old_card.player3 == other2) ||
-               (is_p2 && old_card.player3 == other1 && old_card.player1 == other2) ||
-               (is_p3 && old_card.player1 == other1 && old_card.player2 == other2));
-
-        let final_card: Cards = Cards {
-            player1: is_p1 ? old_card.player1 : (is_p2 ? new_other2 : new_other1),
-            player2: is_p2 ? old_card.player2 : (is_p1 ? new_other1 : new_other2),
-            player3: is_p3 ? old_card.player3 : (is_p2 ? new_other1 : new_other2),
-            flop: old_card.flop,
-            turn: old_card.turn,
-            river: old_card.river,
-        };
-
-        let is_p1_out: bool = is_player1(game.players_out);
-        let is_p2_out: bool = is_player2(game.players_out);
-        let is_p3_out: bool = is_player3(game.players_out);
-        let is_p1_folded: bool = is_player1(game.players_folded);
-        let is_p2_folded: bool = is_player2(game.players_folded);
-        let is_p3_folded: bool = is_player3(game.players_folded);
-        let is_dealer_p1: bool = is_player1(game.dealer_button);
-        let is_dealer_p2: bool = is_player2(game.dealer_button);
-
-
-        let is_p1_active: bool = !is_p1_out && !is_p1_folded;
-        let is_p2_active: bool = !is_p2_out && !is_p2_folded;
-        let is_p3_active: bool = !is_p3_out && !is_p3_folded;
-
-        let first_bettor_state: u8 = is_dealer_p1 ? (is_p1_active ? p1_bet_pre : (is_p2_active ? p2_bet_pre : p3_bet_pre)) :
-                                     is_dealer_p2 ? (is_p2_active ? p2_bet_pre : (is_p3_active ? p3_bet_pre : p1_bet_pre)) :
-                                                    (is_p3_active ? p3_bet_pre : (is_p1_active ? p1_bet_pre : p2_bet_pre));
-
-        let first_bettor_player: u8 = first_bettor_state == p1_bet_pre ? player1() :
-                                      first_bettor_state == p2_bet_pre ? player2() :
-                                                                         player3();
-
-        let big_blind_player: u8 = is_dealer_p1 ? player3() :
-                                   is_dealer_p2 ? player1() :
-                                                  player2();
-
-        let next_state: u8 =
-            is_p1 ? (is_p2_out ? first_bettor_state : p2_dec_hand) :
-            is_p2 ? (is_p3_out ? first_bettor_state : p3_dec_hand) :
-            first_bettor_state;
-
-        let new_last_bet: u8 =
-            is_p1 ? game.last_bet :
-            is_p2 ? (is_p3_out ? big_blind_player : game.last_bet) :
-            big_blind_player;
-
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: next_state,
-            dealer_button: game.dealer_button,
-            players_out: game.players_out,
-            players_folded: game.players_folded,
-            last_bet: new_last_bet,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: game.remaining_hands,
-            hands_played: game.hands_played,
-            last_raise_size: game.last_raise_size,
-        };
-
-        Mapping::set(cards, game_id, final_card);
-        Mapping::set(games, game_id, new_game);
-    }
     fn decrypt_flop(game_id: u32, flop: [group; 3], keys: Keys) -> (Keys, Final) {
         let flop0: group = decrypt_card(keys.secret_inv, flop[0u8]);
         let flop1: group = decrypt_card(keys.secret_inv, flop[1u8]);
@@ -702,131 +699,58 @@ program mental_poker2.aleo {
         let flop_u8: [u8; 3] = [flop0_u8, flop1_u8, flop2_u8];
 
         let signer: address = std::ctx::signer();
-        return (keys, final { finalize_decrypt_flop(game_id, flop, flop_dec, flop_u8, signer); });
-    }
-    final fn finalize_decrypt_flop(game_id: u32, flop: [group; 3], flop_dec: [group; 3], flop_u8: [u8; 3], signer: address) {
-        let old_card: Cards = Mapping::get(cards, game_id);
-        let game: Game = Mapping::get(games, game_id);
-        
-        let is_p1: bool = signer == game.player1 && game.state == p1_dec_flop;
-        let is_p2: bool = signer == game.player2 && game.state == p2_dec_flop;
-        let is_p3: bool = signer == game.player3 && game.state == p3_dec_flop;
-
-        assert(is_p1 | is_p2 | is_p3);
-        assert_eq(flop, old_card.flop);
-        
-        let new_card: Cards = Cards {
-            player1: old_card.player1,
-            player2: old_card.player2,
-            player3: old_card.player3,
-            flop: flop_dec,
-            turn: old_card.turn,
-            river: old_card.river,
-        };
-
-        let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
-        let new_revealed: RevealedCards = RevealedCards {
-            player1: revealed.player1,
-            player2: revealed.player2,
-            player3: revealed.player3,
-            flop: flop_u8,
-            turn: revealed.turn,
-            river: revealed.river,
-        };
-        Mapping::set(revealed_cards, game_id, new_revealed);
-
-        let chip: Chips = Mapping::get(chips, game_id);
-        let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded);
-        let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded);
-        let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
-
-        let should_skip_betting: bool =
-            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8;
-
-        let next_state: u8 =
-            is_p1 ? (!is_player2(game.players_out) ? p2_dec_flop : p3_dec_flop) :
-            is_p2 ? (!is_player3(game.players_out) ? p3_dec_flop : should_skip_betting ? p1_dec_turn :
-           is_player1(game.dealer_button) ?
-                         (!is_p2_inactive ? p2_bet_flop : !is_p3_inactive ? p3_bet_flop : p1_bet_flop) :
-           is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_flop : !is_p1_inactive ? p1_bet_flop : p2_bet_flop) :
-                                            (!is_p1_inactive ? p1_bet_flop : !is_p2_inactive ? p2_bet_flop : p3_bet_flop)) :
-                       should_skip_betting ? p1_dec_turn :
-            is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_flop : !is_p3_inactive ? p3_bet_flop : p1_bet_flop) :
-            is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_flop : !is_p1_inactive ? p1_bet_flop : p2_bet_flop) :
-                                             (!is_p1_inactive ? p1_bet_flop : !is_p2_inactive ? p2_bet_flop : p3_bet_flop);
-
-        let new_last_bet: u8 = 0u8;
-
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: next_state,
-            dealer_button: game.dealer_button,
-            players_out: game.players_out,
-            players_folded: game.players_folded,
-            last_bet: new_last_bet,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: game.remaining_hands,
-            hands_played: game.hands_played,
-            last_raise_size: is_p3 ? 0u16 : game.last_raise_size,
-        };
-
-        Mapping::set(cards, game_id, new_card);
-        Mapping::set(games, game_id, new_game);
-    }
-    fn fold(game_id: u32) -> Final {
-        let signer: address = std::ctx::signer();
-        return final { finalize_fold(game_id, signer); };
-    }
-    
-    final fn finalize_fold(game_id: u32, signer: address) {
-        let game: Game = Mapping::get(games, game_id);
-        let chip: Chips = Mapping::get(chips, game_id);
-        
-        // Validate the fold is from the correct player and in a betting state
-        let is_valid_state: bool =
-            (game.state >= p1_bet_pre && game.state <= p3_bet_pre) ||
-            (game.state >= p1_bet_flop && game.state <= p3_bet_flop) ||
-            (game.state >= p1_bet_turn && game.state <= p3_bet_turn) ||
-            (game.state >= p1_bet_river && game.state <= p3_bet_river);
-        assert(is_valid_state);
-        
-        // Determine which player is folding and validate
-        let is_player1_folding: bool = game.player1 == signer;
-        let is_player2_folding: bool = game.player2 == signer;
-        let is_player3_folding: bool = game.player3 == signer;
-        assert(is_player1_folding || is_player2_folding || is_player3_folding);
-        
-        let new_players_folded: u8 = 
-            game.players_folded | 
-            (is_player1_folding ? player1() : 
-             is_player2_folding ? player2() : player3());
-        
-        let active_count: u8 = (!is_player1(new_players_folded) as u8) + 
-                               (!is_player2(new_players_folded) as u8) + 
-                               (!is_player3(new_players_folded) as u8);
-        
-        if (active_count == 1u8) {
-            let pot_size: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet;
-            let new_chip: Chips = Chips {
-                player1: !is_player1(new_players_folded) ? chip.player1 + pot_size : chip.player1,
-                player2: !is_player2(new_players_folded) ? chip.player2 + pot_size : chip.player2,
-                player3: !is_player3(new_players_folded) ? chip.player3 + pot_size : chip.player3,
-                player1_bet: 0u16,
-                player2_bet: 0u16,
-                player3_bet: 0u16,
-            };
+        return (keys, final {
+            let old_card: Cards = Mapping::get(cards, game_id);
+            let game: Game = Mapping::get(games, game_id);
             
-            let next_shuffle_state: u8 = !is_player1(game.players_out) ? p1_new_shuffle : p2_new_shuffle;
+            let is_p1: bool = signer == game.player1 && game.state == p1_dec_flop;
+            let is_p2: bool = signer == game.player2 && game.state == p2_dec_flop;
+            let is_p3: bool = signer == game.player3 && game.state == p3_dec_flop;
 
-            let new_remaining_hands: u8 = game.remaining_hands - 1u8;
-            let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
-                                                                            (game.sb, game.bb);
+            assert(is_p1 | is_p2 | is_p3);
+            assert_eq(flop, old_card.flop);
+            
+            let new_card: Cards = Cards {
+                player1: old_card.player1,
+                player2: old_card.player2,
+                player3: old_card.player3,
+                flop: flop_dec,
+                turn: old_card.turn,
+                river: old_card.river,
+            };
+
+            let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
+            let new_revealed: RevealedCards = RevealedCards {
+                player1: revealed.player1,
+                player2: revealed.player2,
+                player3: revealed.player3,
+                flop: flop_u8,
+                turn: revealed.turn,
+                river: revealed.river,
+            };
+            Mapping::set(revealed_cards, game_id, new_revealed);
+
+            let chip: Chips = Mapping::get(chips, game_id);
+            let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded);
+            let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded);
+            let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
+
+            let should_skip_betting: bool =
+                (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8;
+
+            let next_state: u8 =
+                is_p1 ? (!is_player2(game.players_out) ? p2_dec_flop : p3_dec_flop) :
+                is_p2 ? (!is_player3(game.players_out) ? p3_dec_flop : should_skip_betting ? p1_dec_turn :
+               is_player1(game.dealer_button) ?
+                             (!is_p2_inactive ? p2_bet_flop : !is_p3_inactive ? p3_bet_flop : p1_bet_flop) :
+               is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_flop : !is_p1_inactive ? p1_bet_flop : p2_bet_flop) :
+                                                (!is_p1_inactive ? p1_bet_flop : !is_p2_inactive ? p2_bet_flop : p3_bet_flop)) :
+                           should_skip_betting ? p1_dec_turn :
+                is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_flop : !is_p3_inactive ? p3_bet_flop : p1_bet_flop) :
+                is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_flop : !is_p1_inactive ? p1_bet_flop : p2_bet_flop) :
+                                                 (!is_p1_inactive ? p1_bet_flop : !is_p2_inactive ? p2_bet_flop : p3_bet_flop);
+
+            let new_last_bet: u8 = 0u8;
 
             let new_game: Game = Game {
                 player1: game.player1,
@@ -834,836 +758,901 @@ program mental_poker2.aleo {
                 player3: game.player3,
                 buy_in: game.buy_in,
                 password_hash: game.password_hash,
-                state: next_shuffle_state,
+                state: next_state,
                 dealer_button: game.dealer_button,
                 players_out: game.players_out,
-                players_folded: new_players_folded,
-                last_bet: 0u8,
-                sb: new_sb,
-                bb: new_bb,
+                players_folded: game.players_folded,
+                last_bet: new_last_bet,
+                sb: game.sb,
+                bb: game.bb,
                 blind_frequency: game.blind_frequency,
-                remaining_hands: new_remaining_hands == 0u8 ? game.blind_frequency : new_remaining_hands,
-                hands_played: game.hands_played + 1u8,
-                last_raise_size: 0u16,
+                remaining_hands: game.remaining_hands,
+                hands_played: game.hands_played,
+                last_raise_size: is_p3 ? 0u16 : game.last_raise_size,
             };
 
-            Mapping::set(chips, game_id, new_chip);
+            Mapping::set(cards, game_id, new_card);
             Mapping::set(games, game_id, new_game);
-            return;
-        }
-
-        let highest_bet: u16 = 
-            (chip.player1_bet >= chip.player2_bet && chip.player1_bet >= chip.player3_bet) ? chip.player1_bet :
-            (chip.player2_bet >= chip.player3_bet) ? chip.player2_bet : chip.player3_bet;
-
-        // Check if all remaining players have matched the highest bet
-        let all_matched: bool = 
-            (is_player1(new_players_folded) || chip.player1_bet == highest_bet) &&
-            (is_player2(new_players_folded) || chip.player2_bet == highest_bet) &&
-            (is_player3(new_players_folded) || chip.player3_bet == highest_bet);
-
-        let should_end_betting: bool = all_matched;
-
-        let base_state: u8 =
-            (game.state <= p3_bet_pre) ? p1_bet_pre :
-            (game.state <= p3_bet_flop) ? p1_bet_flop :
-            (game.state <= p3_bet_turn) ? p1_bet_turn :
-            p1_bet_river;
-
-        // If betting round ends, move to next phase
-        let next_state: u8 =
-            should_end_betting ?
-                (game.state <= p3_bet_pre)  ? (is_player1(game.players_out) ? p2_dec_flop  : p1_dec_flop)  :
-                (game.state <= p3_bet_flop) ? (is_player1(game.players_out) ? p2_dec_turn : p1_dec_turn) :
-                (game.state <= p3_bet_turn) ? (is_player1(game.players_out) ? p2_dec_river : p1_dec_river) :
-                                        is_player1(game.players_out) ? p2_showdown : p1_showdown  :
-                (is_player1_folding) ? // Find next active player to the left
-                    (is_player2(new_players_folded) ? base_state + 2u8 : base_state + 1u8) :  // P1 folded -> P2 or P3
-                (is_player2_folding) ? 
-                    (is_player3(new_players_folded) ? base_state : base_state + 2u8) :        // P2 folded -> P3 or P1
-                // P3 folding
-                (is_player1(new_players_folded) ? base_state + 1u8 : base_state);             // P3 folded -> P1 or P2
-        
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: next_state,
-            dealer_button: game.dealer_button,
-            players_out: game.players_out,
-            players_folded: new_players_folded,
-            last_bet: should_end_betting ? 0u8 : game.last_bet,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: game.remaining_hands,
-            hands_played: game.hands_played,
-            last_raise_size: should_end_betting ? 0u16 : game.last_raise_size,
-        };
-        
-        Mapping::set(games, game_id, new_game);
+        });
     }
+
+    fn fold(game_id: u32) -> Final {
+        let signer: address = std::ctx::signer();
+        return final {
+            let game: Game = Mapping::get(games, game_id);
+            let chip: Chips = Mapping::get(chips, game_id);
+            
+            // Validate the fold is from the correct player and in a betting state
+            let is_valid_state: bool =
+                (game.state >= p1_bet_pre && game.state <= p3_bet_pre) ||
+                (game.state >= p1_bet_flop && game.state <= p3_bet_flop) ||
+                (game.state >= p1_bet_turn && game.state <= p3_bet_turn) ||
+                (game.state >= p1_bet_river && game.state <= p3_bet_river);
+            assert(is_valid_state);
+            
+            // Determine which player is folding and validate
+            let is_player1_folding: bool = game.player1 == signer;
+            let is_player2_folding: bool = game.player2 == signer;
+            let is_player3_folding: bool = game.player3 == signer;
+            assert(is_player1_folding || is_player2_folding || is_player3_folding);
+            
+            let new_players_folded: u8 = 
+                game.players_folded | 
+                (is_player1_folding ? player1() : 
+                 is_player2_folding ? player2() : player3());
+            
+            let active_count: u8 = (!is_player1(new_players_folded) as u8) + 
+                                   (!is_player2(new_players_folded) as u8) + 
+                                   (!is_player3(new_players_folded) as u8);
+            
+            if (active_count == 1u8) {
+                let pot_size: u16 = chip.player1_bet + chip.player2_bet + chip.player3_bet;
+                let new_chip: Chips = Chips {
+                    player1: !is_player1(new_players_folded) ? chip.player1 + pot_size : chip.player1,
+                    player2: !is_player2(new_players_folded) ? chip.player2 + pot_size : chip.player2,
+                    player3: !is_player3(new_players_folded) ? chip.player3 + pot_size : chip.player3,
+                    player1_bet: 0u16,
+                    player2_bet: 0u16,
+                    player3_bet: 0u16,
+                };
+                
+                let next_shuffle_state: u8 = !is_player1(game.players_out) ? p1_new_shuffle : p2_new_shuffle;
+
+                let new_remaining_hands: u8 = game.remaining_hands - 1u8;
+                let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
+                                                                                (game.sb, game.bb);
+
+                let new_game: Game = Game {
+                    player1: game.player1,
+                    player2: game.player2,
+                    player3: game.player3,
+                    buy_in: game.buy_in,
+                    password_hash: game.password_hash,
+                    state: next_shuffle_state,
+                    dealer_button: game.dealer_button,
+                    players_out: game.players_out,
+                    players_folded: new_players_folded,
+                    last_bet: 0u8,
+                    sb: new_sb,
+                    bb: new_bb,
+                    blind_frequency: game.blind_frequency,
+                    remaining_hands: new_remaining_hands == 0u8 ? game.blind_frequency : new_remaining_hands,
+                    hands_played: game.hands_played + 1u8,
+                    last_raise_size: 0u16,
+                };
+
+                Mapping::set(chips, game_id, new_chip);
+                Mapping::set(games, game_id, new_game);
+            } else {
+                let highest_bet: u16 = 
+                    (chip.player1_bet >= chip.player2_bet && chip.player1_bet >= chip.player3_bet) ? chip.player1_bet :
+                    (chip.player2_bet >= chip.player3_bet) ? chip.player2_bet : chip.player3_bet;
+
+                // Check if all remaining players have matched the highest bet
+                let all_matched: bool = 
+                    (is_player1(new_players_folded) || chip.player1_bet == highest_bet) &&
+                    (is_player2(new_players_folded) || chip.player2_bet == highest_bet) &&
+                    (is_player3(new_players_folded) || chip.player3_bet == highest_bet);
+
+                let should_end_betting: bool = all_matched;
+
+                let base_state: u8 =
+                    (game.state <= p3_bet_pre) ? p1_bet_pre :
+                    (game.state <= p3_bet_flop) ? p1_bet_flop :
+                    (game.state <= p3_bet_turn) ? p1_bet_turn :
+                    p1_bet_river;
+
+                // If betting round ends, move to next phase
+                let next_state: u8 =
+                    should_end_betting ?
+                        (game.state <= p3_bet_pre)  ? (is_player1(game.players_out) ? p2_dec_flop  : p1_dec_flop)  :
+                        (game.state <= p3_bet_flop) ? (is_player1(game.players_out) ? p2_dec_turn : p1_dec_turn) :
+                        (game.state <= p3_bet_turn) ? (is_player1(game.players_out) ? p2_dec_river : p1_dec_river) :
+                                                is_player1(game.players_out) ? p2_showdown : p1_showdown  :
+                        (is_player1_folding) ? // Find next active player to the left
+                            (is_player2(new_players_folded) ? base_state + 2u8 : base_state + 1u8) :  // P1 folded -> P2 or P3
+                        (is_player2_folding) ? 
+                            (is_player3(new_players_folded) ? base_state : base_state + 2u8) :        // P2 folded -> P3 or P1
+                        // P3 folding
+                        (is_player1(new_players_folded) ? base_state + 1u8 : base_state);             // P3 folded -> P1 or P2
+                
+                let new_game: Game = Game {
+                    player1: game.player1,
+                    player2: game.player2,
+                    player3: game.player3,
+                    buy_in: game.buy_in,
+                    password_hash: game.password_hash,
+                    state: next_state,
+                    dealer_button: game.dealer_button,
+                    players_out: game.players_out,
+                    players_folded: new_players_folded,
+                    last_bet: should_end_betting ? 0u8 : game.last_bet,
+                    sb: game.sb,
+                    bb: game.bb,
+                    blind_frequency: game.blind_frequency,
+                    remaining_hands: game.remaining_hands,
+                    hands_played: game.hands_played,
+                    last_raise_size: should_end_betting ? 0u16 : game.last_raise_size,
+                };
+                
+                Mapping::set(games, game_id, new_game);
+            }
+        };
+    }
+    
     fn decrypt_turn_river(game_id: u32, card: group, keys: Keys) -> (Keys, Final) {
         let card_dec: group = decrypt_card(keys.secret_inv, card);
         let card_u8: u8 = to_u8(card_dec);
         let signer: address = std::ctx::signer();
-        return (keys, final { finalize_decrypt_turn_river(game_id, card, card_dec, card_u8, signer); });
-    }
-    final fn finalize_decrypt_turn_river(game_id: u32, card: group, card_dec: group, card_u8: u8, signer: address) {
-        let old_card: Cards = Mapping::get(cards, game_id);
-        let game: Game = Mapping::get(games, game_id);
+        return (keys, final {
+            let old_card: Cards = Mapping::get(cards, game_id);
+            let game: Game = Mapping::get(games, game_id);
 
-        let is_p1: bool = signer == game.player1;
-        let is_p2: bool = signer == game.player2;
-        let is_p3: bool = signer == game.player3;
+            let is_p1: bool = signer == game.player1;
+            let is_p2: bool = signer == game.player2;
+            let is_p3: bool = signer == game.player3;
 
-        let is_p1_turn: bool = is_p1 && game.state == p1_dec_turn;
-        let is_p2_turn: bool = is_p2 && game.state == p2_dec_turn;
-        let is_p3_turn: bool = is_p3 && game.state == p3_dec_turn;
+            let is_p1_turn: bool = is_p1 && game.state == p1_dec_turn;
+            let is_p2_turn: bool = is_p2 && game.state == p2_dec_turn;
+            let is_p3_turn: bool = is_p3 && game.state == p3_dec_turn;
 
-        let is_p1_river: bool = is_p1 && game.state == p1_dec_river;
-        let is_p2_river: bool = is_p2 && game.state == p2_dec_river;
-        let is_p3_river: bool = is_p3 && game.state == p3_dec_river;
+            let is_p1_river: bool = is_p1 && game.state == p1_dec_river;
+            let is_p2_river: bool = is_p2 && game.state == p2_dec_river;
+            let is_p3_river: bool = is_p3 && game.state == p3_dec_river;
 
-        let is_river: bool = is_p1_river | is_p2_river | is_p3_river;
-        assert(is_p1_turn | is_p2_turn | is_p3_turn | is_river);
-        assert_eq(card, is_river ? old_card.river : old_card.turn);
-        
-        let new_card: Cards = Cards {
-            player1: old_card.player1,
-            player2: old_card.player2,
-            player3: old_card.player3,
-            flop: old_card.flop,
-            turn: is_river ? old_card.turn : card_dec,
-            river: is_river ? card_dec : old_card.river,
-        };
-
-        let chip: Chips = Mapping::get(chips, game_id);
-        let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded);
-        let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded);
-        let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
-
-        let should_skip_betting: bool =
-            (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8;
-
-        let is_p1_out: bool = is_player1(game.players_out);
-        let is_p2_out: bool = is_player2(game.players_out);
-        let is_p3_out: bool = is_player3(game.players_out);
-
-        let is_p1_folded: bool = is_player1(game.players_folded);
-        let is_p2_folded: bool = is_player2(game.players_folded);
-        let is_p3_folded: bool = is_player3(game.players_folded);
-
-        let is_p1_live_for_showdown: bool = !is_p1_out && !is_p1_folded;
-        let is_p2_live_for_showdown: bool = !is_p2_out && !is_p2_folded;
-        let is_p3_live_for_showdown: bool = !is_p3_out && !is_p3_folded;
-
-        let board_revealer: u8 = is_p3_live_for_showdown ? player3() :
-                                 is_p2_live_for_showdown ? player2() : player1();
-
-        let is_board_revealer: bool = (board_revealer == player1() && is_p1) ||
-                                      (board_revealer == player2() && is_p2) ||
-                                      (board_revealer == player3() && is_p3);
-
-        if (is_board_revealer) {
-            let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
-            let new_revealed: RevealedCards = RevealedCards {
-                player1: revealed.player1,
-                player2: revealed.player2,
-                player3: revealed.player3,
-                flop: revealed.flop,
-                turn: is_river ? revealed.turn : card_u8,
-                river: is_river ? card_u8 : revealed.river,
+            let is_river: bool = is_p1_river | is_p2_river | is_p3_river;
+            assert(is_p1_turn | is_p2_turn | is_p3_turn | is_river);
+            assert_eq(card, is_river ? old_card.river : old_card.turn);
+            
+            let new_card: Cards = Cards {
+                player1: old_card.player1,
+                player2: old_card.player2,
+                player3: old_card.player3,
+                flop: old_card.flop,
+                turn: is_river ? old_card.turn : card_dec,
+                river: is_river ? card_dec : old_card.river,
             };
-            Mapping::set(revealed_cards, game_id, new_revealed);
-        }
 
-        let first_active_showdown: u8 =
-            is_p1_live_for_showdown ? p1_showdown :
-            is_p2_live_for_showdown ? p2_showdown :
-            p3_showdown;
-
-        let next_state: u8 =
-            is_p1_turn ? (!is_player2(game.players_out) ? p2_dec_turn : p3_dec_turn) :
-            is_p2_turn ? (!is_player3(game.players_out) ? p3_dec_turn :
-                         should_skip_betting ? p1_dec_river :
-                         is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_turn :
-                                                           !is_p3_inactive ? p3_bet_turn :
-                                                                             p1_bet_turn) :
-                         is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn :
-                                                           !is_p1_inactive ? p1_bet_turn :
-                                                                             p2_bet_turn) :
-                                                          (!is_p1_inactive ? p1_bet_turn :
-                                                           !is_p2_inactive ? p2_bet_turn :
-                                                                             p3_bet_turn)) :
-            is_p3_turn ? (should_skip_betting ? p1_dec_river :
-                         is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_turn :
-                                                           !is_p3_inactive ? p3_bet_turn :
-                                                                             p1_bet_turn) :
-                         is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn :
-                                                           !is_p1_inactive ? p1_bet_turn :
-                                                                             p2_bet_turn) :
-                                                          (!is_p1_inactive ? p1_bet_turn :
-                                                           !is_p2_inactive ? p2_bet_turn :
-                                                                             p3_bet_turn)) :
-            is_p1_river ? (!is_player2(game.players_out) ? p2_dec_river : p3_dec_river) :
-            is_p2_river ? (!is_player3(game.players_out) ? p3_dec_river :
-                          should_skip_betting ? first_active_showdown :
-                          is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_river :
-                                                            !is_p3_inactive ? p3_bet_river :
-                                                                              p1_bet_river) :
-                          is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river :
-                                                            !is_p1_inactive ? p1_bet_river :
-                                                                              p2_bet_river) :
-                                                           (!is_p1_inactive ? p1_bet_river :
-                                                            !is_p2_inactive ? p2_bet_river :
-                                                                              p3_bet_river)) :
-                          should_skip_betting ? first_active_showdown :
-                          is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_river :
-                                                            !is_p3_inactive ? p3_bet_river :
-                                                                              p1_bet_river) :
-                          is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river :
-                                                            !is_p1_inactive ? p1_bet_river :
-                                                                              p2_bet_river) :
-                                                           (!is_p1_inactive ? p1_bet_river :
-                                                            !is_p2_inactive ? p2_bet_river :
-                                                                              p3_bet_river);
-
-        let new_last_bet: u8 = 0u8;
-
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: next_state,
-            dealer_button: game.dealer_button,
-            players_out: game.players_out,
-            players_folded: game.players_folded,
-            last_bet: new_last_bet,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: game.remaining_hands,
-            hands_played: game.hands_played,
-            last_raise_size: (is_p3_turn || is_p3_river) ? 0u16 : game.last_raise_size,
-        };
-
-        Mapping::set(cards, game_id, new_card);
-        Mapping::set(games, game_id, new_game);
-    }
-    fn showdown(game_id: u32, hand: [group; 2], keys: Keys) -> (Keys, Final) {
-        let c0: u8 = to_u8(decrypt_card(keys.secret_inv, hand[0u8]));
-        let c1: u8 = to_u8(decrypt_card(keys.secret_inv, hand[1u8]));
-
-        let signer: address = std::ctx::signer();
-        return (keys, final { finalize_showdown(game_id, signer, hand, [c0, c1]); });
-    }
-    final fn finalize_showdown(game_id: u32, signer: address, hand: [group; 2], hand_u8: [u8; 2]) {
-        let old_card: Cards = Mapping::get(cards, game_id);
-        let game: Game = Mapping::get(games, game_id);
-
-        let is_p1_showdown: bool = game.state == p1_showdown;
-        let is_p2_showdown: bool = game.state == p2_showdown;
-        let is_p3_showdown: bool = game.state == p3_showdown;
-
-        assert_eq(game.state, signer == game.player1 ? p1_showdown :
-                              signer == game.player2 ? p2_showdown :
-                              signer == game.player3 ? p3_showdown : 255u8);
-
-        assert_eq(hand, is_p1_showdown ? old_card.player1 :
-                        is_p2_showdown ? old_card.player2 :
-                                         old_card.player3);
-
-        let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
-        let new_revealed: RevealedCards = RevealedCards {
-            player1: is_p1_showdown ? hand_u8 : revealed.player1,
-            player2: is_p2_showdown ? hand_u8 : revealed.player2,
-            player3: is_p3_showdown ? hand_u8 : revealed.player3,
-            flop: revealed.flop,
-            turn: revealed.turn,
-            river: revealed.river,
-        };
-
-        let p2_active: bool = !is_player2(game.players_out) && !is_player2(game.players_folded);
-        let p3_active: bool = !is_player3(game.players_out) && !is_player3(game.players_folded);
-
-        let new_state: u8 = is_p1_showdown ? (p2_active ? p2_showdown : (p3_active ? p3_showdown : compare)) :
-                            is_p2_showdown ? (p3_active ? p3_showdown : compare) :
-                                             compare;
-
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: new_state,
-            dealer_button: game.dealer_button,
-            players_out: game.players_out,
-            players_folded: game.players_folded,
-            last_bet: game.last_bet,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: game.remaining_hands,
-            hands_played: game.hands_played,
-            last_raise_size: game.last_raise_size,
-        };
-
-        Mapping::set(revealed_cards, game_id, new_revealed);
-        Mapping::set(games, game_id, new_game);
-    }
-
-    fn compare_hands(game_id: u32) -> Final {
-        let signer: address = std::ctx::signer();
-        return final { finalize_compare_hands(game_id, signer); };
-    }
-    final fn finalize_compare_hands(game_id: u32, signer: address) {
-        let game: Game = Mapping::get(games, game_id);
-        assert_eq(game.state, compare);
-
-        let is_valid_signer: bool = (is_player1(game.dealer_button) && game.player1 == signer) ||
-                                    (is_player2(game.dealer_button) && game.player2 == signer) ||
-                                    (is_player3(game.dealer_button) && game.player3 == signer);
-        assert(is_valid_signer);
-
-        let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
-        let chip: Chips = Mapping::get(chips, game_id);
-
-        let p1_active: bool = !is_player1(game.players_out) && !is_player1(game.players_folded);
-        let p2_active: bool = !is_player2(game.players_out) && !is_player2(game.players_folded);
-        let p3_active: bool = !is_player3(game.players_out) && !is_player3(game.players_folded);
-
-        let cc1_0: (u8, u8) = (revealed.flop[0u8] / 13u8, revealed.flop[0u8] % 13u8);
-        let cc2_0: (u8, u8) = (revealed.flop[1u8] / 13u8, revealed.flop[1u8] % 13u8);
-        let cc3_0: (u8, u8) = (revealed.flop[2u8] / 13u8, revealed.flop[2u8] % 13u8);
-        let cc4_0: (u8, u8) = (revealed.turn      / 13u8, revealed.turn      % 13u8);
-        let cc5_0: (u8, u8) = (revealed.river     / 13u8, revealed.river     % 13u8);
-
-        // Sort community cards by rank
-        let cmp_1: bool = cc1_0.1 < cc2_0.1;
-        let cc1_1: (u8, u8) = cmp_1 ? cc1_0 : cc2_0;
-        let cc2_1: (u8, u8) = cmp_1 ? cc2_0 : cc1_0;
-        let cc3_1: (u8, u8) = cc3_0;
-        let cc4_1: (u8, u8) = cc4_0;
-        let cc5_1: (u8, u8) = cc5_0;
-
-        let cc1_2: (u8, u8) = cc1_1;
-        let cmp_2: bool = cc2_1.1 < cc3_1.1;
-        let cc2_2: (u8, u8) = cmp_2 ? cc2_1 : cc3_1;
-        let cc3_2: (u8, u8) = cmp_2 ? cc3_1 : cc2_1;
-        let cc4_2: (u8, u8) = cc4_1;
-        let cc5_2: (u8, u8) = cc5_1;
-
-        let cc1_3: (u8, u8) = cc1_2;
-        let cc2_3: (u8, u8) = cc2_2;
-        let cmp_3: bool = cc3_2.1 < cc4_2.1;
-        let cc3_3: (u8, u8) = cmp_3 ? cc3_2 : cc4_2;
-        let cc4_3: (u8, u8) = cmp_3 ? cc4_2 : cc3_2;
-        let cc5_3: (u8, u8) = cc5_2;
-
-        let cc1_4: (u8, u8) = cc1_3;
-        let cc2_4: (u8, u8) = cc2_3;
-        let cc3_4: (u8, u8) = cc3_3;
-        let cmp_4: bool = cc4_3.1 < cc5_3.1;
-        let cc4_4: (u8, u8) = cmp_4 ? cc4_3 : cc5_3;
-        let cc5_4: (u8, u8) = cmp_4 ? cc5_3 : cc4_3;
-
-        // Second pass
-        let cmp_5: bool = cc1_4.1 < cc2_4.1;
-        let cc1_5: (u8, u8) = cmp_5 ? cc1_4 : cc2_4;
-        let cc2_5: (u8, u8) = cmp_5 ? cc2_4 : cc1_4;
-        let cc3_5: (u8, u8) = cc3_4;
-        let cc4_5: (u8, u8) = cc4_4;
-        let cc5_5: (u8, u8) = cc5_4;
-
-        let cc1_6: (u8, u8) = cc1_5;
-        let cmp_6: bool = cc2_5.1 < cc3_5.1;
-        let cc2_6: (u8, u8) = cmp_6 ? cc2_5 : cc3_5;
-        let cc3_6: (u8, u8) = cmp_6 ? cc3_5 : cc2_5;
-        let cc4_6: (u8, u8) = cc4_5;
-        let cc5_6: (u8, u8) = cc5_5;
-
-        let cc1_7: (u8, u8) = cc1_6;
-        let cc2_7: (u8, u8) = cc2_6;
-        let cmp_7: bool = cc3_6.1 < cc4_6.1;
-        let cc3_7: (u8, u8) = cmp_7 ? cc3_6 : cc4_6;
-        let cc4_7: (u8, u8) = cmp_7 ? cc4_6 : cc3_6;
-        let cc5_7: (u8, u8) = cc5_6;
-
-        let cc1_8: (u8, u8) = cc1_7;
-        let cc2_8: (u8, u8) = cc2_7;
-        let cc3_8: (u8, u8) = cc3_7;
-        let cmp_8: bool = cc4_7.1 < cc5_7.1;
-        let cc4_8: (u8, u8) = cmp_8 ? cc4_7 : cc5_7;
-        let cc5_8: (u8, u8) = cmp_8 ? cc5_7 : cc4_7;
-
-        // Third pass
-        let cmp_9: bool = cc1_8.1 < cc2_8.1;
-        let cc1_9: (u8, u8) = cmp_9 ? cc1_8 : cc2_8;
-        let cc2_9: (u8, u8) = cmp_9 ? cc2_8 : cc1_8;
-        let cc3_9: (u8, u8) = cc3_8;
-        let cc4_9: (u8, u8) = cc4_8;
-        let cc5_9: (u8, u8) = cc5_8;
-
-        let cc1_10: (u8, u8) = cc1_9;
-        let cmp_10: bool = cc2_9.1 < cc3_9.1;
-        let cc2_10: (u8, u8) = cmp_10 ? cc2_9 : cc3_9;
-        let cc3_10: (u8, u8) = cmp_10 ? cc3_9 : cc2_9;
-        let cc4_10: (u8, u8) = cc4_9;
-        let cc5_10: (u8, u8) = cc5_9;
-
-        let cc1_11: (u8, u8) = cc1_10;
-        let cc2_11: (u8, u8) = cc2_10;
-        let cmp_11: bool = cc3_10.1 < cc4_10.1;
-        let cc3_11: (u8, u8) = cmp_11 ? cc3_10 : cc4_10;
-        let cc4_11: (u8, u8) = cmp_11 ? cc4_10 : cc3_10;
-        let cc5_11: (u8, u8) = cc5_10;
-
-        let cc1_12: (u8, u8) = cc1_11;
-        let cc2_12: (u8, u8) = cc2_11;
-        let cc3_12: (u8, u8) = cc3_11;
-        let cmp_12: bool = cc4_11.1 < cc5_11.1;
-        let cc4_12: (u8, u8) = cmp_12 ? cc4_11 : cc5_11;
-        let cc5_12: (u8, u8) = cmp_12 ? cc5_11 : cc4_11;
-
-        // Fourth pass
-        let cmp_13: bool = cc1_12.1 < cc2_12.1;
-        let cc1_13: (u8, u8) = cmp_13 ? cc1_12 : cc2_12;
-        let cc2_13: (u8, u8) = cmp_13 ? cc2_12 : cc1_12;
-        let cc3_13: (u8, u8) = cc3_12;
-        let cc4_13: (u8, u8) = cc4_12;
-        let cc5_13: (u8, u8) = cc5_12;
-
-        let cc1_14: (u8, u8) = cc1_13;
-        let cmp_14: bool = cc2_13.1 < cc3_13.1;
-        let cc2_14: (u8, u8) = cmp_14 ? cc2_13 : cc3_13;
-        let cc3_14: (u8, u8) = cmp_14 ? cc3_13 : cc2_13;
-        let cc4_14: (u8, u8) = cc4_13;
-        let cc5_14: (u8, u8) = cc5_13;
-
-        let cc1_15: (u8, u8) = cc1_14;
-        let cc2_15: (u8, u8) = cc2_14;
-        let cmp_15: bool = cc3_14.1 < cc4_14.1;
-        let cc3_15: (u8, u8) = cmp_15 ? cc3_14 : cc4_14;
-        let cc4_15: (u8, u8) = cmp_15 ? cc4_14 : cc3_14;
-        let cc5_15: (u8, u8) = cc5_14;
-
-        let c1: (u8, u8) = cc1_15;
-        let c2: (u8, u8) = cc2_15;
-        let c3: (u8, u8) = cc3_15;
-        let cmp_16: bool = cc4_15.1 < cc5_15.1;
-        let c4: (u8, u8) = cmp_16 ? cc4_15 : cc5_15;
-        let c5: (u8, u8) = cmp_16 ? cc5_15 : cc4_15;
-
-        // Merge hole cards with community cards for each player
-        let p1_h1_card: u8 = p1_active ? revealed.player1[0u8] : 0u8;
-        let p1_h2_card: u8 = p1_active ? revealed.player1[1u8] : 0u8;
-        let p1_h1: (u8, u8) = (p1_h1_card / 13u8, p1_h1_card % 13u8);
-        let p1_h2: (u8, u8) = (p1_h2_card / 13u8, p1_h2_card % 13u8);
-
-        let p1_h1_lt_c1: bool = p1_h1.1 < c1.1;
-        let p1_h1_lt_c2: bool = p1_h1.1 < c2.1;
-        let p1_h1_lt_c3: bool = p1_h1.1 < c3.1;
-        let p1_h1_lt_c4: bool = p1_h1.1 < c4.1;
-        let p1_h1_lt_c5: bool = p1_h1.1 < c5.1;
-        let p1_tmp_c1: (u8, u8) = p1_h1_lt_c1 ? p1_h1 : c1;
-        let p1_tmp_c2: (u8, u8) = p1_h1_lt_c1 ? c1 : p1_h1_lt_c2 ? p1_h1 : c2;
-        let p1_tmp_c3: (u8, u8) = p1_h1_lt_c2 ? c2 : p1_h1_lt_c3 ? p1_h1 : c3;
-        let p1_tmp_c4: (u8, u8) = p1_h1_lt_c3 ? c3 : p1_h1_lt_c4 ? p1_h1 : c4;
-        let p1_tmp_c5: (u8, u8) = p1_h1_lt_c4 ? c4 : p1_h1_lt_c5 ? p1_h1 : c5;
-        let p1_tmp_c6: (u8, u8) = p1_h1_lt_c5 ? c5 : p1_h1;
-
-        let p1_h2_lt_t1: bool = p1_h2.1 < p1_tmp_c1.1;
-        let p1_h2_lt_t2: bool = p1_h2.1 < p1_tmp_c2.1;
-        let p1_h2_lt_t3: bool = p1_h2.1 < p1_tmp_c3.1;
-        let p1_h2_lt_t4: bool = p1_h2.1 < p1_tmp_c4.1;
-        let p1_h2_lt_t5: bool = p1_h2.1 < p1_tmp_c5.1;
-        let p1_h2_lt_t6: bool = p1_h2.1 < p1_tmp_c6.1;
-        let p1_c1: (u8, u8) = p1_h2_lt_t1 ? p1_h2 : p1_tmp_c1;
-        let p1_c2: (u8, u8) = p1_h2_lt_t1 ? p1_tmp_c1 : p1_h2_lt_t2 ? p1_h2 : p1_tmp_c2;
-        let p1_c3: (u8, u8) = p1_h2_lt_t2 ? p1_tmp_c2 : p1_h2_lt_t3 ? p1_h2 : p1_tmp_c3;
-        let p1_c4: (u8, u8) = p1_h2_lt_t3 ? p1_tmp_c3 : p1_h2_lt_t4 ? p1_h2 : p1_tmp_c4;
-        let p1_c5: (u8, u8) = p1_h2_lt_t4 ? p1_tmp_c4 : p1_h2_lt_t5 ? p1_h2 : p1_tmp_c5;
-        let p1_c6: (u8, u8) = p1_h2_lt_t5 ? p1_tmp_c5 : p1_h2_lt_t6 ? p1_h2 : p1_tmp_c6;
-        let p1_c7: (u8, u8) = p1_h2_lt_t6 ? p1_tmp_c6 : p1_h2;
-
-
-
-        let p2_h1_card: u8 = p2_active ? revealed.player2[0u8] : 0u8;
-        let p2_h2_card: u8 = p2_active ? revealed.player2[1u8] : 0u8;
-        let p2_h1: (u8, u8) = (p2_h1_card / 13u8, p2_h1_card % 13u8);
-        let p2_h2: (u8, u8) = (p2_h2_card / 13u8, p2_h2_card % 13u8);
-
-        let p2_h1_lt_c1: bool = p2_h1.1 < c1.1;
-        let p2_h1_lt_c2: bool = p2_h1.1 < c2.1;
-        let p2_h1_lt_c3: bool = p2_h1.1 < c3.1;
-        let p2_h1_lt_c4: bool = p2_h1.1 < c4.1;
-        let p2_h1_lt_c5: bool = p2_h1.1 < c5.1;
-        let p2_tmp_c1: (u8, u8) = p2_h1_lt_c1 ? p2_h1 : c1;
-        let p2_tmp_c2: (u8, u8) = p2_h1_lt_c1 ? c1 : p2_h1_lt_c2 ? p2_h1 : c2;
-        let p2_tmp_c3: (u8, u8) = p2_h1_lt_c2 ? c2 : p2_h1_lt_c3 ? p2_h1 : c3;
-        let p2_tmp_c4: (u8, u8) = p2_h1_lt_c3 ? c3 : p2_h1_lt_c4 ? p2_h1 : c4;
-        let p2_tmp_c5: (u8, u8) = p2_h1_lt_c4 ? c4 : p2_h1_lt_c5 ? p2_h1 : c5;
-        let p2_tmp_c6: (u8, u8) = p2_h1_lt_c5 ? c5 : p2_h1;
-
-        let p2_h2_lt_t1: bool = p2_h2.1 < p2_tmp_c1.1;
-        let p2_h2_lt_t2: bool = p2_h2.1 < p2_tmp_c2.1;
-        let p2_h2_lt_t3: bool = p2_h2.1 < p2_tmp_c3.1;
-        let p2_h2_lt_t4: bool = p2_h2.1 < p2_tmp_c4.1;
-        let p2_h2_lt_t5: bool = p2_h2.1 < p2_tmp_c5.1;
-        let p2_h2_lt_t6: bool = p2_h2.1 < p2_tmp_c6.1;
-        let p2_c1: (u8, u8) = p2_h2_lt_t1 ? p2_h2 : p2_tmp_c1;
-        let p2_c2: (u8, u8) = p2_h2_lt_t1 ? p2_tmp_c1 : p2_h2_lt_t2 ? p2_h2 : p2_tmp_c2;
-        let p2_c3: (u8, u8) = p2_h2_lt_t2 ? p2_tmp_c2 : p2_h2_lt_t3 ? p2_h2 : p2_tmp_c3;
-        let p2_c4: (u8, u8) = p2_h2_lt_t3 ? p2_tmp_c3 : p2_h2_lt_t4 ? p2_h2 : p2_tmp_c4;
-        let p2_c5: (u8, u8) = p2_h2_lt_t4 ? p2_tmp_c4 : p2_h2_lt_t5 ? p2_h2 : p2_tmp_c5;
-        let p2_c6: (u8, u8) = p2_h2_lt_t5 ? p2_tmp_c5 : p2_h2_lt_t6 ? p2_h2 : p2_tmp_c6;
-        let p2_c7: (u8, u8) = p2_h2_lt_t6 ? p2_tmp_c6 : p2_h2;
-
-
-
-        let p3_h1_card: u8 = p3_active ? revealed.player3[0u8] : 0u8;
-        let p3_h2_card: u8 = p3_active ? revealed.player3[1u8] : 0u8;
-        let p3_h1: (u8, u8) = (p3_h1_card / 13u8, p3_h1_card % 13u8);
-        let p3_h2: (u8, u8) = (p3_h2_card / 13u8, p3_h2_card % 13u8);
-
-        let p3_h1_lt_c1: bool = p3_h1.1 < c1.1;
-        let p3_h1_lt_c2: bool = p3_h1.1 < c2.1;
-        let p3_h1_lt_c3: bool = p3_h1.1 < c3.1;
-        let p3_h1_lt_c4: bool = p3_h1.1 < c4.1;
-        let p3_h1_lt_c5: bool = p3_h1.1 < c5.1;
-        let p3_tmp_c1: (u8, u8) = p3_h1_lt_c1 ? p3_h1 : c1;
-        let p3_tmp_c2: (u8, u8) = p3_h1_lt_c1 ? c1 : p3_h1_lt_c2 ? p3_h1 : c2;
-        let p3_tmp_c3: (u8, u8) = p3_h1_lt_c2 ? c2 : p3_h1_lt_c3 ? p3_h1 : c3;
-        let p3_tmp_c4: (u8, u8) = p3_h1_lt_c3 ? c3 : p3_h1_lt_c4 ? p3_h1 : c4;
-        let p3_tmp_c5: (u8, u8) = p3_h1_lt_c4 ? c4 : p3_h1_lt_c5 ? p3_h1 : c5;
-        let p3_tmp_c6: (u8, u8) = p3_h1_lt_c5 ? c5 : p3_h1;
-
-        let p3_h2_lt_t1: bool = p3_h2.1 < p3_tmp_c1.1;
-        let p3_h2_lt_t2: bool = p3_h2.1 < p3_tmp_c2.1;
-        let p3_h2_lt_t3: bool = p3_h2.1 < p3_tmp_c3.1;
-        let p3_h2_lt_t4: bool = p3_h2.1 < p3_tmp_c4.1;
-        let p3_h2_lt_t5: bool = p3_h2.1 < p3_tmp_c5.1;
-        let p3_h2_lt_t6: bool = p3_h2.1 < p3_tmp_c6.1;
-        let p3_c1: (u8, u8) = p3_h2_lt_t1 ? p3_h2 : p3_tmp_c1;
-        let p3_c2: (u8, u8) = p3_h2_lt_t1 ? p3_tmp_c1 : p3_h2_lt_t2 ? p3_h2 : p3_tmp_c2;
-        let p3_c3: (u8, u8) = p3_h2_lt_t2 ? p3_tmp_c2 : p3_h2_lt_t3 ? p3_h2 : p3_tmp_c3;
-        let p3_c4: (u8, u8) = p3_h2_lt_t3 ? p3_tmp_c3 : p3_h2_lt_t4 ? p3_h2 : p3_tmp_c4;
-        let p3_c5: (u8, u8) = p3_h2_lt_t4 ? p3_tmp_c4 : p3_h2_lt_t5 ? p3_h2 : p3_tmp_c5;
-        let p3_c6: (u8, u8) = p3_h2_lt_t5 ? p3_tmp_c5 : p3_h2_lt_t6 ? p3_h2 : p3_tmp_c6;
-        let p3_c7: (u8, u8) = p3_h2_lt_t6 ? p3_tmp_c6 : p3_h2;
-
-
-
-        let p1_hand_value: u32 =
-            evaluate_hand(p1_c1.0, p1_c1.1, p1_c2.0, p1_c2.1, p1_c3.0, p1_c3.1, p1_c4.0, p1_c4.1, p1_c5.0, p1_c5.1, p1_c6.0, p1_c6.1, p1_c7.0, p1_c7.1);
-
-        let p2_hand_value: u32 =
-            evaluate_hand(p2_c1.0, p2_c1.1, p2_c2.0, p2_c2.1, p2_c3.0, p2_c3.1, p2_c4.0, p2_c4.1, p2_c5.0, p2_c5.1, p2_c6.0, p2_c6.1, p2_c7.0, p2_c7.1);
-
-        let p3_hand_value: u32 =
-            evaluate_hand(p3_c1.0, p3_c1.1, p3_c2.0, p3_c2.1, p3_c3.0, p3_c3.1, p3_c4.0, p3_c4.1, p3_c5.0, p3_c5.1, p3_c6.0, p3_c6.1, p3_c7.0, p3_c7.1);
-
-        let level1: u16 = chip.player1_bet <= chip.player2_bet && chip.player1_bet <= chip.player3_bet ? chip.player1_bet :
-                          chip.player2_bet <= chip.player3_bet ? chip.player2_bet : chip.player3_bet;
-
-        let level3: u16 = chip.player1_bet >= chip.player2_bet && chip.player1_bet >= chip.player3_bet ? chip.player1_bet :
-                          chip.player2_bet >= chip.player3_bet ? chip.player2_bet : chip.player3_bet;
-
-        let level2: u16 = chip.player1_bet != level1 && chip.player1_bet != level3 ? chip.player1_bet :
-                          chip.player2_bet != level1 && chip.player2_bet != level3 ? chip.player2_bet :
-                          chip.player3_bet;
-
-        let contributors_to_main: u8 = (chip.player1_bet >= level1) as u8 +
-                                       (chip.player2_bet >= level1) as u8 +
-                                       (chip.player3_bet >= level1) as u8;
-
-        let contributors_to_side1: u8 = (chip.player1_bet >= level2) as u8 +
-                                        (chip.player2_bet >= level2) as u8 +
-                                        (chip.player3_bet >= level2) as u8;
-
-        let contributors_to_side2: u8 = (chip.player1_bet >= level3) as u8 +
-                                        (chip.player2_bet >= level3) as u8 +
-                                        (chip.player3_bet >= level3) as u8;
-
-        let main_pot: u16 = level1 * contributors_to_main as u16;
-        let side_pot_1: u16 = level1 == level2 ? 0u16 : (level2 - level1) * contributors_to_side1 as u16;
-        let side_pot_2: u16 = level2 == level3 ? 0u16 : (level3 - level2) * contributors_to_side2 as u16;
-
-        let p1_in_main: bool = p1_active && chip.player1_bet >= level1;
-        let p2_in_main: bool = p2_active && chip.player2_bet >= level1;
-        let p3_in_main: bool = p3_active && chip.player3_bet >= level1;
-
-        let p1_main_value: u32 = p1_in_main ? p1_hand_value : 0u32;
-        let p2_main_value: u32 = p2_in_main ? p2_hand_value : 0u32;
-        let p3_main_value: u32 = p3_in_main ? p3_hand_value : 0u32;
-
-        let tmp_max_main_1: u32 = p1_main_value >= p2_main_value ? p1_main_value : p2_main_value;
-        let best_main_value: u32 = tmp_max_main_1 >= p3_main_value ? tmp_max_main_1 : p3_main_value;
-
-        let p1_is_main_winner: bool = p1_in_main && p1_main_value == best_main_value;
-        let p2_is_main_winner: bool = p2_in_main && p2_main_value == best_main_value;
-        let p3_is_main_winner: bool = p3_in_main && p3_main_value == best_main_value;
-
-        let num_main_winners: u8 = (p1_is_main_winner as u8) +
-                                   (p2_is_main_winner as u8) +
-                                   (p3_is_main_winner as u8);
-
-        let p1_from_main: u16 = p1_is_main_winner && num_main_winners > 0u8 ? main_pot / num_main_winners as u16 : 0u16;
-        let p2_from_main: u16 = p2_is_main_winner && num_main_winners > 0u8 ? main_pot / num_main_winners as u16 : 0u16;
-        let p3_from_main: u16 = p3_is_main_winner && num_main_winners > 0u8 ? main_pot / num_main_winners as u16 : 0u16;
-
-        let p1_in_side1: bool = p1_active && chip.player1_bet >= level2;
-        let p2_in_side1: bool = p2_active && chip.player2_bet >= level2;
-        let p3_in_side1: bool = p3_active && chip.player3_bet >= level2;
-
-        let p1_side1_value: u32 = p1_in_side1 ? p1_hand_value : 0u32;
-        let p2_side1_value: u32 = p2_in_side1 ? p2_hand_value : 0u32;
-        let p3_side1_value: u32 = p3_in_side1 ? p3_hand_value : 0u32;
-
-        let tmp_max_side1_1: u32 = p1_side1_value >= p2_side1_value ? p1_side1_value : p2_side1_value;
-        let best_side1_value: u32 = tmp_max_side1_1 >= p3_side1_value ? tmp_max_side1_1 : p3_side1_value;
-
-        let p1_is_side1_winner: bool = p1_in_side1 && p1_side1_value == best_side1_value;
-        let p2_is_side1_winner: bool = p2_in_side1 && p2_side1_value == best_side1_value;
-        let p3_is_side1_winner: bool = p3_in_side1 && p3_side1_value == best_side1_value;
-
-        let num_side1_winners: u8 = (p1_is_side1_winner as u8) +
-                                    (p2_is_side1_winner as u8) +
-                                    (p3_is_side1_winner as u8);
-
-        let p1_from_side1: u16 = p1_is_side1_winner && num_side1_winners > 0u8 ? side_pot_1 / num_side1_winners as u16 : 0u16;
-        let p2_from_side1: u16 = p2_is_side1_winner && num_side1_winners > 0u8 ? side_pot_1 / num_side1_winners as u16 : 0u16;
-        let p3_from_side1: u16 = p3_is_side1_winner && num_side1_winners > 0u8 ? side_pot_1 / num_side1_winners as u16 : 0u16;
-
-        let p1_in_side2: bool = p1_active && chip.player1_bet >= level3;
-        let p2_in_side2: bool = p2_active && chip.player2_bet >= level3;
-        let p3_in_side2: bool = p3_active && chip.player3_bet >= level3;
-
-        let p1_side2_value: u32 = p1_in_side2 ? p1_hand_value : 0u32;
-        let p2_side2_value: u32 = p2_in_side2 ? p2_hand_value : 0u32;
-        let p3_side2_value: u32 = p3_in_side2 ? p3_hand_value : 0u32;
-
-        let tmp_max_side2_1: u32 = p1_side2_value >= p2_side2_value ? p1_side2_value : p2_side2_value;
-        let best_side2_value: u32 = tmp_max_side2_1 >= p3_side2_value ? tmp_max_side2_1 : p3_side2_value;
-
-        let p1_is_side2_winner: bool = p1_in_side2 && p1_side2_value == best_side2_value;
-        let p2_is_side2_winner: bool = p2_in_side2 && p2_side2_value == best_side2_value;
-        let p3_is_side2_winner: bool = p3_in_side2 && p3_side2_value == best_side2_value;
-
-        let num_side2_winners: u8 = (p1_is_side2_winner as u8) +
-                                    (p2_is_side2_winner as u8) +
-                                    (p3_is_side2_winner as u8);
-
-        let p1_from_side2: u16 = p1_is_side2_winner && num_side2_winners > 0u8 ? side_pot_2 / num_side2_winners as u16 : 0u16;
-        let p2_from_side2: u16 = p2_is_side2_winner && num_side2_winners > 0u8 ? side_pot_2 / num_side2_winners as u16 : 0u16;
-        let p3_from_side2: u16 = p3_is_side2_winner && num_side2_winners > 0u8 ? side_pot_2 / num_side2_winners as u16 : 0u16;
-
-        let p1_share: u16 = p1_from_main + p1_from_side1 + p1_from_side2;
-        let p2_share: u16 = p2_from_main + p2_from_side1 + p2_from_side2;
-        let p3_share: u16 = p3_from_main + p3_from_side1 + p3_from_side2;
-
-        let new_chip: Chips = Chips {
-            player1: chip.player1 + p1_share,
-            player2: chip.player2 + p2_share,
-            player3: chip.player3 + p3_share,
-            player1_bet: 0u16,
-            player2_bet: 0u16,
-            player3_bet: 0u16,
-        };
-
-        let new_players_out: u8 = (new_chip.player1 == 0u16 ? player1() : 0u8) |
-                                  (new_chip.player2 == 0u16 ? player2() : 0u8) |
-                                  (new_chip.player3 == 0u16 ? player3() : 0u8);
-
-        let game_over: bool = new_players_out == 6u8 || new_players_out == 5u8 || new_players_out == 3u8;
-        if (game_over) {
-            let end_state: u8 = !is_player1(new_players_out) ? p1_claim :
-                                !is_player2(new_players_out) ? p2_claim : p3_claim;
-            let end_game: Game = Game {
+            let chip: Chips = Mapping::get(chips, game_id);
+            let is_p1_inactive: bool = chip.player1 == 0u16 || is_player1(game.players_folded);
+            let is_p2_inactive: bool = chip.player2 == 0u16 || is_player2(game.players_folded);
+            let is_p3_inactive: bool = chip.player3 == 0u16 || is_player3(game.players_folded);
+
+            let should_skip_betting: bool =
+                (!is_p1_inactive as u8 + !is_p2_inactive as u8 + !is_p3_inactive as u8) <= 1u8;
+
+            let is_p1_out: bool = is_player1(game.players_out);
+            let is_p2_out: bool = is_player2(game.players_out);
+            let is_p3_out: bool = is_player3(game.players_out);
+
+            let is_p1_folded: bool = is_player1(game.players_folded);
+            let is_p2_folded: bool = is_player2(game.players_folded);
+            let is_p3_folded: bool = is_player3(game.players_folded);
+
+            let is_p1_live_for_showdown: bool = !is_p1_out && !is_p1_folded;
+            let is_p2_live_for_showdown: bool = !is_p2_out && !is_p2_folded;
+            let is_p3_live_for_showdown: bool = !is_p3_out && !is_p3_folded;
+
+            let board_revealer: u8 = is_p3_live_for_showdown ? player3() :
+                                     is_p2_live_for_showdown ? player2() : player1();
+
+            let is_board_revealer: bool = (board_revealer == player1() && is_p1) ||
+                                          (board_revealer == player2() && is_p2) ||
+                                          (board_revealer == player3() && is_p3);
+
+            if (is_board_revealer) {
+                let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
+                let new_revealed: RevealedCards = RevealedCards {
+                    player1: revealed.player1,
+                    player2: revealed.player2,
+                    player3: revealed.player3,
+                    flop: revealed.flop,
+                    turn: is_river ? revealed.turn : card_u8,
+                    river: is_river ? card_u8 : revealed.river,
+                };
+                Mapping::set(revealed_cards, game_id, new_revealed);
+            }
+
+            let first_active_showdown: u8 =
+                is_p1_live_for_showdown ? p1_showdown :
+                is_p2_live_for_showdown ? p2_showdown :
+                p3_showdown;
+
+            let next_state: u8 =
+                is_p1_turn ? (!is_player2(game.players_out) ? p2_dec_turn : p3_dec_turn) :
+                is_p2_turn ? (!is_player3(game.players_out) ? p3_dec_turn :
+                             should_skip_betting ? p1_dec_river :
+                             is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_turn :
+                                                               !is_p3_inactive ? p3_bet_turn :
+                                                                                 p1_bet_turn) :
+                             is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn :
+                                                               !is_p1_inactive ? p1_bet_turn :
+                                                                                 p2_bet_turn) :
+                                                              (!is_p1_inactive ? p1_bet_turn :
+                                                               !is_p2_inactive ? p2_bet_turn :
+                                                                                 p3_bet_turn)) :
+                is_p3_turn ? (should_skip_betting ? p1_dec_river :
+                             is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_turn :
+                                                               !is_p3_inactive ? p3_bet_turn :
+                                                                                 p1_bet_turn) :
+                             is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_turn :
+                                                               !is_p1_inactive ? p1_bet_turn :
+                                                                                 p2_bet_turn) :
+                                                              (!is_p1_inactive ? p1_bet_turn :
+                                                               !is_p2_inactive ? p2_bet_turn :
+                                                                                 p3_bet_turn)) :
+                is_p1_river ? (!is_player2(game.players_out) ? p2_dec_river : p3_dec_river) :
+                is_p2_river ? (!is_player3(game.players_out) ? p3_dec_river :
+                              should_skip_betting ? first_active_showdown :
+                              is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_river :
+                                                                !is_p3_inactive ? p3_bet_river :
+                                                                                  p1_bet_river) :
+                              is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river :
+                                                                !is_p1_inactive ? p1_bet_river :
+                                                                                  p2_bet_river) :
+                                                               (!is_p1_inactive ? p1_bet_river :
+                                                                !is_p2_inactive ? p2_bet_river :
+                                                                                  p3_bet_river)) :
+                              should_skip_betting ? first_active_showdown :
+                              is_player1(game.dealer_button) ? (!is_p2_inactive ? p2_bet_river :
+                                                                !is_p3_inactive ? p3_bet_river :
+                                                                                  p1_bet_river) :
+                              is_player2(game.dealer_button) ? (!is_p3_inactive ? p3_bet_river :
+                                                                !is_p1_inactive ? p1_bet_river :
+                                                                                  p2_bet_river) :
+                                                               (!is_p1_inactive ? p1_bet_river :
+                                                                !is_p2_inactive ? p2_bet_river :
+                                                                                  p3_bet_river);
+
+            let new_last_bet: u8 = 0u8;
+
+            let new_game: Game = Game {
                 player1: game.player1,
                 player2: game.player2,
                 player3: game.player3,
                 buy_in: game.buy_in,
                 password_hash: game.password_hash,
-                state: end_state,
+                state: next_state,
                 dealer_button: game.dealer_button,
-                players_out: new_players_out,
-                players_folded: new_players_out,
+                players_out: game.players_out,
+                players_folded: game.players_folded,
+                last_bet: new_last_bet,
+                sb: game.sb,
+                bb: game.bb,
+                blind_frequency: game.blind_frequency,
+                remaining_hands: game.remaining_hands,
+                hands_played: game.hands_played,
+                last_raise_size: (is_p3_turn || is_p3_river) ? 0u16 : game.last_raise_size,
+            };
+
+            Mapping::set(cards, game_id, new_card);
+            Mapping::set(games, game_id, new_game);
+        });
+    }
+
+    fn showdown(game_id: u32, hand: [group; 2], keys: Keys) -> (Keys, Final) {
+        let c0: u8 = to_u8(decrypt_card(keys.secret_inv, hand[0u8]));
+        let c1: u8 = to_u8(decrypt_card(keys.secret_inv, hand[1u8]));
+
+        let signer: address = std::ctx::signer();
+        return (keys, final {
+            let old_card: Cards = Mapping::get(cards, game_id);
+            let game: Game = Mapping::get(games, game_id);
+
+            let is_p1_showdown: bool = game.state == p1_showdown;
+            let is_p2_showdown: bool = game.state == p2_showdown;
+            let is_p3_showdown: bool = game.state == p3_showdown;
+
+            assert_eq(game.state, signer == game.player1 ? p1_showdown :
+                                  signer == game.player2 ? p2_showdown :
+                                  signer == game.player3 ? p3_showdown : 255u8);
+
+            assert_eq(hand, is_p1_showdown ? old_card.player1 :
+                            is_p2_showdown ? old_card.player2 :
+                                             old_card.player3);
+
+            let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
+            let new_revealed: RevealedCards = RevealedCards {
+                player1: is_p1_showdown ? [c0, c1] : revealed.player1,
+                player2: is_p2_showdown ? [c0, c1] : revealed.player2,
+                player3: is_p3_showdown ? [c0, c1] : revealed.player3,
+                flop: revealed.flop,
+                turn: revealed.turn,
+                river: revealed.river,
+            };
+
+            let p2_active: bool = !is_player2(game.players_out) && !is_player2(game.players_folded);
+            let p3_active: bool = !is_player3(game.players_out) && !is_player3(game.players_folded);
+
+            let new_state: u8 = is_p1_showdown ? (p2_active ? p2_showdown : (p3_active ? p3_showdown : compare)) :
+                                is_p2_showdown ? (p3_active ? p3_showdown : compare) :
+                                                 compare;
+
+            let new_game: Game = Game {
+                player1: game.player1,
+                player2: game.player2,
+                player3: game.player3,
+                buy_in: game.buy_in,
+                password_hash: game.password_hash,
+                state: new_state,
+                dealer_button: game.dealer_button,
+                players_out: game.players_out,
+                players_folded: game.players_folded,
+                last_bet: game.last_bet,
+                sb: game.sb,
+                bb: game.bb,
+                blind_frequency: game.blind_frequency,
+                remaining_hands: game.remaining_hands,
+                hands_played: game.hands_played,
+                last_raise_size: game.last_raise_size,
+            };
+
+            Mapping::set(revealed_cards, game_id, new_revealed);
+            Mapping::set(games, game_id, new_game);
+        });
+    }
+
+    fn compare_hands(game_id: u32) -> Final {
+        let signer: address = std::ctx::signer();
+        return final {
+            let game: Game = Mapping::get(games, game_id);
+            assert_eq(game.state, compare);
+
+            let is_valid_signer: bool = (is_player1(game.dealer_button) && game.player1 == signer) ||
+                                        (is_player2(game.dealer_button) && game.player2 == signer) ||
+                                        (is_player3(game.dealer_button) && game.player3 == signer);
+            assert(is_valid_signer);
+
+            let revealed: RevealedCards = Mapping::get(revealed_cards, game_id);
+            let chip: Chips = Mapping::get(chips, game_id);
+
+            let p1_active: bool = !is_player1(game.players_out) && !is_player1(game.players_folded);
+            let p2_active: bool = !is_player2(game.players_out) && !is_player2(game.players_folded);
+            let p3_active: bool = !is_player3(game.players_out) && !is_player3(game.players_folded);
+
+            let cc1_0: (u8, u8) = (revealed.flop[0u8] / 13u8, revealed.flop[0u8] % 13u8);
+            let cc2_0: (u8, u8) = (revealed.flop[1u8] / 13u8, revealed.flop[1u8] % 13u8);
+            let cc3_0: (u8, u8) = (revealed.flop[2u8] / 13u8, revealed.flop[2u8] % 13u8);
+            let cc4_0: (u8, u8) = (revealed.turn      / 13u8, revealed.turn      % 13u8);
+            let cc5_0: (u8, u8) = (revealed.river     / 13u8, revealed.river     % 13u8);
+
+            // Sort community cards by rank
+            let cmp_1: bool = cc1_0.1 < cc2_0.1;
+            let cc1_1: (u8, u8) = cmp_1 ? cc1_0 : cc2_0;
+            let cc2_1: (u8, u8) = cmp_1 ? cc2_0 : cc1_0;
+            let cc3_1: (u8, u8) = cc3_0;
+            let cc4_1: (u8, u8) = cc4_0;
+            let cc5_1: (u8, u8) = cc5_0;
+
+            let cc1_2: (u8, u8) = cc1_1;
+            let cmp_2: bool = cc2_1.1 < cc3_1.1;
+            let cc2_2: (u8, u8) = cmp_2 ? cc2_1 : cc3_1;
+            let cc3_2: (u8, u8) = cmp_2 ? cc3_1 : cc2_1;
+            let cc4_2: (u8, u8) = cc4_1;
+            let cc5_2: (u8, u8) = cc5_1;
+
+            let cc1_3: (u8, u8) = cc1_2;
+            let cc2_3: (u8, u8) = cc2_2;
+            let cmp_3: bool = cc3_2.1 < cc4_2.1;
+            let cc3_3: (u8, u8) = cmp_3 ? cc3_2 : cc4_2;
+            let cc4_3: (u8, u8) = cmp_3 ? cc4_2 : cc3_2;
+            let cc5_3: (u8, u8) = cc5_2;
+
+            let cc1_4: (u8, u8) = cc1_3;
+            let cc2_4: (u8, u8) = cc2_3;
+            let cc3_4: (u8, u8) = cc3_3;
+            let cmp_4: bool = cc4_3.1 < cc5_3.1;
+            let cc4_4: (u8, u8) = cmp_4 ? cc4_3 : cc5_3;
+            let cc5_4: (u8, u8) = cmp_4 ? cc5_3 : cc4_3;
+
+            // Second pass
+            let cmp_5: bool = cc1_4.1 < cc2_4.1;
+            let cc1_5: (u8, u8) = cmp_5 ? cc1_4 : cc2_4;
+            let cc2_5: (u8, u8) = cmp_5 ? cc2_4 : cc1_4;
+            let cc3_5: (u8, u8) = cc3_4;
+            let cc4_5: (u8, u8) = cc4_4;
+            let cc5_5: (u8, u8) = cc5_4;
+
+            let cc1_6: (u8, u8) = cc1_5;
+            let cmp_6: bool = cc2_5.1 < cc3_5.1;
+            let cc2_6: (u8, u8) = cmp_6 ? cc2_5 : cc3_5;
+            let cc3_6: (u8, u8) = cmp_6 ? cc3_5 : cc2_5;
+            let cc4_6: (u8, u8) = cc4_5;
+            let cc5_6: (u8, u8) = cc5_5;
+
+            let cc1_7: (u8, u8) = cc1_6;
+            let cc2_7: (u8, u8) = cc2_6;
+            let cmp_7: bool = cc3_6.1 < cc4_6.1;
+            let cc3_7: (u8, u8) = cmp_7 ? cc3_6 : cc4_6;
+            let cc4_7: (u8, u8) = cmp_7 ? cc4_6 : cc3_6;
+            let cc5_7: (u8, u8) = cc5_6;
+
+            let cc1_8: (u8, u8) = cc1_7;
+            let cc2_8: (u8, u8) = cc2_7;
+            let cc3_8: (u8, u8) = cc3_7;
+            let cmp_8: bool = cc4_7.1 < cc5_7.1;
+            let cc4_8: (u8, u8) = cmp_8 ? cc4_7 : cc5_7;
+            let cc5_8: (u8, u8) = cmp_8 ? cc5_7 : cc4_7;
+
+            // Third pass
+            let cmp_9: bool = cc1_8.1 < cc2_8.1;
+            let cc1_9: (u8, u8) = cmp_9 ? cc1_8 : cc2_8;
+            let cc2_9: (u8, u8) = cmp_9 ? cc2_8 : cc1_8;
+            let cc3_9: (u8, u8) = cc3_8;
+            let cc4_9: (u8, u8) = cc4_8;
+            let cc5_9: (u8, u8) = cc5_8;
+
+            let cc1_10: (u8, u8) = cc1_9;
+            let cmp_10: bool = cc2_9.1 < cc3_9.1;
+            let cc2_10: (u8, u8) = cmp_10 ? cc2_9 : cc3_9;
+            let cc3_10: (u8, u8) = cmp_10 ? cc3_9 : cc2_9;
+            let cc4_10: (u8, u8) = cc4_9;
+            let cc5_10: (u8, u8) = cc5_9;
+
+            let cc1_11: (u8, u8) = cc1_10;
+            let cc2_11: (u8, u8) = cc2_10;
+            let cmp_11: bool = cc3_10.1 < cc4_10.1;
+            let cc3_11: (u8, u8) = cmp_11 ? cc3_10 : cc4_10;
+            let cc4_11: (u8, u8) = cmp_11 ? cc4_10 : cc3_10;
+            let cc5_11: (u8, u8) = cc5_10;
+
+            let cc1_12: (u8, u8) = cc1_11;
+            let cc2_12: (u8, u8) = cc2_11;
+            let cc3_12: (u8, u8) = cc3_11;
+            let cmp_12: bool = cc4_11.1 < cc5_11.1;
+            let cc4_12: (u8, u8) = cmp_12 ? cc4_11 : cc5_11;
+            let cc5_12: (u8, u8) = cmp_12 ? cc5_11 : cc4_11;
+
+            // Fourth pass
+            let cmp_13: bool = cc1_12.1 < cc2_12.1;
+            let cc1_13: (u8, u8) = cmp_13 ? cc1_12 : cc2_12;
+            let cc2_13: (u8, u8) = cmp_13 ? cc2_12 : cc1_12;
+            let cc3_13: (u8, u8) = cc3_12;
+            let cc4_13: (u8, u8) = cc4_12;
+            let cc5_13: (u8, u8) = cc5_12;
+
+            let cc1_14: (u8, u8) = cc1_13;
+            let cmp_14: bool = cc2_13.1 < cc3_13.1;
+            let cc2_14: (u8, u8) = cmp_14 ? cc2_13 : cc3_13;
+            let cc3_14: (u8, u8) = cmp_14 ? cc3_13 : cc2_13;
+            let cc4_14: (u8, u8) = cc4_13;
+            let cc5_14: (u8, u8) = cc5_13;
+
+            let cc1_15: (u8, u8) = cc1_14;
+            let cc2_15: (u8, u8) = cc2_14;
+            let cmp_15: bool = cc3_14.1 < cc4_14.1;
+            let cc3_15: (u8, u8) = cmp_15 ? cc3_14 : cc4_14;
+            let cc4_15: (u8, u8) = cmp_15 ? cc4_14 : cc3_14;
+            let cc5_15: (u8, u8) = cc5_14;
+
+            let c1: (u8, u8) = cc1_15;
+            let c2: (u8, u8) = cc2_15;
+            let c3: (u8, u8) = cc3_15;
+            let cmp_16: bool = cc4_15.1 < cc5_15.1;
+            let c4: (u8, u8) = cmp_16 ? cc4_15 : cc5_15;
+            let c5: (u8, u8) = cmp_16 ? cc5_15 : cc4_15;
+
+            // Merge hole cards with community cards for each player
+            let p1_h1_card: u8 = p1_active ? revealed.player1[0u8] : 0u8;
+            let p1_h2_card: u8 = p1_active ? revealed.player1[1u8] : 0u8;
+            let p1_h1: (u8, u8) = (p1_h1_card / 13u8, p1_h1_card % 13u8);
+            let p1_h2: (u8, u8) = (p1_h2_card / 13u8, p1_h2_card % 13u8);
+
+            let p1_h1_lt_c1: bool = p1_h1.1 < c1.1;
+            let p1_h1_lt_c2: bool = p1_h1.1 < c2.1;
+            let p1_h1_lt_c3: bool = p1_h1.1 < c3.1;
+            let p1_h1_lt_c4: bool = p1_h1.1 < c4.1;
+            let p1_h1_lt_c5: bool = p1_h1.1 < c5.1;
+            let p1_tmp_c1: (u8, u8) = p1_h1_lt_c1 ? p1_h1 : c1;
+            let p1_tmp_c2: (u8, u8) = p1_h1_lt_c1 ? c1 : p1_h1_lt_c2 ? p1_h1 : c2;
+            let p1_tmp_c3: (u8, u8) = p1_h1_lt_c2 ? c2 : p1_h1_lt_c3 ? p1_h1 : c3;
+            let p1_tmp_c4: (u8, u8) = p1_h1_lt_c3 ? c3 : p1_h1_lt_c4 ? p1_h1 : c4;
+            let p1_tmp_c5: (u8, u8) = p1_h1_lt_c4 ? c4 : p1_h1_lt_c5 ? p1_h1 : c5;
+            let p1_tmp_c6: (u8, u8) = p1_h1_lt_c5 ? c5 : p1_h1;
+
+            let p1_h2_lt_t1: bool = p1_h2.1 < p1_tmp_c1.1;
+            let p1_h2_lt_t2: bool = p1_h2.1 < p1_tmp_c2.1;
+            let p1_h2_lt_t3: bool = p1_h2.1 < p1_tmp_c3.1;
+            let p1_h2_lt_t4: bool = p1_h2.1 < p1_tmp_c4.1;
+            let p1_h2_lt_t5: bool = p1_h2.1 < p1_tmp_c5.1;
+            let p1_h2_lt_t6: bool = p1_h2.1 < p1_tmp_c6.1;
+            let p1_c1: (u8, u8) = p1_h2_lt_t1 ? p1_h2 : p1_tmp_c1;
+            let p1_c2: (u8, u8) = p1_h2_lt_t1 ? p1_tmp_c1 : p1_h2_lt_t2 ? p1_h2 : p1_tmp_c2;
+            let p1_c3: (u8, u8) = p1_h2_lt_t2 ? p1_tmp_c2 : p1_h2_lt_t3 ? p1_h2 : p1_tmp_c3;
+            let p1_c4: (u8, u8) = p1_h2_lt_t3 ? p1_tmp_c3 : p1_h2_lt_t4 ? p1_h2 : p1_tmp_c4;
+            let p1_c5: (u8, u8) = p1_h2_lt_t4 ? p1_tmp_c4 : p1_h2_lt_t5 ? p1_h2 : p1_tmp_c5;
+            let p1_c6: (u8, u8) = p1_h2_lt_t5 ? p1_tmp_c5 : p1_h2_lt_t6 ? p1_h2 : p1_tmp_c6;
+            let p1_c7: (u8, u8) = p1_h2_lt_t6 ? p1_tmp_c6 : p1_h2;
+
+
+
+            let p2_h1_card: u8 = p2_active ? revealed.player2[0u8] : 0u8;
+            let p2_h2_card: u8 = p2_active ? revealed.player2[1u8] : 0u8;
+            let p2_h1: (u8, u8) = (p2_h1_card / 13u8, p2_h1_card % 13u8);
+            let p2_h2: (u8, u8) = (p2_h2_card / 13u8, p2_h2_card % 13u8);
+
+            let p2_h1_lt_c1: bool = p2_h1.1 < c1.1;
+            let p2_h1_lt_c2: bool = p2_h1.1 < c2.1;
+            let p2_h1_lt_c3: bool = p2_h1.1 < c3.1;
+            let p2_h1_lt_c4: bool = p2_h1.1 < c4.1;
+            let p2_h1_lt_c5: bool = p2_h1.1 < c5.1;
+            let p2_tmp_c1: (u8, u8) = p2_h1_lt_c1 ? p2_h1 : c1;
+            let p2_tmp_c2: (u8, u8) = p2_h1_lt_c1 ? c1 : p2_h1_lt_c2 ? p2_h1 : c2;
+            let p2_tmp_c3: (u8, u8) = p2_h1_lt_c2 ? c2 : p2_h1_lt_c3 ? p2_h1 : c3;
+            let p2_tmp_c4: (u8, u8) = p2_h1_lt_c3 ? c3 : p2_h1_lt_c4 ? p2_h1 : c4;
+            let p2_tmp_c5: (u8, u8) = p2_h1_lt_c4 ? c4 : p2_h1_lt_c5 ? p2_h1 : c5;
+            let p2_tmp_c6: (u8, u8) = p2_h1_lt_c5 ? c5 : p2_h1;
+
+            let p2_h2_lt_t1: bool = p2_h2.1 < p2_tmp_c1.1;
+            let p2_h2_lt_t2: bool = p2_h2.1 < p2_tmp_c2.1;
+            let p2_h2_lt_t3: bool = p2_h2.1 < p2_tmp_c3.1;
+            let p2_h2_lt_t4: bool = p2_h2.1 < p2_tmp_c4.1;
+            let p2_h2_lt_t5: bool = p2_h2.1 < p2_tmp_c5.1;
+            let p2_h2_lt_t6: bool = p2_h2.1 < p2_tmp_c6.1;
+            let p2_c1: (u8, u8) = p2_h2_lt_t1 ? p2_h2 : p2_tmp_c1;
+            let p2_c2: (u8, u8) = p2_h2_lt_t1 ? p2_tmp_c1 : p2_h2_lt_t2 ? p2_h2 : p2_tmp_c2;
+            let p2_c3: (u8, u8) = p2_h2_lt_t2 ? p2_tmp_c2 : p2_h2_lt_t3 ? p2_h2 : p2_tmp_c3;
+            let p2_c4: (u8, u8) = p2_h2_lt_t3 ? p2_tmp_c3 : p2_h2_lt_t4 ? p2_h2 : p2_tmp_c4;
+            let p2_c5: (u8, u8) = p2_h2_lt_t4 ? p2_tmp_c4 : p2_h2_lt_t5 ? p2_h2 : p2_tmp_c5;
+            let p2_c6: (u8, u8) = p2_h2_lt_t5 ? p2_tmp_c5 : p2_h2_lt_t6 ? p2_h2 : p2_tmp_c6;
+            let p2_c7: (u8, u8) = p2_h2_lt_t6 ? p2_tmp_c6 : p2_h2;
+
+
+
+            let p3_h1_card: u8 = p3_active ? revealed.player3[0u8] : 0u8;
+            let p3_h2_card: u8 = p3_active ? revealed.player3[1u8] : 0u8;
+            let p3_h1: (u8, u8) = (p3_h1_card / 13u8, p3_h1_card % 13u8);
+            let p3_h2: (u8, u8) = (p3_h2_card / 13u8, p3_h2_card % 13u8);
+
+            let p3_h1_lt_c1: bool = p3_h1.1 < c1.1;
+            let p3_h1_lt_c2: bool = p3_h1.1 < c2.1;
+            let p3_h1_lt_c3: bool = p3_h1.1 < c3.1;
+            let p3_h1_lt_c4: bool = p3_h1.1 < c4.1;
+            let p3_h1_lt_c5: bool = p3_h1.1 < c5.1;
+            let p3_tmp_c1: (u8, u8) = p3_h1_lt_c1 ? p3_h1 : c1;
+            let p3_tmp_c2: (u8, u8) = p3_h1_lt_c1 ? c1 : p3_h1_lt_c2 ? p3_h1 : c2;
+            let p3_tmp_c3: (u8, u8) = p3_h1_lt_c2 ? c2 : p3_h1_lt_c3 ? p3_h1 : c3;
+            let p3_tmp_c4: (u8, u8) = p3_h1_lt_c3 ? c3 : p3_h1_lt_c4 ? p3_h1 : c4;
+            let p3_tmp_c5: (u8, u8) = p3_h1_lt_c4 ? c4 : p3_h1_lt_c5 ? p3_h1 : c5;
+            let p3_tmp_c6: (u8, u8) = p3_h1_lt_c5 ? c5 : p3_h1;
+
+            let p3_h2_lt_t1: bool = p3_h2.1 < p3_tmp_c1.1;
+            let p3_h2_lt_t2: bool = p3_h2.1 < p3_tmp_c2.1;
+            let p3_h2_lt_t3: bool = p3_h2.1 < p3_tmp_c3.1;
+            let p3_h2_lt_t4: bool = p3_h2.1 < p3_tmp_c4.1;
+            let p3_h2_lt_t5: bool = p3_h2.1 < p3_tmp_c5.1;
+            let p3_h2_lt_t6: bool = p3_h2.1 < p3_tmp_c6.1;
+            let p3_c1: (u8, u8) = p3_h2_lt_t1 ? p3_h2 : p3_tmp_c1;
+            let p3_c2: (u8, u8) = p3_h2_lt_t1 ? p3_tmp_c1 : p3_h2_lt_t2 ? p3_h2 : p3_tmp_c2;
+            let p3_c3: (u8, u8) = p3_h2_lt_t2 ? p3_tmp_c2 : p3_h2_lt_t3 ? p3_h2 : p3_tmp_c3;
+            let p3_c4: (u8, u8) = p3_h2_lt_t3 ? p3_tmp_c3 : p3_h2_lt_t4 ? p3_h2 : p3_tmp_c4;
+            let p3_c5: (u8, u8) = p3_h2_lt_t4 ? p3_tmp_c4 : p3_h2_lt_t5 ? p3_h2 : p3_tmp_c5;
+            let p3_c6: (u8, u8) = p3_h2_lt_t5 ? p3_tmp_c5 : p3_h2_lt_t6 ? p3_h2 : p3_tmp_c6;
+            let p3_c7: (u8, u8) = p3_h2_lt_t6 ? p3_tmp_c6 : p3_h2;
+
+
+
+            let p1_hand_value: u32 =
+                evaluate_hand(p1_c1.0, p1_c1.1, p1_c2.0, p1_c2.1, p1_c3.0, p1_c3.1, p1_c4.0, p1_c4.1, p1_c5.0, p1_c5.1, p1_c6.0, p1_c6.1, p1_c7.0, p1_c7.1);
+
+            let p2_hand_value: u32 =
+                evaluate_hand(p2_c1.0, p2_c1.1, p2_c2.0, p2_c2.1, p2_c3.0, p2_c3.1, p2_c4.0, p2_c4.1, p2_c5.0, p2_c5.1, p2_c6.0, p2_c6.1, p2_c7.0, p2_c7.1);
+
+            let p3_hand_value: u32 =
+                evaluate_hand(p3_c1.0, p3_c1.1, p3_c2.0, p3_c2.1, p3_c3.0, p3_c3.1, p3_c4.0, p3_c4.1, p3_c5.0, p3_c5.1, p3_c6.0, p3_c6.1, p3_c7.0, p3_c7.1);
+
+            let level1: u16 = chip.player1_bet <= chip.player2_bet && chip.player1_bet <= chip.player3_bet ? chip.player1_bet :
+                              chip.player2_bet <= chip.player3_bet ? chip.player2_bet : chip.player3_bet;
+
+            let level3: u16 = chip.player1_bet >= chip.player2_bet && chip.player1_bet >= chip.player3_bet ? chip.player1_bet :
+                              chip.player2_bet >= chip.player3_bet ? chip.player2_bet : chip.player3_bet;
+
+            let level2: u16 = chip.player1_bet != level1 && chip.player1_bet != level3 ? chip.player1_bet :
+                              chip.player2_bet != level1 && chip.player2_bet != level3 ? chip.player2_bet :
+                              chip.player3_bet;
+
+            let contributors_to_main: u8 = (chip.player1_bet >= level1) as u8 +
+                                           (chip.player2_bet >= level1) as u8 +
+                                           (chip.player3_bet >= level1) as u8;
+
+            let contributors_to_side1: u8 = (chip.player1_bet >= level2) as u8 +
+                                            (chip.player2_bet >= level2) as u8 +
+                                            (chip.player3_bet >= level2) as u8;
+
+            let contributors_to_side2: u8 = (chip.player1_bet >= level3) as u8 +
+                                            (chip.player2_bet >= level3) as u8 +
+                                            (chip.player3_bet >= level3) as u8;
+
+            let main_pot: u16 = level1 * contributors_to_main as u16;
+            let side_pot_1: u16 = level1 == level2 ? 0u16 : (level2 - level1) * contributors_to_side1 as u16;
+            let side_pot_2: u16 = level2 == level3 ? 0u16 : (level3 - level2) * contributors_to_side2 as u16;
+
+            let p1_in_main: bool = p1_active && chip.player1_bet >= level1;
+            let p2_in_main: bool = p2_active && chip.player2_bet >= level1;
+            let p3_in_main: bool = p3_active && chip.player3_bet >= level1;
+
+            let p1_main_value: u32 = p1_in_main ? p1_hand_value : 0u32;
+            let p2_main_value: u32 = p2_in_main ? p2_hand_value : 0u32;
+            let p3_main_value: u32 = p3_in_main ? p3_hand_value : 0u32;
+
+            let tmp_max_main_1: u32 = p1_main_value >= p2_main_value ? p1_main_value : p2_main_value;
+            let best_main_value: u32 = tmp_max_main_1 >= p3_main_value ? tmp_max_main_1 : p3_main_value;
+
+            let p1_is_main_winner: bool = p1_in_main && p1_main_value == best_main_value;
+            let p2_is_main_winner: bool = p2_in_main && p2_main_value == best_main_value;
+            let p3_is_main_winner: bool = p3_in_main && p3_main_value == best_main_value;
+
+            let num_main_winners: u8 = (p1_is_main_winner as u8) +
+                                       (p2_is_main_winner as u8) +
+                                       (p3_is_main_winner as u8);
+
+            let p1_from_main: u16 = p1_is_main_winner && num_main_winners > 0u8 ? main_pot / num_main_winners as u16 : 0u16;
+            let p2_from_main: u16 = p2_is_main_winner && num_main_winners > 0u8 ? main_pot / num_main_winners as u16 : 0u16;
+            let p3_from_main: u16 = p3_is_main_winner && num_main_winners > 0u8 ? main_pot / num_main_winners as u16 : 0u16;
+
+            let p1_in_side1: bool = p1_active && chip.player1_bet >= level2;
+            let p2_in_side1: bool = p2_active && chip.player2_bet >= level2;
+            let p3_in_side1: bool = p3_active && chip.player3_bet >= level2;
+
+            let p1_side1_value: u32 = p1_in_side1 ? p1_hand_value : 0u32;
+            let p2_side1_value: u32 = p2_in_side1 ? p2_hand_value : 0u32;
+            let p3_side1_value: u32 = p3_in_side1 ? p3_hand_value : 0u32;
+
+            let tmp_max_side1_1: u32 = p1_side1_value >= p2_side1_value ? p1_side1_value : p2_side1_value;
+            let best_side1_value: u32 = tmp_max_side1_1 >= p3_side1_value ? tmp_max_side1_1 : p3_side1_value;
+
+            let p1_is_side1_winner: bool = p1_in_side1 && p1_side1_value == best_side1_value;
+            let p2_is_side1_winner: bool = p2_in_side1 && p2_side1_value == best_side1_value;
+            let p3_is_side1_winner: bool = p3_in_side1 && p3_side1_value == best_side1_value;
+
+            let num_side1_winners: u8 = (p1_is_side1_winner as u8) +
+                                        (p2_is_side1_winner as u8) +
+                                        (p3_is_side1_winner as u8);
+
+            let p1_from_side1: u16 = p1_is_side1_winner && num_side1_winners > 0u8 ? side_pot_1 / num_side1_winners as u16 : 0u16;
+            let p2_from_side1: u16 = p2_is_side1_winner && num_side1_winners > 0u8 ? side_pot_1 / num_side1_winners as u16 : 0u16;
+            let p3_from_side1: u16 = p3_is_side1_winner && num_side1_winners > 0u8 ? side_pot_1 / num_side1_winners as u16 : 0u16;
+
+            let p1_in_side2: bool = p1_active && chip.player1_bet >= level3;
+            let p2_in_side2: bool = p2_active && chip.player2_bet >= level3;
+            let p3_in_side2: bool = p3_active && chip.player3_bet >= level3;
+
+            let p1_side2_value: u32 = p1_in_side2 ? p1_hand_value : 0u32;
+            let p2_side2_value: u32 = p2_in_side2 ? p2_hand_value : 0u32;
+            let p3_side2_value: u32 = p3_in_side2 ? p3_hand_value : 0u32;
+
+            let tmp_max_side2_1: u32 = p1_side2_value >= p2_side2_value ? p1_side2_value : p2_side2_value;
+            let best_side2_value: u32 = tmp_max_side2_1 >= p3_side2_value ? tmp_max_side2_1 : p3_side2_value;
+
+            let p1_is_side2_winner: bool = p1_in_side2 && p1_side2_value == best_side2_value;
+            let p2_is_side2_winner: bool = p2_in_side2 && p2_side2_value == best_side2_value;
+            let p3_is_side2_winner: bool = p3_in_side2 && p3_side2_value == best_side2_value;
+
+            let num_side2_winners: u8 = (p1_is_side2_winner as u8) +
+                                        (p2_is_side2_winner as u8) +
+                                        (p3_is_side2_winner as u8);
+
+            let p1_from_side2: u16 = p1_is_side2_winner && num_side2_winners > 0u8 ? side_pot_2 / num_side2_winners as u16 : 0u16;
+            let p2_from_side2: u16 = p2_is_side2_winner && num_side2_winners > 0u8 ? side_pot_2 / num_side2_winners as u16 : 0u16;
+            let p3_from_side2: u16 = p3_is_side2_winner && num_side2_winners > 0u8 ? side_pot_2 / num_side2_winners as u16 : 0u16;
+
+            let p1_share: u16 = p1_from_main + p1_from_side1 + p1_from_side2;
+            let p2_share: u16 = p2_from_main + p2_from_side1 + p2_from_side2;
+            let p3_share: u16 = p3_from_main + p3_from_side1 + p3_from_side2;
+
+            let new_chip: Chips = Chips {
+                player1: chip.player1 + p1_share,
+                player2: chip.player2 + p2_share,
+                player3: chip.player3 + p3_share,
+                player1_bet: 0u16,
+                player2_bet: 0u16,
+                player3_bet: 0u16,
+            };
+
+            let new_players_out: u8 = (new_chip.player1 == 0u16 ? player1() : 0u8) |
+                                      (new_chip.player2 == 0u16 ? player2() : 0u8) |
+                                      (new_chip.player3 == 0u16 ? player3() : 0u8);
+
+            let game_over: bool = new_players_out == 6u8 || new_players_out == 5u8 || new_players_out == 3u8;
+            if (game_over) {
+                let end_state: u8 = !is_player1(new_players_out) ? p1_claim :
+                                    !is_player2(new_players_out) ? p2_claim : p3_claim;
+                let end_game: Game = Game {
+                    player1: game.player1,
+                    player2: game.player2,
+                    player3: game.player3,
+                    buy_in: game.buy_in,
+                    password_hash: game.password_hash,
+                    state: end_state,
+                    dealer_button: game.dealer_button,
+                    players_out: new_players_out,
+                    players_folded: new_players_out,
+                    last_bet: 0u8,
+                    sb: game.sb,
+                    bb: game.bb,
+                    blind_frequency: game.blind_frequency,
+                    remaining_hands: game.remaining_hands,
+                    hands_played: game.hands_played + 1u8,
+                    last_raise_size: 0u16,
+                };
+                Mapping::set(chips, game_id, new_chip);
+                Mapping::set(games, game_id, end_game);
+            } else {
+                let new_remaining_hands: u8 = game.remaining_hands - 1u8;
+
+                let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
+                                                                                (game.sb, game.bb);
+
+                let next_state: u8 = !is_player1(new_players_out) ? p1_new_shuffle : p2_new_shuffle;
+
+                let new_game: Game = Game {
+                    player1: game.player1,
+                    player2: game.player2,
+                    player3: game.player3,
+                    buy_in: game.buy_in,
+                    password_hash: game.password_hash,
+                    state: next_state,
+                    dealer_button: game.dealer_button,
+                    players_out: new_players_out,
+                    players_folded: new_players_out,
+                    last_bet: 0u8,
+                    sb: new_sb,
+                    bb: new_bb,
+                    blind_frequency: game.blind_frequency,
+                    remaining_hands: new_remaining_hands == 0u8 ? game.blind_frequency : new_remaining_hands,
+                    hands_played: game.hands_played + 1u8,
+                    last_raise_size: 0u16,
+                };
+
+                Mapping::set(chips, game_id, new_chip);
+                Mapping::set(games, game_id, new_game);
+            }
+        };
+    }
+
+    fn new_hand(game_id: u32, control_bits: [bool; 249], secret: scalar, secret_inv: scalar) -> (Keys, Final) {
+
+        let deck: [group; 52] = waksman::shuffle_and_encrypt(initialize_deck(), secret, control_bits);
+
+        assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
+
+        let signer: address = std::ctx::signer();
+        let keys: Keys = Keys {
+            owner: signer,
+            secret: secret,
+            secret_inv: secret_inv,
+        };
+
+        return (keys, final {
+            let game: Game = Mapping::get(games, game_id);
+            let chip: Chips = Mapping::get(chips, game_id);
+
+            let is_p1: bool = game.player1 == signer && game.state == p1_new_shuffle;
+            let is_p2: bool = game.player2 == signer && game.state == p2_new_shuffle;
+
+            assert(is_p1 || is_p2);
+
+            let is_p1_out: bool = is_player1(game.players_out);
+            let is_p2_out: bool = is_player2(game.players_out);
+            let is_p3_out: bool = is_player3(game.players_out);
+
+            let next_state: u8 = is_p1 ? (is_p2_out ? p3_shuffle : p2_shuffle) : p3_shuffle;
+
+            let new_dealer_button: u8 = is_player1(game.dealer_button) ? (!is_player2(game.players_out) ? player2() :
+                                                                          !is_player3(game.players_out) ? player3() :
+                                                                                                          player1()) :
+                                        is_player2(game.dealer_button) ? (!is_player3(game.players_out) ? player3() :
+                                                                          !is_player1(game.players_out) ? player1() :
+                                                                                                          player2()) :
+                                                                         (!is_player1(game.players_out) ? player1() :
+                                                                          !is_player2(game.players_out) ? player2() :
+                                                                                                          player3());
+
+            let is_dealer_p1: bool = is_player1(new_dealer_button);
+            let is_dealer_p2: bool = is_player2(new_dealer_button);
+            let is_dealer_p3: bool = is_player3(new_dealer_button);
+
+            let is_heads_up: bool = is_p1_out || is_p2_out || is_p3_out;
+
+            let sb_player: u8 = is_heads_up ? new_dealer_button :
+                               (is_dealer_p1 ? player2() :
+                                is_dealer_p2 ? player3() :
+                                               player1());
+
+            let bb_player: u8 = is_heads_up ? (is_dealer_p1 ? (!is_p2_out ? player2() : player3()) :
+                                               is_dealer_p2 ? (!is_p3_out ? player3() : player1()) :
+                                                              (!is_p1_out ? player1() : player2())) :
+                                (is_dealer_p1 ? player3() :
+                                 is_dealer_p2 ? player1() :
+                                                player2());
+
+            let p1_blind_to_post: u16 = is_player1(sb_player) ? game.sb :
+                                        is_player1(bb_player) ? game.bb : 0u16;
+            let p2_blind_to_post: u16 = is_player2(sb_player) ? game.sb :
+                                        is_player2(bb_player) ? game.bb : 0u16;
+            let p3_blind_to_post: u16 = is_player3(sb_player) ? game.sb :
+                                        is_player3(bb_player) ? game.bb : 0u16;
+
+            let p1_blind: u16 = p1_blind_to_post > chip.player1 ? chip.player1 : p1_blind_to_post;
+            let p2_blind: u16 = p2_blind_to_post > chip.player2 ? chip.player2 : p2_blind_to_post;
+            let p3_blind: u16 = p3_blind_to_post > chip.player3 ? chip.player3 : p3_blind_to_post;
+
+            let new_chip: Chips = Chips {
+                player1: chip.player1 - p1_blind,
+                player2: chip.player2 - p2_blind,
+                player3: chip.player3 - p3_blind,
+                player1_bet: p1_blind,
+                player2_bet: p2_blind,
+                player3_bet: p3_blind,
+            };
+
+            let card: Cards = Cards {
+                player1: [deck[0u8], deck[3u8]],
+                player2: [deck[1u8], deck[4u8]],
+                player3: [deck[2u8], deck[5u8]],
+                flop: [deck[7u8], deck[8u8], deck[9u8]],
+                turn: deck[11u8],
+                river: deck[13u8],
+            };
+
+            let revealed: RevealedCards = RevealedCards {
+                player1: [255u8, 255u8],
+                player2: [255u8, 255u8],
+                player3: [255u8, 255u8],
+                flop: [255u8, 255u8, 255u8],
+                turn: 255u8,
+                river: 255u8,
+            };
+
+            let new_game: Game = Game {
+                player1: game.player1,
+                player2: game.player2,
+                player3: game.player3,
+                buy_in: game.buy_in,
+                password_hash: game.password_hash,
+                state: next_state,
+                dealer_button: new_dealer_button,
+                players_out: game.players_out,
+                players_folded: game.players_out,
                 last_bet: 0u8,
                 sb: game.sb,
                 bb: game.bb,
                 blind_frequency: game.blind_frequency,
                 remaining_hands: game.remaining_hands,
-                hands_played: game.hands_played + 1u8,
+                hands_played: game.hands_played,
                 last_raise_size: 0u16,
             };
+
+            Mapping::set(decks, game_id, deck);
             Mapping::set(chips, game_id, new_chip);
-            Mapping::set(games, game_id, end_game);
-            return;
-        }
-
-        let new_remaining_hands: u8 = game.remaining_hands - 1u8;
-
-        let (new_sb, new_bb): (u16, u16) = new_remaining_hands == 0u8 ? (game.sb << 1u8, game.bb << 1u8) :
-                                                                        (game.sb, game.bb);
-
-        let next_state: u8 = !is_player1(new_players_out) ? p1_new_shuffle : p2_new_shuffle;
-
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: next_state,
-            dealer_button: game.dealer_button,
-            players_out: new_players_out,
-            players_folded: new_players_out,
-            last_bet: 0u8,
-            sb: new_sb,
-            bb: new_bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: new_remaining_hands == 0u8 ? game.blind_frequency : new_remaining_hands,
-            hands_played: game.hands_played + 1u8,
-            last_raise_size: 0u16,
-        };
-
-        Mapping::set(chips, game_id, new_chip);
-        Mapping::set(games, game_id, new_game);
-    }
-
-
-    fn new_hand(game_id: u32, control_bits: [bool; 249], secret: scalar, secret_inv: scalar) -> (Keys, Final) {
-
-        let deck_enc: [group; 52] = waksman::shuffle_and_encrypt(initialize_deck(), secret, control_bits);
-
-        assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
-
-        let signer: address = std::ctx::signer();
-        let keys: Keys = Keys {
-            owner: signer,
-            secret: secret,
-            secret_inv: secret_inv,
-        };
-
-        return (keys, final { finalize_new_hand(game_id, deck_enc, signer); });
-    }
-
-    final fn finalize_new_hand(game_id: u32, deck: [group; 52], signer: address) {
-        let game: Game = Mapping::get(games, game_id);
-        let chip: Chips = Mapping::get(chips, game_id);
-
-        let is_p1: bool = game.player1 == signer && game.state == p1_new_shuffle;
-        let is_p2: bool = game.player2 == signer && game.state == p2_new_shuffle;
-
-        assert(is_p1 || is_p2);
-
-        let is_p1_out: bool = is_player1(game.players_out);
-        let is_p2_out: bool = is_player2(game.players_out);
-        let is_p3_out: bool = is_player3(game.players_out);
-
-        let next_state: u8 = is_p1 ? (is_p2_out ? p3_shuffle : p2_shuffle) : p3_shuffle;
-
-        let new_dealer_button: u8 = is_player1(game.dealer_button) ? (!is_player2(game.players_out) ? player2() :
-                                                                      !is_player3(game.players_out) ? player3() :
-                                                                                                      player1()) :
-                                    is_player2(game.dealer_button) ? (!is_player3(game.players_out) ? player3() :
-                                                                      !is_player1(game.players_out) ? player1() :
-                                                                                                      player2()) :
-                                                                     (!is_player1(game.players_out) ? player1() :
-                                                                      !is_player2(game.players_out) ? player2() :
-                                                                                                      player3());
-
-        let is_dealer_p1: bool = is_player1(new_dealer_button);
-        let is_dealer_p2: bool = is_player2(new_dealer_button);
-        let is_dealer_p3: bool = is_player3(new_dealer_button);
-
-        let is_heads_up: bool = is_p1_out || is_p2_out || is_p3_out;
-
-        let sb_player: u8 = is_heads_up ? new_dealer_button :
-                           (is_dealer_p1 ? player2() :
-                            is_dealer_p2 ? player3() :
-                                           player1());
-
-        let bb_player: u8 = is_heads_up ? (is_dealer_p1 ? (!is_p2_out ? player2() : player3()) :
-                                           is_dealer_p2 ? (!is_p3_out ? player3() : player1()) :
-                                                          (!is_p1_out ? player1() : player2())) :
-                            (is_dealer_p1 ? player3() :
-                             is_dealer_p2 ? player1() :
-                                            player2());
-
-        let p1_blind_to_post: u16 = is_player1(sb_player) ? game.sb :
-                                    is_player1(bb_player) ? game.bb : 0u16;
-        let p2_blind_to_post: u16 = is_player2(sb_player) ? game.sb :
-                                    is_player2(bb_player) ? game.bb : 0u16;
-        let p3_blind_to_post: u16 = is_player3(sb_player) ? game.sb :
-                                    is_player3(bb_player) ? game.bb : 0u16;
-
-        let p1_blind: u16 = p1_blind_to_post > chip.player1 ? chip.player1 : p1_blind_to_post;
-        let p2_blind: u16 = p2_blind_to_post > chip.player2 ? chip.player2 : p2_blind_to_post;
-        let p3_blind: u16 = p3_blind_to_post > chip.player3 ? chip.player3 : p3_blind_to_post;
-
-        let new_chip: Chips = Chips {
-            player1: chip.player1 - p1_blind,
-            player2: chip.player2 - p2_blind,
-            player3: chip.player3 - p3_blind,
-            player1_bet: p1_blind,
-            player2_bet: p2_blind,
-            player3_bet: p3_blind,
-        };
-
-        let card: Cards = Cards {
-            player1: [deck[0u8], deck[3u8]],
-            player2: [deck[1u8], deck[4u8]],
-            player3: [deck[2u8], deck[5u8]],
-            flop: [deck[7u8], deck[8u8], deck[9u8]],
-            turn: deck[11u8],
-            river: deck[13u8],
-        };
-
-        let revealed: RevealedCards = RevealedCards {
-            player1: [255u8, 255u8],
-            player2: [255u8, 255u8],
-            player3: [255u8, 255u8],
-            flop: [255u8, 255u8, 255u8],
-            turn: 255u8,
-            river: 255u8,
-        };
-
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: next_state,
-            dealer_button: new_dealer_button,
-            players_out: game.players_out,
-            players_folded: game.players_out,
-            last_bet: 0u8,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: game.remaining_hands,
-            hands_played: game.hands_played,
-            last_raise_size: 0u16,
-        };
-
-        Mapping::set(decks, game_id, deck);
-        Mapping::set(chips, game_id, new_chip);
-        Mapping::set(cards, game_id, card);
-        Mapping::set(revealed_cards, game_id, revealed);
-        Mapping::set(games, game_id, new_game);
+            Mapping::set(cards, game_id, card);
+            Mapping::set(revealed_cards, game_id, revealed);
+            Mapping::set(games, game_id, new_game);
+        });
     }
 
     fn shuffle_deck(game_id: u32, deck: [group; 52], control_bits: [bool; 249], secret: scalar, secret_inv: scalar) -> (Keys, Final) {
-        let deck_enc: [group; 52] = waksman::shuffle_and_encrypt(deck, secret, control_bits);
+        let new_deck: [group; 52] = waksman::shuffle_and_encrypt(deck, secret, control_bits);
 
         assert_eq(Poseidon2::hash_to_group(1u8) * secret * secret_inv, Poseidon2::hash_to_group(1u8));
 
@@ -1674,99 +1663,94 @@ program mental_poker2.aleo {
             secret_inv: secret_inv,
         };
 
-        return (keys, final { finalize_shuffle_deck(game_id, deck, deck_enc, signer); });
-    }
+        return (keys, final {
+            let game: Game = Mapping::get(games, game_id);
+            let previous_deck: [group; 52] = Mapping::get(decks, game_id);
+            assert(previous_deck == deck);
 
-    final fn finalize_shuffle_deck(game_id: u32, deck: [group; 52], new_deck: [group; 52], signer: address) {
-        let game: Game = Mapping::get(games, game_id);
-        let previous_deck: [group; 52] = Mapping::get(decks, game_id);
-        assert(previous_deck == deck);
+            let is_p2: bool = game.player2 == signer && game.state == p2_shuffle;
+            let is_p3: bool = game.player3 == signer && game.state == p3_shuffle;
 
-        let is_p2: bool = game.player2 == signer && game.state == p2_shuffle;
-        let is_p3: bool = game.player3 == signer && game.state == p3_shuffle;
+            assert(is_p2 || is_p3);
 
-        assert(is_p2 || is_p3);
+            let card: Cards = Cards {
+                player1: [new_deck[0u8], new_deck[3u8]],
+                player2: [new_deck[1u8], new_deck[4u8]],
+                player3: [new_deck[2u8], new_deck[5u8]],
+                flop: [new_deck[7u8], new_deck[8u8], new_deck[9u8]],
+                turn: new_deck[11u8],
+                river: new_deck[13u8],
+            };
 
-        let card: Cards = Cards {
-            player1: [new_deck[0u8], new_deck[3u8]],
-            player2: [new_deck[1u8], new_deck[4u8]],
-            player3: [new_deck[2u8], new_deck[5u8]],
-            flop: [new_deck[7u8], new_deck[8u8], new_deck[9u8]],
-            turn: new_deck[11u8],
-            river: new_deck[13u8],
-        };
+            let new_state: u8 = is_p2 ? (!is_player3(game.players_out) ? p3_shuffle : p1_dec_hand) :
+                                         (!is_player1(game.players_out) ? p1_dec_hand :
+                                          !is_player2(game.players_out) ? p2_dec_hand :
+                                                                          p3_dec_hand);
 
-        let new_state: u8 = is_p2 ? (!is_player3(game.players_out) ? p3_shuffle : p1_dec_hand) :
-                                     (!is_player1(game.players_out) ? p1_dec_hand :
-                                      !is_player2(game.players_out) ? p2_dec_hand :
-                                                                      p3_dec_hand);
+            let new_game: Game = Game {
+                player1: game.player1,
+                player2: game.player2,
+                player3: game.player3,
+                buy_in: game.buy_in,
+                password_hash: game.password_hash,
+                state: new_state,
+                dealer_button: game.dealer_button,
+                players_out: game.players_out,
+                players_folded: game.players_out,
+                last_bet: 0u8,
+                sb: game.sb,
+                bb: game.bb,
+                blind_frequency: game.blind_frequency,
+                remaining_hands: game.remaining_hands,
+                hands_played: game.hands_played,
+                last_raise_size: 0u16,
+            };
 
-        let new_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: new_state,
-            dealer_button: game.dealer_button,
-            players_out: game.players_out,
-            players_folded: game.players_out,
-            last_bet: 0u8,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: game.remaining_hands,
-            hands_played: game.hands_played,
-            last_raise_size: 0u16,
-        };
-
-        Mapping::set(decks, game_id, new_deck);
-        Mapping::set(cards, game_id, card);
-        Mapping::set(games, game_id, new_game);
+            Mapping::set(decks, game_id, new_deck);
+            Mapping::set(cards, game_id, card);
+            Mapping::set(games, game_id, new_game);
+        });
     }
 
     fn claim_prize(game_id: u32, public prize: u64) -> Final {
         let signer: address = std::ctx::signer();
         let transfer_future: Final = credits.aleo::transfer_public(signer, prize);
-        return final { finalize_claim_prize(game_id, signer, prize, transfer_future); };
-    }
+        return final {
+            let game: Game = Mapping::get(games, game_id);
+            let chip: Chips = Mapping::get(chips, game_id);
 
-    final fn finalize_claim_prize(game_id: u32, signer: address, prize: u64, transfer_future: Final) {
-        let game: Game = Mapping::get(games, game_id);
-        let chip: Chips = Mapping::get(chips, game_id);
+            assert(game.player1 == signer || game.player2 == signer || game.player3 == signer);
 
-        assert(game.player1 == signer || game.player2 == signer || game.player3 == signer);
+            let total_chips: u16 = chip.player1 + chip.player2 + chip.player3;
+            let player_chips: u16 = game.player1 == signer ? chip.player1 :
+                                    game.player2 == signer ? chip.player2 : chip.player3;
+            assert_eq(player_chips, total_chips);
 
-        let total_chips: u16 = chip.player1 + chip.player2 + chip.player3;
-        let player_chips: u16 = game.player1 == signer ? chip.player1 :
-                                game.player2 == signer ? chip.player2 : chip.player3;
-        assert_eq(player_chips, total_chips);
+            let expected_prize: u64 = game.buy_in * 3u64;
+            assert_eq(prize, expected_prize);
 
-        let expected_prize: u64 = game.buy_in * 3u64;
-        assert_eq(prize, expected_prize);
+            let completed_game: Game = Game {
+                player1: game.player1,
+                player2: game.player2,
+                player3: game.player3,
+                buy_in: game.buy_in,
+                password_hash: game.password_hash,
+                state: 255u8,
+                dealer_button: game.dealer_button,
+                players_out: 7u8,
+                players_folded: 7u8,
+                last_bet: 0u8,
+                sb: game.sb,
+                bb: game.bb,
+                blind_frequency: game.blind_frequency,
+                remaining_hands: 0u8,
+                hands_played: game.hands_played,
+                last_raise_size: 0u16,
+            };
 
-        transfer_future.run();
-
-        let completed_game: Game = Game {
-            player1: game.player1,
-            player2: game.player2,
-            player3: game.player3,
-            buy_in: game.buy_in,
-            password_hash: game.password_hash,
-            state: 255u8,
-            dealer_button: game.dealer_button,
-            players_out: 7u8,
-            players_folded: 7u8,
-            last_bet: 0u8,
-            sb: game.sb,
-            bb: game.bb,
-            blind_frequency: game.blind_frequency,
-            remaining_hands: 0u8,
-            hands_played: game.hands_played,
-            last_raise_size: 0u16,
+            Mapping::set(games, game_id, completed_game);
+            transfer_future.run();
         };
-
-        Mapping::set(games, game_id, completed_game);
     }
 
     @noupgrade

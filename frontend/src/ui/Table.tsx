@@ -37,7 +37,6 @@ export function Table({ model, busy, dispatch }: { model: GameModel; busy: boole
                     ) : (
                         <>
                             <p className="font-display text-xl text-paper">{description ?? waiting}</p>
-                            {state !== null && <p className="text-sm text-muted">State {state}</p>}
                         </>
                     )}
                 </div>
@@ -94,7 +93,7 @@ export function Table({ model, busy, dispatch }: { model: GameModel; busy: boole
                             </p>
                         </motion.div>
                     )}
-                    <div className="flex gap-2">
+                    <div className="flex max-w-full flex-wrap justify-center gap-1.5 sm:gap-2">
                         {[...cards.flop, cards.turn, cards.river].map((card, i) => (
                             <Card key={i} index={card} size="md" />
                         ))}

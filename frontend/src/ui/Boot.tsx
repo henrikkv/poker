@@ -93,7 +93,7 @@ function ShieldBoot({ onOpenSettings }: { onOpenSettings: () => void }) {
             });
             return;
         }
-        const next = new GameController(openWalletSession(walletRef), config.networkName, config.endpoint);
+        const next = new GameController(openWalletSession(walletRef), config.networkName);
         next.start();
         setController(next);
         return () => next.stop();
@@ -153,7 +153,7 @@ function LocalBoot({ epoch, onOpenSettings }: { epoch: number; onOpenSettings: (
                     return;
                 }
                 const session = openLocalSession({ account, proveToken: token });
-                const next = new GameController(session, config.networkName, config.endpoint);
+                const next = new GameController(session, config.networkName);
                 next.start();
                 if (cancelled) {
                     next.stop();

@@ -1,7 +1,9 @@
 import type { TransactionInput } from "@provablehq/aleo-types";
 import type { WalletContextState } from "@provablehq/aleo-wallet-adapter-react";
 import { AleoNetworkClient } from "@provablehq/sdk";
+import { createBlockPace, isNewBlock, msUntilHeightCheck, noteHeight, noteMissedHeight } from "./blockPace.js";
 import { withTimeout } from "./confirm.js";
+import { recoverKeyRecords } from "./keyScan.js";
 
 export type { TransactionInput };
 
@@ -20,6 +22,8 @@ export interface Session {
     ): Promise<string[]>;
     requestRecords(programName: string): Promise<unknown[]>;
     mapping(programName: string, mappingName: string, key: string): Promise<string | null>;
+    /** Latest block height via `AleoNetworkClient.getLatestHeight`. */
+    latestHeight(): Promise<number>;
 }
 
 /**
@@ -55,16 +59,60 @@ export function reservedFeeMicrocredits(functionName: string, kind: SessionKind 
 
 export const PRIORITY_FEE_CREDITS = 0.1;
 
-export async function waitUntilSettled(functionName: string, settled?: () => Promise<boolean>): Promise<void> {
+function sleep(ms: number): Promise<void> {
+    if (ms <= 0) {
+        return Promise.resolve();
+    }
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Waits until `settled` sees the program mapping change.
+ * One mapping read up front, in case the transaction is already in the latest block,
+ * then one more each time `getLatestHeight` moves. Height itself is not polled faster
+ * than the block interval.
+ */
+export async function waitUntilSettled(
+    functionName: string,
+    settled?: () => Promise<boolean>,
+    readHeight?: () => Promise<number>,
+): Promise<void> {
     if (!settled) {
         return;
     }
     const deadline = Date.now() + 600_000;
+    if (await settled()) {
+        return;
+    }
+    let pace = createBlockPace();
+    try {
+        const height = readHeight ? await readHeight() : 0;
+        pace = noteHeight(pace, height, Date.now());
+    } catch {
+        pace = noteMissedHeight(pace, Date.now());
+    }
     while (Date.now() < deadline) {
+        const remaining = deadline - Date.now();
+        const wait = Math.min(msUntilHeightCheck(pace, Date.now()), remaining);
+        await sleep(wait);
+        if (Date.now() >= deadline) {
+            break;
+        }
+        let height: number;
+        try {
+            height = readHeight ? await readHeight() : (pace.height ?? 0) + 1;
+        } catch {
+            pace = noteMissedHeight(pace, Date.now());
+            continue;
+        }
+        const advanced = isNewBlock(pace, height);
+        pace = noteHeight(pace, height, Date.now());
+        if (!advanced) {
+            continue;
+        }
         if (await settled()) {
             return;
         }
-        await new Promise((resolve) => setTimeout(resolve, 2000));
     }
     throw new Error(`Timed out waiting for ${functionName} to finish`);
 }
@@ -128,12 +176,20 @@ export class WalletSession implements Session {
         if (!submitted?.transactionId) {
             throw new Error(`Wallet did not submit ${programName}/${functionName}`);
         }
-        await waitUntilSettled(functionName, settled);
+        await waitUntilSettled(functionName, settled, () => this.networkClient.getLatestHeight());
         return [];
     }
 
+    latestHeight(): Promise<number> {
+        return this.networkClient.getLatestHeight();
+    }
+
     async requestRecords(programName: string): Promise<unknown[]> {
-        return withTimeout(this.wallet.requestRecords(programName, true, "unspent"), 8_000, "requestRecords");
+        return withTimeout(
+            recoverKeyRecords(this.wallet, programName, this.networkClient),
+            60_000,
+            "requestRecords",
+        );
     }
 
     async mapping(programName: string, mappingName: string, key: string): Promise<string | null> {

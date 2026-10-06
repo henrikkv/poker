@@ -84,8 +84,12 @@ export class LocalSession implements Session {
         if (!response.ok) {
             throw new Error(body.error ?? `Delegated prove failed for ${programName}/${functionName}`);
         }
-        await waitUntilSettled(functionName, settled);
+        await waitUntilSettled(functionName, settled, () => this.networkClient.getLatestHeight());
         return [];
+    }
+
+    latestHeight(): Promise<number> {
+        return this.networkClient.getLatestHeight();
     }
 
     private async recordScanWindow(): Promise<{ startHeight: number; endHeight: number }> {

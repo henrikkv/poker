@@ -37,6 +37,9 @@ export function App({
 
     useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
+            if (document.querySelector("[role='dialog']")) {
+                return;
+            }
             if (event.key === "Escape") {
                 dispatch(KEYS.Escape);
                 return;
@@ -80,6 +83,7 @@ export function App({
                                     lobbyTables={model.lobbyTables}
                                     lobbyReady={model.lobbyReady}
                                     blockedGameId={model.blockedGameId}
+                                    yourAddress={status.address}
                                     dispatch={dispatch}
                                 />
                             )}

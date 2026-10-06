@@ -1,5 +1,6 @@
 import type { Session } from "../net/aleo.js";
-import { latestHeight, publicBalance } from "../net/chain.js";
+import { createBlockPace, msUntilHeightCheck, noteHeight, noteMissedHeight, isNewBlock, type BlockPace } from "../net/blockPace.js";
+import { publicBalance } from "../net/chain.js";
 import {
     decreaseBlindFrequency,
     decreaseRaise,
@@ -14,7 +15,6 @@ import {
     selectPrevAction,
     setAllIn,
     setRaise,
-    shouldPoll,
     type BettingAction,
     type CreateGameField,
     type GameModel,
@@ -125,8 +125,6 @@ export interface Snapshot {
 }
 
 const DRIVE_INTERVAL_MS = 100;
-const STATUS_INTERVAL_MS = 3000;
-const LOBBY_REFRESH_MS = 10_000;
 
 export class GameController {
     private model: GameModel;
@@ -140,15 +138,17 @@ export class GameController {
     private timers: ReturnType<typeof setInterval>[] = [];
 
     private autoQueuedForState: number | null = null;
-    private lastLobbyMs = 0;
     private searchAttempts = 0;
+    private pace: BlockPace = createBlockPace();
+    private chainBusy = false;
+    /** searchForGame runs again only after the height moves past this block. */
+    private retryAfterHeight: number | null = null;
     private joinRetryUsed = false;
     private allowSecondSeat = false;
 
     constructor(
         readonly session: Session,
         networkName: string,
-        private readonly endpoint: string,
     ) {
         const address = session.address();
         const seat = loadSeat(address);
@@ -174,8 +174,6 @@ export class GameController {
 
     start(): void {
         this.timers.push(setInterval(() => void this.drive(), DRIVE_INTERVAL_MS));
-        this.timers.push(setInterval(() => void this.refreshStatus(), STATUS_INTERVAL_MS));
-        void this.refreshStatus();
         this.resumeIfSeated();
         void this.drive();
     }
@@ -258,7 +256,6 @@ export class GameController {
 
     /** Stay on the menu. A single open seat is resumed from the list, not automatically. */
     private async loadLobby(model: GameModel, announce: boolean): Promise<void> {
-        this.lastLobbyMs = Date.now();
         if (announce) {
             log(model, "Looking up tables");
             model.backgroundTask = "Looking up tables";
@@ -270,7 +267,7 @@ export class GameController {
         } catch (error) {
             if (announce) {
                 model.backgroundTask = null;
-                log(model, `Could not scan tables: ${errorMessage(error)}. Secrets are kept.`);
+                log(model, `Could not scan tables: ${errorMessage(error)}.`);
             }
             return;
         }
@@ -354,7 +351,9 @@ export class GameController {
         this.model.screen = "inGame";
         this.model.spectating = false;
         this.model.blockedGameId = null;
-        this.persistSeat();
+        if (this.handle.hasKeys) {
+            this.persistSeat();
+        }
         const game = await this.handle.poker.get_games(gameId);
         if (game) {
             rememberJoinedTable(gameId, this.status.address, this.handle.seatsFromGame(game));
@@ -362,15 +361,79 @@ export class GameController {
         this.pendingCommand = { type: "refreshGameState", gameId };
     }
 
-    private async refreshStatus(): Promise<void> {
+    /**
+     * One height read per block interval. Mappings (balance, lobby, table) are
+     * read once, and only after the height increases.
+     */
+    private async pollChain(): Promise<void> {
+        if (this.chainBusy || this.running || this.syncBusy) {
+            return;
+        }
+        if (msUntilHeightCheck(this.pace, Date.now()) > 0) {
+            return;
+        }
+        this.chainBusy = true;
         try {
-            this.status.height = await latestHeight(this.endpoint);
+            const height = await this.session.latestHeight();
+            const advanced = isNewBlock(this.pace, height);
+            this.pace = noteHeight(this.pace, height, Date.now());
+            this.status.height = height;
             this.status.nodeError = null;
-            this.status.balance = await publicBalance(this.session, this.status.address);
+            if (advanced) {
+                try {
+                    this.status.balance = await publicBalance(this.session, this.status.address);
+                } catch (error) {
+                    this.status.nodeError = errorMessage(error);
+                }
+                this.queueChainRefresh();
+            }
         } catch (error) {
             this.status.nodeError = errorMessage(error);
+            this.pace = noteMissedHeight(this.pace, Date.now());
+        } finally {
+            this.chainBusy = false;
+            this.emit();
         }
-        this.emit();
+    }
+
+    private queueChainRefresh(): void {
+        if (this.running || this.syncBusy) {
+            return;
+        }
+        const pending = this.pendingCommand;
+        if (
+            pending?.type === "searchForGame" &&
+            this.retryAfterHeight !== null &&
+            this.pace.height !== null &&
+            this.pace.height > this.retryAfterHeight
+        ) {
+            this.retryAfterHeight = null;
+            void this.drive();
+            return;
+        }
+        if (pending !== null) {
+            return;
+        }
+        const model = this.model;
+        if (model.screen === "menu") {
+            this.pendingCommand = { type: "refreshLobby" };
+        } else if (model.gameInitialized && model.gameId !== null) {
+            this.pendingCommand = { type: "refreshGameState", gameId: model.gameId };
+        } else {
+            return;
+        }
+        void this.drive();
+    }
+
+    private waitingForNextBlock(command: Command): boolean {
+        if (command.type !== "searchForGame" || this.retryAfterHeight === null) {
+            return false;
+        }
+        if (this.pace.height === null || this.pace.height <= this.retryAfterHeight) {
+            return true;
+        }
+        this.retryAfterHeight = null;
+        return false;
     }
 
     private processMessage(msg: GameMessage): void {
@@ -381,6 +444,9 @@ export class GameController {
     }
 
     private async drive(): Promise<void> {
+        if (!this.running && !this.syncBusy) {
+            void this.pollChain();
+        }
         if (this.syncBusy) {
             return;
         }
@@ -388,6 +454,9 @@ export class GameController {
 
         const command = this.pendingCommand;
         if (!command) {
+            return;
+        }
+        if (this.waitingForNextBlock(command)) {
             return;
         }
 
@@ -431,11 +500,15 @@ export class GameController {
         switch (command.type) {
             case "refreshGameState": {
                 let stateChanged: boolean;
+                const secretBefore = handle.secret;
                 try {
                     stateChanged = await handle.refreshGameState(model, command.gameId);
                 } catch (error) {
                     model.lastPollTime = Date.now();
                     return { type: "gameStatePolled", error: errorMessage(error) };
+                }
+                if (handle.secret !== secretBefore) {
+                    this.persistSeat();
                 }
                 const next = await handle.detectAutoAction(model, command.gameId);
                 if (next && (stateChanged || this.autoQueuedForState !== model.currentState)) {
@@ -459,6 +532,7 @@ export class GameController {
                     log(model, `Could not read game ${target} yet. Keeping this table.`);
                 }
                 if (this.searchAttempts < 8) {
+                    this.retryAfterHeight = this.pace.height ?? -1;
                     this.pendingCommand = { type: "searchForGame" };
                     return null;
                 }
@@ -481,12 +555,13 @@ export class GameController {
                     return null;
                 }
                 log(model, `Opening game ${id}`);
+                model.spectating = false;
                 model.backgroundTask = `Opening game ${id}`;
                 this.emit();
                 const lookup = await handle.lookupGame(id);
                 model.backgroundTask = null;
                 if (lookup.status === "error") {
-                    log(model, `Could not read game ${id}. Secrets are kept. Hide this table locally if it is abandoned.`);
+                    log(model, `Could not read game ${id}.`);
                     if (command.type === "resumeGame") {
                         model.screen = "menu";
                         model.gameInitialized = false;
@@ -497,7 +572,7 @@ export class GameController {
                     return null;
                 }
                 if (lookup.status === "missing") {
-                    log(model, `Game ${id} is not ready yet. Secrets are kept.`);
+                    log(model, `Game ${id} is not ready yet.`);
                     if (command.type === "resumeGame") {
                         model.screen = "menu";
                         model.gameInitialized = false;
@@ -517,16 +592,6 @@ export class GameController {
                             ? `Rejoined game ${id} as Player ${seats.join(" and ")}`
                             : `Rejoined game ${id} as Player ${model.currentPlayerId}`,
                     );
-                    return null;
-                }
-                const prior = loadJoinedTable(id);
-                if (prior && prior.address !== this.status.address) {
-                    log(
-                        model,
-                        "This table is abandoned. A reload created a new key, so it cannot be finished. Start a new game.",
-                    );
-                    model.gameId = null;
-                    model.screen = "menu";
                     return null;
                 }
                 if (command.type === "resumeGame") {
@@ -615,7 +680,13 @@ export class GameController {
                 return { type: "gameInitialized", error: await capture(() => handle.initializeGame(model)) };
             }
             case "joinGame": {
-                const playerNum = (await handle.getGameState(command.gameId)) === 0 ? 2 : 3;
+                const lookup = await handle.lookupGame(command.gameId);
+                if (lookup.status === "ok" && handle.playerIdFromGame(lookup.game) !== null) {
+                    await this.sitAsPlayer(command.gameId);
+                    log(model, `Rejoined game ${command.gameId} as Player ${model.currentPlayerId}`);
+                    return { type: "gameJoined" };
+                }
+                const playerNum = lookup.status === "ok" && lookup.game.state === 0 ? 2 : 3;
                 log(model, `Joining game ${command.gameId} as Player ${playerNum}`);
                 return { type: "gameJoined", error: await capture(() => handle.joinGame(model, command.gameId)) };
             }
@@ -670,7 +741,7 @@ export class GameController {
             case "charInput": {
                 const c = msg.char;
                 if (model.screen === "joinGame") {
-                    if (model.joinGameField === "gameId" && /^[a-zA-Z0-9.-]$/.test(c)) {
+                    if (model.joinGameField === "gameId" && /^\d$/.test(c)) {
                         model.gameIdInput += c;
                     } else if (model.joinGameField === "password" && /^\d$/.test(c)) {
                         model.passwordInput += c;
@@ -702,7 +773,7 @@ export class GameController {
                 if (msg.field === "buyIn") {
                     if (/^\d*(\.\d{0,6})?$/.test(msg.value)) model.buyInInput = msg.value;
                 } else if (msg.field === "gameId") {
-                    if (/^[a-zA-Z0-9.-]*$/.test(msg.value)) model.gameIdInput = msg.value;
+                    if (/^\d*$/.test(msg.value)) model.gameIdInput = msg.value;
                 } else if (/^\d*$/.test(msg.value)) {
                     model.passwordInput = msg.value;
                 }
@@ -733,6 +804,12 @@ export class GameController {
                 return null;
 
             case "openListedTable":
+                if (model.lobbyTables.some((table) => table.gameId === msg.gameId && table.yours)) {
+                    model.blockedGameId = null;
+                    model.screen = "inGame";
+                    this.pendingCommand = { type: "resumeGame", gameId: msg.gameId };
+                    return null;
+                }
                 model.gameIdInput = String(msg.gameId);
                 model.joinGameField = "password";
                 model.selectedMenuOption = "joinGame";
@@ -741,8 +818,11 @@ export class GameController {
 
             case "watchTable":
                 model.blockedGameId = null;
+                model.spectating = false;
                 model.screen = "inGame";
-                this.pendingCommand = { type: "prepareJoin", gameId: msg.gameId };
+                this.pendingCommand = model.lobbyTables.some((table) => table.gameId === msg.gameId && table.yours)
+                    ? { type: "resumeGame", gameId: msg.gameId }
+                    : { type: "prepareJoin", gameId: msg.gameId };
                 return null;
 
             case "leaveLocally":
@@ -867,18 +947,6 @@ export class GameController {
                 return null;
 
             case "tick":
-                if (this.pendingCommand !== null) {
-                    return null;
-                }
-                if (
-                    model.screen === "menu" &&
-                    !this.syncBusy &&
-                    Date.now() - this.lastLobbyMs >= LOBBY_REFRESH_MS
-                ) {
-                    this.pendingCommand = { type: "refreshLobby" };
-                } else if (model.gameInitialized && shouldPoll(model) && model.gameId !== null) {
-                    this.pendingCommand = { type: "refreshGameState", gameId: model.gameId };
-                }
                 return null;
 
             case "gameInitialized":
@@ -901,7 +969,7 @@ export class GameController {
                     model.currentPlayerId = this.handle.playerId;
                     this.persistSeat();
                     this.refreshAfter();
-                } else if (!this.joinRetryUsed && model.gameId !== null) {
+                } else if (this.session.kind === "local" && !this.joinRetryUsed && model.gameId !== null) {
                     this.joinRetryUsed = true;
                     log(model, "That seat was taken. Trying the next open seat.");
                     this.pendingCommand = { type: "prepareJoin", gameId: model.gameId };

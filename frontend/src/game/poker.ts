@@ -1,18 +1,21 @@
-import type { Session } from "../net/aleo.js";
+import type { Session, TransactionInput } from "../net/aleo.js";
 import { reservedFeeMicrocredits } from "../net/aleo.js";
 import { withExclusiveLock } from "../net/tabLock.js";
-import { MentalPoker, type Cards, type Game } from "./program.js";
-import { secretsFromRecord } from "./keysRecord.js";
+import { MentalPoker, type Cards, type Game, type RevealedCards } from "./program.js";
+import { recordUid, sameScalar, secretsFromRecord } from "./keysRecord.js";
 import type { StoredSeat } from "./seat.js";
 import { publicBalance } from "../net/chain.js";
 import {
-    cardViewFromRevealed,
+    applyCommunityState,
+    cardIndexFromGroup,
     computeCardHashesFromDeck,
-    decryptHandLocal,
+    emptyCardView,
     generateSecret,
     getOtherPlayersCards,
     getPlayerCards,
-    setViewCards,
+    keyOpensHand,
+    openHand,
+    presentCardView,
     type CardHashes,
 } from "./cards.js";
 import { initializedDeck } from "./deck.js";
@@ -27,7 +30,9 @@ import {
     log,
     logActionComplete,
     logActionStart,
+    facingAllIn,
     newBettingUi,
+    raiseBounds,
     parseCreditsInput,
     parsePassword,
     updateEliminatedPlayers,
@@ -35,7 +40,7 @@ import {
     type ChipView,
     type GameModel,
 } from "./model.js";
-import { sortLobby, toLobbyTable, type LobbyTable } from "./lobby.js";
+import { seatedPlayerIds, sortLobby, toLobbyTable, type LobbyTable } from "./lobby.js";
 import {
     currentPlayer,
     decryptionLogMessage,
@@ -43,6 +48,7 @@ import {
     GameState,
     gameStateFromU8,
     isBettingState,
+    isNewHandState,
     isUnfinishedState,
     type DecryptionStep,
     type PlayerId,
@@ -61,13 +67,8 @@ export interface SeatedGameInfo {
     unfinished: boolean;
 }
 
-const LOOKUP_ATTEMPTS = 3;
 /** Recent games shown on the menu, plus any id this browser already joined. */
 const SCAN_TAIL = 16;
-
-function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export type GameCommand =
     | { type: "initializeGame" }
@@ -92,6 +93,12 @@ export class PokerGame {
     readonly cardHashes: CardHashes;
     playerId: PlayerId | 0 = 0;
     hasKeys = false;
+    /** Wallet handle for the Keys record that matches the secret used on this deck. */
+    private keysUid: string | null = null;
+    /** Hole-card groups we already searched the wallet for. A new deal searches again. */
+    private searchedHand: string | null = null;
+    private loggedKeyMiss = false;
+    private lastCards: Cards | null = null;
 
     constructor(readonly session: Session, seat?: StoredSeat | null) {
         this.poker = new MentalPoker(session);
@@ -99,6 +106,10 @@ export class PokerGame {
         this.secret = secret;
         this.secretInv = secretInv;
         this.cardHashes = computeCardHashesFromDeck(initializedDeck());
+        // A restored seat is the secret this browser already submitted.
+        // A local key always signs with the secret it holds. Shield must not
+        // treat a freshly generated secret as a Keys record.
+        this.hasKeys = seat != null || session.kind === "local";
     }
 
     get address(): string {
@@ -129,17 +140,7 @@ export class PokerGame {
     }
 
     seatsFromGame(game: Pick<Game, "player1" | "player2" | "player3">): PlayerId[] {
-        const seats: PlayerId[] = [];
-        if (this.address === game.player1) {
-            seats.push(1);
-        }
-        if (this.address === game.player2) {
-            seats.push(2);
-        }
-        if (this.address === game.player3) {
-            seats.push(3);
-        }
-        return seats;
+        return seatedPlayerIds(this.address, game);
     }
 
     playerIdFromGame(game: Pick<Game, "player1" | "player2" | "player3">): PlayerId | null {
@@ -154,7 +155,9 @@ export class PokerGame {
         const turn = state === null ? null : currentPlayer(state);
         const id = turn && seats.includes(turn) ? turn : seats[0];
         this.playerId = id;
-        this.hasKeys = true;
+        if (this.session.kind === "local") {
+            this.hasKeys = true;
+        }
         return id;
     }
 
@@ -182,48 +185,97 @@ export class PokerGame {
         if (id === null) {
             throw new Error(`Not a player in game ${gameId}`);
         }
-        if (this.session.kind !== "local") {
-            await this.adoptWalletKeys();
-        }
     }
 
-    /** Prefer the secret stored in the wallet Keys record over a freshly generated one. */
-    async adoptWalletKeys(): Promise<void> {
+    /**
+     * Spend the Keys record whose secret encrypted this deck.
+     * A wallet with several unspent Keys records otherwise picks one at random,
+     * and that leaves the next street face down.
+     */
+    private keysInput(): TransactionInput {
+        const request = {
+            type: "record" as const,
+            program: "mental_poker2.aleo",
+            recordname: "Keys",
+        };
+        if (this.keysUid) {
+            return { ...request, uid: this.keysUid };
+        }
+        if (!this.hasKeys) {
+            throw new Error("No Keys record in the connected wallet for this game");
+        }
+        return { ...request, filters: { secret: { eq: this.secret } } };
+    }
+
+    private async prepareKeys(cards: Cards | null): Promise<"hit" | "pinned" | "miss" | "empty"> {
+        if (this.session.kind === "local") {
+            return this.hasKeys ? "hit" : "miss";
+        }
+        const hand = cards && this.playerId !== 0 ? getPlayerCards(this.playerId, cards) : null;
+        const heldOpens = Boolean(hand && this.hasKeys && keyOpensHand(hand, this.secretInv, this.cardHashes));
+        if (heldOpens && this.keysUid) {
+            return "hit";
+        }
+        let records: unknown[] = [];
         try {
-            const records = await this.session.requestRecords("mental_poker2.aleo");
-            for (const record of records) {
-                const pair = secretsFromRecord(record);
-                if (pair) {
+            records = await this.session.requestRecords("mental_poker2.aleo");
+        } catch {
+            return "empty";
+        }
+        if (records.length === 0) {
+            return "empty";
+        }
+        let sameUid: string | null = null;
+        for (const record of records) {
+            const pair = secretsFromRecord(record);
+            const uid = recordUid(record);
+            if (!pair) {
+                continue;
+            }
+            if (hand && keyOpensHand(hand, pair.secretInv, this.cardHashes)) {
+                if (!heldOpens) {
                     this.secret = pair.secret;
                     this.secretInv = pair.secretInv;
                     this.hasKeys = true;
-                    return;
                 }
+                if (uid) {
+                    this.keysUid = uid;
+                }
+                return "hit";
             }
-        } catch {
-            // The wallet can refuse record reads; keep the locally stored secret.
+            if (this.hasKeys && uid && sameScalar(pair.secret, this.secret)) {
+                sameUid = uid;
+            }
         }
+        if (sameUid) {
+            this.keysUid = sameUid;
+            return "pinned";
+        }
+        return "miss";
     }
 
-    async lookupGame(gameId: number, attempts = LOOKUP_ATTEMPTS): Promise<GameLookup> {
-        let lastError: string | null = null;
-        for (let attempt = 0; attempt < attempts; attempt += 1) {
-            try {
-                const game = await this.poker.get_games(gameId);
-                if (game) {
-                    return { status: "ok", game };
-                }
-            } catch (error) {
-                lastError = errorMessage(error);
+    private paintCards(state: GameState | null, revealed: RevealedCards | null, model: GameModel): void {
+        const locked = model.currentState !== null && isNewHandState(model.currentState) ? model.currentState : state;
+        model.card = presentCardView({
+            state: locked,
+            revealed,
+            cards: this.lastCards,
+            playerId: model.currentPlayerId,
+            secretInv: this.hasKeys ? this.secretInv : null,
+            cardHashes: this.cardHashes,
+        });
+    }
+
+    async lookupGame(gameId: number): Promise<GameLookup> {
+        try {
+            const game = await this.poker.get_games(gameId);
+            if (game) {
+                return { status: "ok", game };
             }
-            if (attempt + 1 < attempts) {
-                await delay(400 * 2 ** attempt);
-            }
+            return { status: "missing" };
+        } catch (error) {
+            return { status: "error", message: errorMessage(error) };
         }
-        if (lastError) {
-            return { status: "error", message: lastError };
-        }
-        return { status: "missing" };
     }
 
     async findSeatedGames(knownIds: number[] = []): Promise<SeatedGameInfo[]> {
@@ -318,11 +370,19 @@ export class PokerGame {
             model.blindFrequency,
         );
         this.hasKeys = true;
+        this.playerId = 1;
         model.gameId = model.lastKnownGameId;
         logActionComplete(model);
     }
 
     async joinGame(model: GameModel, gameId: number): Promise<void> {
+        const existing = await this.poker.get_games(gameId);
+        if (existing && this.playerIdFromGame(existing) !== null) {
+            await this.trySetPlayerId(gameId);
+            log(model, `Rejoined game ${gameId} as Player ${this.playerId}`);
+            return;
+        }
+
         logActionStart(model, "Loading the table deck");
         const deck = await this.poker.get_decks(gameId);
         if (!deck) {
@@ -339,15 +399,21 @@ export class PokerGame {
             const game = await this.requireGame(gameId);
             if (this.playerIdFromGame(game) !== null) {
                 await this.trySetPlayerId(gameId);
-                log(model, `Already seated in game ${gameId} as Player ${this.playerId}`);
+                log(model, `Rejoined game ${gameId} as Player ${this.playerId}`);
                 return;
             }
             await this.requireBalance(game.buy_in + BigInt(reservedFeeMicrocredits("join_game", this.session.kind)));
+            const joiningAs: PlayerId = game.state === 0 ? 2 : 3;
             logActionStart(model, `Joining game ${gameId}`);
             await this.poker.join_game(gameId, game.buy_in, deck, control, this.secret, this.secretInv, password);
             this.hasKeys = true;
+            this.playerId = joiningAs;
             logActionComplete(model);
-            await this.trySetPlayerId(gameId);
+            try {
+                await this.trySetPlayerId(gameId);
+            } catch {
+                // The mapping can lag Shield's confirmation. Keep the secret just submitted.
+            }
             log(model, `Joined game ${gameId} as Player ${this.playerId}`);
         });
     }
@@ -368,15 +434,26 @@ export class PokerGame {
                 if (this.playerId === 0) {
                     throw new Error("Invalid player_id");
                 }
-                const callAmount = highestBet(chips) - getCurrentBet(chips, this.playerId);
-                logActionStart(model, callAmount === 0 ? "Checking" : `Calling ${callAmount}`);
+                const stack = getChips(chips, this.playerId);
+                const owed = Math.max(highestBet(chips) - getCurrentBet(chips, this.playerId), 0);
+                const callAmount = Math.min(owed, stack);
+                logActionStart(model, callAmount === 0 ? "Checking" : callAmount >= stack ? `All in ${callAmount}` : `Calling ${callAmount}`);
                 await this.poker.bet(gameId, callAmount);
                 logActionComplete(model);
                 break;
             }
             case "raise": {
-                logActionStart(model, `Raising ${amount}`);
-                await this.poker.bet(gameId, amount);
+                const chips = await this.poker.get_chips(gameId);
+                if (!chips) {
+                    throw new Error("No chips found");
+                }
+                if (this.playerId === 0) {
+                    throw new Error("Invalid player_id");
+                }
+                const stack = getChips(chips, this.playerId);
+                const wager = Math.min(Math.max(amount, 0), stack);
+                logActionStart(model, wager >= stack ? `All in ${wager}` : `Raising ${wager}`);
+                await this.poker.bet(gameId, wager);
                 logActionComplete(model);
                 break;
             }
@@ -392,27 +469,30 @@ export class PokerGame {
         if (this.playerId === 0) {
             throw new Error("Unknown player id");
         }
+        await this.prepareKeys(cards);
         this.requireKeys();
+        const keys = this.keysInput();
         logActionStart(model, decryptionLogMessage(step));
         switch (step) {
             case "hands": {
                 const [other1, other2] = getOtherPlayersCards(this.playerId, cards);
-                await this.poker.decrypt_hands(gameId, other1, other2);
+                await this.poker.decrypt_hands(gameId, other1, other2, keys);
                 break;
             }
             case "flop":
-                await this.poker.decrypt_flop(gameId, cards.flop);
+                await this.poker.decrypt_flop(gameId, cards.flop, keys);
                 break;
             case "turn":
-                await this.poker.decrypt_turn_river(gameId, cards.turn);
+                await this.poker.decrypt_turn_river(gameId, cards.turn, keys);
                 break;
             case "river":
-                await this.poker.decrypt_turn_river(gameId, cards.river);
+                await this.poker.decrypt_turn_river(gameId, cards.river, keys);
                 break;
             case "showdown":
-                await this.poker.showdown(gameId, getPlayerCards(this.playerId, cards));
+                await this.poker.showdown(gameId, getPlayerCards(this.playerId, cards), keys);
                 break;
         }
+        this.keysUid = null;
         logActionComplete(model);
     }
 
@@ -443,7 +523,8 @@ export class PokerGame {
         const highest = highestBet(chips);
         const minRaiseSize = highest === 0 || game.last_raise_size === 0 ? game.bb : game.last_raise_size;
         const callAmount = Math.max(highest - currentBet, 0);
-        const minRaise = Math.max(highest + minRaiseSize - currentBet, 0);
+        const fullMinRaise = Math.max(highest + minRaiseSize - currentBet, 0);
+        const { minRaise } = raiseBounds(playerChips, callAmount, fullMinRaise, facingAllIn(chips, this.playerId));
 
         model.bettingUi = newBettingUi(playerChips, callAmount, minRaise);
     }
@@ -498,11 +579,7 @@ export class PokerGame {
             this.poker.get_revealed_cards(gameId),
             this.poker.get_games(gameId),
         ]);
-        const view = cardViewFromRevealed(revealed);
-        if (model.decryptedHand && model.currentPlayerId !== 0) {
-            setViewCards(view, model.currentPlayerId, model.decryptedHand);
-        }
-        model.card = view;
+        this.paintCards(game ? gameStateFromU8(game.state) : model.currentState, revealed, model);
         model.chip = chips;
         if (game) {
             model.dealerButton = game.dealer_button;
@@ -522,6 +599,7 @@ export class PokerGame {
         const acting = this.adoptActingSeat(game, newState);
         if (acting !== null) {
             model.currentPlayerId = acting;
+            model.spectating = false;
         }
         const stateChanged = model.currentState !== newState;
 
@@ -534,8 +612,13 @@ export class PokerGame {
             switch (newState) {
                 case GameState.P1NewShuffle:
                 case GameState.P2NewShuffle:
-                    model.card = null;
+                case GameState.P2Shuffle:
+                case GameState.P3Shuffle:
+                    model.card = emptyCardView();
                     model.decryptedHand = null;
+                    this.searchedHand = null;
+                    this.loggedKeyMiss = false;
+                    this.keysUid = null;
                     model.gameWinner = null;
                     if (
                         (newState === GameState.P1NewShuffle && this.playerId === 1) ||
@@ -543,10 +626,6 @@ export class PokerGame {
                     ) {
                         log(model, "Starting new hand");
                     }
-                    break;
-                case GameState.P2Shuffle:
-                case GameState.P3Shuffle:
-                    model.gameWinner = null;
                     if (
                         (newState === GameState.P2Shuffle && this.playerId === 2) ||
                         (newState === GameState.P3Shuffle && this.playerId === 3)
@@ -558,12 +637,13 @@ export class PokerGame {
         }
 
         const [chips, cards] = await Promise.all([this.getChip(gameId), this.poker.get_cards(gameId)]);
+        this.lastCards = cards;
         let handDecrypted = false;
 
         if (newState !== null) {
             this.setupBettingUi(newState, stateChanged, chips, game, model);
 
-            if (model.decryptedHand === null && cards && this.hasKeys && this.playerId !== 0) {
+            if (model.decryptedHand === null && cards && this.playerId !== 0) {
                 const beforeDecrypt: GameState[] = [
                     GameState.P2Join,
                     GameState.P3Join,
@@ -577,10 +657,29 @@ export class PokerGame {
                 ];
                 if (!beforeDecrypt.includes(newState)) {
                     const encryptedHand = getPlayerCards(this.playerId, cards);
-                    const result = decryptHandLocal(encryptedHand, this.secretInv, this.cardHashes);
-                    if (result[0] !== 255 || result[1] !== 255) {
-                        model.decryptedHand = result;
-                        handDecrypted = true;
+                    const fingerprint = `${encryptedHand[0]}|${encryptedHand[1]}`;
+                    const stillEncrypted = encryptedHand.some(
+                        (card) => cardIndexFromGroup(card, this.cardHashes) === null,
+                    );
+                    let opened =
+                        stillEncrypted && this.hasKeys && keyOpensHand(encryptedHand, this.secretInv, this.cardHashes);
+                    if (stillEncrypted && !opened && this.session.kind !== "local" && this.searchedHand !== fingerprint) {
+                        const recovered = await this.prepareKeys(cards);
+                        if (recovered !== "empty") {
+                            this.searchedHand = fingerprint;
+                        }
+                        opened = this.hasKeys && keyOpensHand(encryptedHand, this.secretInv, this.cardHashes);
+                        if (!opened && recovered === "miss" && !this.loggedKeyMiss) {
+                            log(model, "None of the keys in this wallet open your hole cards.");
+                            this.loggedKeyMiss = true;
+                        }
+                    }
+                    if (opened) {
+                        const local = openHand(encryptedHand, this.secretInv, this.cardHashes);
+                        if (local) {
+                            model.decryptedHand = local;
+                            handDecrypted = true;
+                        }
                     }
                 }
             }
@@ -588,7 +687,8 @@ export class PokerGame {
 
         if (stateChanged || handDecrypted || model.card === null) {
             await this.updateRenderData(gameId, model);
-        } else {
+        } else if (model.card) {
+            model.card = applyCommunityState(model.card, newState);
             model.chip = chips;
         }
 
@@ -640,7 +740,7 @@ export class PokerGame {
             else if (mine(GameState.P1DecRiver, GameState.P2DecRiver, GameState.P3DecRiver)) step = "river";
             else if (mine(GameState.P1Showdown, GameState.P2Showdown, GameState.P3Showdown)) step = "showdown";
 
-            if (step && (await this.poker.get_cards(gameId))) {
+            if (step) {
                 return { type: "autoDecrypt", gameId, step };
             }
         }

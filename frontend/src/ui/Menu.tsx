@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import type { Suit } from "../game/cards.js";
 import type { GameMessage } from "../game/controller.js";
-import type { LobbyTable } from "../game/lobby.js";
+import { sameAddress, seatOccupied, type LobbyTable } from "../game/lobby.js";
 import type { MenuOption, SeatedTableView } from "../game/model.js";
 import { SuitIcon } from "./SuitIcon.js";
 
@@ -26,6 +26,7 @@ export function Menu({
     lobbyTables,
     lobbyReady,
     blockedGameId,
+    yourAddress,
     dispatch,
 }: {
     selected: MenuOption;
@@ -33,6 +34,7 @@ export function Menu({
     lobbyTables: LobbyTable[];
     lobbyReady: boolean;
     blockedGameId: number | null;
+    yourAddress: string;
     dispatch: (msg: GameMessage) => void;
 }) {
     const tables = lobbyReady ? lobbyTables : seatedTables.filter((table) => table.unfinished).map(pendingRow);
@@ -68,7 +70,13 @@ export function Menu({
                 ) : (
                     <ul className="mt-3 space-y-2">
                         {tables.map((table) => (
-                            <TableRow key={table.gameId} table={table} canHide={!lobbyReady} dispatch={dispatch} />
+                            <TableRow
+                                key={table.gameId}
+                                table={table}
+                                canHide={!lobbyReady}
+                                yourAddress={yourAddress}
+                                dispatch={dispatch}
+                            />
                         ))}
                     </ul>
                 )}
@@ -117,16 +125,19 @@ function pendingRow(table: SeatedTableView): LobbyTable {
         yours: true,
         seatsFilled: Math.min(3, Math.max(playerIds.length, 1)),
         playerIds,
+        addresses: ["", "", ""],
     };
 }
 
 function TableRow({
     table,
     canHide,
+    yourAddress,
     dispatch,
 }: {
     table: LobbyTable;
     canHide: boolean;
+    yourAddress: string;
     dispatch: (msg: GameMessage) => void;
 }) {
     const seats = `${table.seatsFilled} of 3 seated`;
@@ -142,6 +153,7 @@ function TableRow({
                 </p>
                 <p className="mt-1 text-sm text-paper">{table.progress}</p>
                 <p className="text-xs text-muted">{seats}</p>
+                <PlayerList addresses={table.addresses} yourAddress={yourAddress} />
             </div>
             <div className="flex flex-wrap gap-2">
                 {table.yours ? (
@@ -166,6 +178,27 @@ function TableRow({
                 )}
             </div>
         </li>
+    );
+}
+
+function PlayerList({ addresses, yourAddress }: { addresses: [string, string, string]; yourAddress: string }) {
+    return (
+        <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-muted">Players</summary>
+            <ul className="mt-2 space-y-1">
+                {addresses.map((address, index) => {
+                    const occupied = seatOccupied(address);
+                    const you = occupied && sameAddress(address, yourAddress);
+                    return (
+                        <li key={index} className="break-all text-xs text-paper">
+                            <span className="text-muted">Player {index + 1} </span>
+                            {occupied ? address : "Open"}
+                            {you && <span className="text-gold"> (you)</span>}
+                        </li>
+                    );
+                })}
+            </ul>
+        </details>
     );
 }
 

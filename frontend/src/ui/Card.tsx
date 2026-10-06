@@ -1,64 +1,66 @@
-import { AnimatePresence, motion } from "motion/react";
 import { useId } from "react";
 import { cardInfo, type Suit } from "../game/cards.js";
 import { SuitIcon } from "./SuitIcon.js";
 
 type Size = "sm" | "md" | "lg";
 
-const SIZES: Record<Size, string> = {
+const WIDTH: Record<Size, string> = {
     sm: "w-11",
     md: "w-16",
     lg: "w-20",
 };
 
+const TYPE: Record<Size, { pip: string; pipSuit: string; center: string }> = {
+    sm: { pip: "text-[11px]", pipSuit: "size-2.5", center: "size-5" },
+    md: { pip: "text-sm", pipSuit: "size-3", center: "size-7" },
+    lg: { pip: "text-base", pipSuit: "size-3.5", center: "size-9" },
+};
+
 export function Card({ index, size = "md", dim = false }: { index: number; size?: Size; dim?: boolean }) {
-    const info = cardInfo(index);
-    const key = info.kind === "valid" ? `face-${index}` : "back";
+    const numeric = typeof index === "number" ? index : Number(index);
+    const info = cardInfo(Number.isFinite(numeric) ? numeric : 255);
     return (
-        <div className={`${SIZES[size]} aspect-[5/7] [perspective:600px] ${dim ? "opacity-40" : ""}`}>
-            <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                    key={key}
-                    className="size-full drop-shadow-[0_4px_6px_rgba(0,0,0,0.45)]"
-                    initial={{ rotateY: 90, opacity: 0.4 }}
-                    animate={{ rotateY: 0, opacity: 1 }}
-                    exit={{ rotateY: -90, opacity: 0.4 }}
-                    transition={{ duration: 0.22, ease: "easeOut" }}
-                >
-                    {info.kind === "valid" ? (
-                        <CardFace value={info.value} suit={info.suit} red={info.isRed} />
-                    ) : (
-                        <CardBack />
-                    )}
-                </motion.div>
-            </AnimatePresence>
+        <div className={`${WIDTH[size]} aspect-[5/7] ${dim ? "opacity-40" : ""}`}>
+            {info.kind === "valid" ? (
+                <CardFace value={info.value} suit={info.suit} red={info.isRed} size={size} />
+            ) : (
+                <CardBack />
+            )}
         </div>
     );
 }
 
-function CardFace({ value, suit, red }: { value: string; suit: Suit; red: boolean }) {
+function CardFace({ value, suit, red, size }: { value: string; suit: Suit; red: boolean; size: Size }) {
     const tone = red ? "text-card-red" : "text-ink";
+    const type = TYPE[size];
     return (
         <div
             role="img"
             aria-label={`${value} of ${suit}`}
-            className="@container relative size-full overflow-hidden rounded-[8%] border-2 border-[#d8d0bf] bg-[#fbf8f1]"
+            className="relative size-full overflow-hidden rounded-[8%] border-2 border-[#d8d0bf] bg-[#fbf8f1]"
         >
-            <Pip value={value} suit={suit} className={`top-[6%] left-[8%] ${tone}`} />
-            <SuitIcon
-                suit={suit}
-                className={`absolute top-[52%] left-1/2 size-[40cqw] -translate-x-1/2 -translate-y-1/2 ${tone}`}
-            />
-            <Pip value={value} suit={suit} className={`right-[8%] bottom-[6%] rotate-180 ${tone}`} />
+            <Pip value={value} suit={suit} type={type} className={`top-[7%] left-[10%] ${tone}`} />
+            <SuitIcon suit={suit} className={`absolute top-1/2 left-1/2 ${type.center} -translate-x-1/2 -translate-y-1/2 ${tone}`} />
+            <Pip value={value} suit={suit} type={type} className={`right-[10%] bottom-[7%] rotate-180 ${tone}`} />
         </div>
     );
 }
 
-function Pip({ value, suit, className }: { value: string; suit: Suit; className: string }) {
+function Pip({
+    value,
+    suit,
+    type,
+    className,
+}: {
+    value: string;
+    suit: Suit;
+    type: { pip: string; pipSuit: string };
+    className: string;
+}) {
     return (
-        <span className={`absolute flex flex-col items-center font-display leading-none font-bold ${className}`}>
-            <span className="text-[26cqw]">{value}</span>
-            <SuitIcon suit={suit} className="mt-[1cqw] size-[18cqw]" />
+        <span className={`absolute flex flex-col items-center leading-none font-bold ${type.pip} ${className}`}>
+            {value}
+            <SuitIcon suit={suit} className={`mt-px ${type.pipSuit}`} />
         </span>
     );
 }

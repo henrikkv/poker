@@ -1,14 +1,15 @@
-import Icon from "@mdi/react";
-import { mdiCardsClub, mdiCardsDiamond, mdiCardsHeart, mdiCardsSpade } from "@mdi/js";
+import { GiClubs, GiDiamonds, GiHearts, GiSpades } from "react-icons/gi";
+import type { IconType } from "react-icons";
 import type { Suit } from "../game/cards.js";
 
-const PATHS = {
-    spades: mdiCardsSpade,
-    hearts: mdiCardsHeart,
-    diamonds: mdiCardsDiamond,
-    clubs: mdiCardsClub,
-} as const;
+const ICONS: Record<Suit, IconType> = {
+    spades: GiSpades,
+    hearts: GiHearts,
+    diamonds: GiDiamonds,
+    clubs: GiClubs,
+};
 
 export function SuitIcon({ suit, className }: { suit: Suit; className?: string }) {
-    return <Icon path={PATHS[suit]} className={className} aria-hidden />;
+    const Icon = ICONS[suit];
+    return <Icon className={className} aria-hidden />;
 }

@@ -3,14 +3,47 @@ function asScalar(value: string): string {
     return literal.endsWith("scalar") ? literal : `${literal}scalar`;
 }
 
-function pick(fields: Record<string, unknown>, ...names: string[]): string | null {
-    for (const name of names) {
-        const value = fields[name];
-        if (typeof value === "string" && value.length > 0) {
-            return value;
+function asText(value: unknown): string | null {
+    if (typeof value === "string" && value.length > 0) {
+        return value;
+    }
+    if (typeof value === "number" || typeof value === "bigint") {
+        return String(value);
+    }
+    if (value && typeof value === "object") {
+        const record = value as Record<string, unknown>;
+        if (typeof record.value === "string" && record.value.length > 0) {
+            return record.value;
+        }
+        if (typeof record.plaintext === "string" && record.plaintext.length > 0) {
+            return record.plaintext;
         }
     }
     return null;
+}
+
+function pick(fields: Record<string, unknown>, ...names: string[]): string | null {
+    for (const name of names) {
+        const text = asText(fields[name]);
+        if (text) {
+            return text;
+        }
+    }
+    return null;
+}
+
+/** Scalar literals from the wallet and from `Scalar.toString()` differ by suffix and padding. */
+export function sameScalar(left: string, right: string): boolean {
+    const normalize = (value: string) => {
+        const body = value
+            .trim()
+            .toLowerCase()
+            .replace(/\.private|\.public/g, "")
+            .replace(/scalar/g, "")
+            .replace(/^0+(?=\d)/, "");
+        return body.length > 0 ? body : "0";
+    };
+    return normalize(left) === normalize(right);
 }
 
 function fromFields(fields: Record<string, unknown>): { secret: string; secretInv: string } | null {
@@ -20,6 +53,15 @@ function fromFields(fields: Record<string, unknown>): { secret: string; secretIn
         return null;
     }
     return { secret: asScalar(secret), secretInv: asScalar(secretInv) };
+}
+
+/** Wallet-issued handle used to spend this exact record. */
+export function recordUid(record: unknown): string | null {
+    if (!record || typeof record !== "object" || !("uid" in record)) {
+        return null;
+    }
+    const uid = record.uid;
+    return typeof uid === "string" && uid.length > 0 ? uid : null;
 }
 
 /** Reads `secret` / `secret_inv` from a wallet Keys record of any adapter shape. */
@@ -43,7 +85,9 @@ export function secretsFromRecord(record: unknown): { secret: string; secretInv:
         }
     }
 
-    const plaintext = [rec.plaintext, rec.record, rec.data].find((value): value is string => typeof value === "string");
+    const plaintext = [rec.plaintext, rec.recordPlaintext, rec.record, rec.data].find(
+        (value): value is string => typeof value === "string",
+    );
     if (!plaintext) {
         return null;
     }

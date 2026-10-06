@@ -86,7 +86,8 @@ input[type="range"] {
     color: var(--color-gold);
 }
 
-.btn-gold:hover:not(:disabled) {
+.btn-gold:hover:not(:disabled),
+.btn-gold:active:not(:disabled) {
     background: var(--color-gold);
     color: var(--color-ink);
 }
@@ -97,12 +98,15 @@ input[type="range"] {
     color: var(--color-paper);
 }
 
-.btn-ghost:hover:not(:disabled) {
+.btn-ghost:hover:not(:disabled),
+.btn-ghost:active:not(:disabled) {
     border-color: var(--color-gold);
     color: var(--color-gold);
 }
 
-.btn[aria-pressed="true"] {
+.btn[aria-pressed="true"],
+.btn[aria-pressed="true"]:hover:not(:disabled),
+.btn[aria-pressed="true"]:active:not(:disabled) {
     border-color: var(--color-gold);
     background: var(--color-gold);
     color: var(--color-ink);

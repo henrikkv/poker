@@ -33,6 +33,15 @@ export function Header({
 
                 <Pill tone="neutral">{status.balance === null ? "…" : `${formatCredits(status.balance)} credits`}</Pill>
 
+                {status.address && (
+                    <Pill tone="neutral">
+                        <span className="max-w-44 truncate" title={status.address}>
+                            {status.address}
+                        </span>
+                        <span className="text-gold">(you)</span>
+                    </Pill>
+                )}
+
                 {signingMode === "shield" ? (
                     <WalletMultiButton />
                 ) : (

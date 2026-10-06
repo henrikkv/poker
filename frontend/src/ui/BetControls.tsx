@@ -12,7 +12,10 @@ export function BetControls({ ui, disabled, dispatch }: {
         dispatch({ type: "selectBetAction", action });
         dispatch({ type: "confirm" });
     };
-    const canRaise = ui.maxRaise >= ui.minRaise && ui.minRaise > 0;
+    const raiseAmount = Math.min(ui.raiseAmount, ui.maxRaise);
+    const allIn = ui.maxRaise > ui.callAmount && raiseAmount >= ui.maxRaise;
+    const canRaise = (ui.maxRaise >= ui.minRaise && ui.minRaise > ui.callAmount) || allIn;
+    const canAllIn = ui.maxRaise > ui.callAmount;
 
     return (
         <motion.div
@@ -25,7 +28,7 @@ export function BetControls({ ui, disabled, dispatch }: {
                     Fold
                 </ActionButton>
                 <ActionButton selected={ui.selectedAction === "call"} disabled={disabled} onClick={() => submit("call")} tone="paper">
-                    {ui.callAmount === 0 ? "Check" : `Call ${ui.callAmount}`}
+                    {ui.callAmount === 0 ? "Check" : ui.callAmount >= ui.maxRaise ? `All in ${ui.maxRaise}` : `Call ${ui.callAmount}`}
                 </ActionButton>
                 <ActionButton
                     selected={ui.selectedAction === "raise"}
@@ -33,7 +36,7 @@ export function BetControls({ ui, disabled, dispatch }: {
                     onClick={() => submit("raise")}
                     tone="gold"
                 >
-                    {ui.raiseAmount >= ui.maxRaise ? `All in ${ui.raiseAmount}` : `Raise ${ui.raiseAmount}`}
+                    {allIn ? `All in ${ui.maxRaise}` : `Raise ${raiseAmount}`}
                 </ActionButton>
             </div>
             {canRaise && (
@@ -45,19 +48,21 @@ export function BetControls({ ui, disabled, dispatch }: {
                         min={ui.minRaise}
                         max={ui.maxRaise}
                         step={1}
-                        value={ui.raiseAmount}
+                        value={Math.min(Math.max(raiseAmount, Math.min(ui.minRaise, ui.maxRaise)), ui.maxRaise)}
                         disabled={disabled}
                         onChange={(e) => dispatch({ type: "setRaise", amount: Number(e.target.value) })}
                     />
                     <span className="tabular-nums">{ui.maxRaise}</span>
-                    <button
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => dispatch({ type: "allIn" })}
-                        className="btn btn-ghost"
-                    >
-                        All in
-                    </button>
+                    {canAllIn && (
+                        <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => dispatch({ type: "allIn" })}
+                            className="btn btn-ghost"
+                        >
+                            All in {ui.maxRaise}
+                        </button>
+                    )}
                 </div>
             )}
         </motion.div>

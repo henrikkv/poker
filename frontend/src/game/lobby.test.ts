@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GameState } from "./state.js";
-import { seatOccupied, sortLobby, toLobbyTable, type LobbyTable } from "./lobby.js";
+import { sameAddress, seatOccupied, seatedPlayerIds, sortLobby, toLobbyTable, type LobbyTable } from "./lobby.js";
 
 const ZERO = "aleo1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqanfpnq";
 const ALICE = "aleo1rhgdu77hgyqd3xjj8ucu3jj9r2kzg6en4q4r7g2k6p0s0q0s0q0s0q0s0q";
@@ -13,11 +13,23 @@ function row(partial: Pick<LobbyTable, "gameId" | "yours" | "waiting">): LobbyTa
         progress: "",
         seatsFilled: 1,
         playerIds: partial.yours ? [1] : [],
+        addresses: [ALICE, ZERO, ZERO],
         ...partial,
     };
 }
 
 describe("lobby", () => {
+    it("recognizes an existing seat instead of an open one", () => {
+        const game = { player1: ALICE, player2: BOB, player3: "aleo1carolcarolcarolcarolcarolcarolcarolcarolcarolca" };
+        expect(seatedPlayerIds(ALICE, game)).toEqual([1]);
+        expect(seatedPlayerIds(BOB, game)).toEqual([2]);
+        expect(seatedPlayerIds(game.player3, game)).toEqual([3]);
+        expect(seatedPlayerIds(`${ALICE}.private`, game)).toEqual([1]);
+        expect(seatedPlayerIds(ALICE.toUpperCase(), game)).toEqual([1]);
+        expect(seatedPlayerIds("aleo1someoneelseeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", game)).toEqual([]);
+        expect(sameAddress(ALICE, ZERO)).toBe(false);
+    });
+
     it("treats the zero address and numeric placeholders as empty seats", () => {
         expect(seatOccupied("")).toBe(false);
         expect(seatOccupied("0u128")).toBe(false);
@@ -42,7 +54,16 @@ describe("lobby", () => {
         ).toBeNull();
 
         const mine = toLobbyTable(7, { player1: ALICE, player2: BOB, player3: ZERO, state: GameState.P1Claim }, [1]);
-        expect(mine).toMatchObject({ yours: true, stage: "Claim", playerIds: [1] });
+        expect(mine).toMatchObject({ yours: true, stage: "Claim", playerIds: [1], addresses: [ALICE, BOB, ZERO] });
+
+        const second = toLobbyTable(8, { player1: ALICE, player2: BOB, player3: ZERO, state: GameState.P2DecHand }, [2]);
+        expect(second).toMatchObject({ yours: true, playerIds: [2], waiting: false });
+        const third = toLobbyTable(
+            9,
+            { player1: ALICE, player2: BOB, player3: "aleo1carolcarolcarolcarolcarolcarolcarolcarolcarolca", state: GameState.P3BetPre },
+            [3],
+        );
+        expect(third).toMatchObject({ yours: true, playerIds: [3], waiting: false });
     });
 
     it("orders your tables, then tables waiting for players, then newer ids", () => {

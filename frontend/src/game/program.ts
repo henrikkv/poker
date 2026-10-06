@@ -161,20 +161,20 @@ export class MentalPoker {
         await this.run("fold", [u32(gameId)], gameId);
     }
 
-    async decrypt_hands(gameId: number, other1: string[], other2: string[]): Promise<void> {
-        await this.run("decrypt_hands", [u32(gameId), groups(other1), groups(other2), KEYS_RECORD], gameId);
+    async decrypt_hands(gameId: number, other1: string[], other2: string[], keys: TransactionInput = KEYS_RECORD): Promise<void> {
+        await this.run("decrypt_hands", [u32(gameId), groups(other1), groups(other2), keys], gameId);
     }
 
-    async decrypt_flop(gameId: number, flop: string[]): Promise<void> {
-        await this.run("decrypt_flop", [u32(gameId), groups(flop), KEYS_RECORD], gameId);
+    async decrypt_flop(gameId: number, flop: string[], keys: TransactionInput = KEYS_RECORD): Promise<void> {
+        await this.run("decrypt_flop", [u32(gameId), groups(flop), keys], gameId);
     }
 
-    async decrypt_turn_river(gameId: number, card: string): Promise<void> {
-        await this.run("decrypt_turn_river", [u32(gameId), group(card), KEYS_RECORD], gameId);
+    async decrypt_turn_river(gameId: number, card: string, keys: TransactionInput = KEYS_RECORD): Promise<void> {
+        await this.run("decrypt_turn_river", [u32(gameId), group(card), keys], gameId);
     }
 
-    async showdown(gameId: number, hand: string[]): Promise<void> {
-        await this.run("showdown", [u32(gameId), groups(hand), KEYS_RECORD], gameId);
+    async showdown(gameId: number, hand: string[], keys: TransactionInput = KEYS_RECORD): Promise<void> {
+        await this.run("showdown", [u32(gameId), groups(hand), keys], gameId);
     }
 
     async compare_hands(gameId: number): Promise<void> {

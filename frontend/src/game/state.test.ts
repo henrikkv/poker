@@ -5,7 +5,9 @@ import {
     formatCredits,
     increaseBlindFrequency,
     increaseRaise,
+    facingAllIn,
     newBettingUi,
+    raiseBounds,
     newGameModel,
     parseCreditsInput,
     selectNextAction,
@@ -77,6 +79,7 @@ describe("BettingUIState", () => {
     it("starts on call at the minimum raise", () => {
         const ui = newBettingUi(100, 10, 20);
         expect(ui).toMatchObject({ selectedAction: "call", raiseAmount: 20, maxRaise: 100 });
+        expect(newBettingUi(50, 20, 80)).toMatchObject({ raiseAmount: 50, maxRaise: 50 });
     });
 
     it("cycles actions both ways", () => {
@@ -94,6 +97,22 @@ describe("BettingUIState", () => {
         expect(increaseRaise(increaseRaise(raising)).raiseAmount).toBe(50);
         expect(decreaseRaise(raising).raiseAmount).toBe(20);
         expect(setAllIn(raising).raiseAmount).toBe(50);
+        expect(setAllIn(ui)).toMatchObject({ selectedAction: "raise", raiseAmount: 50 });
+    });
+
+    it("lets a bigger stack raise over a short all-in", () => {
+        const chips = {
+            player1: 0,
+            player2: 100,
+            player3: 1000,
+            player1_bet: 90,
+            player2_bet: 0,
+            player3_bet: 0,
+        };
+        expect(facingAllIn(chips, 2)).toBe(true);
+        expect(raiseBounds(100, 90, 110, true)).toEqual({ minRaise: 91, maxRaise: 100 });
+        expect(raiseBounds(1000, 90, 110, true)).toEqual({ minRaise: 110, maxRaise: 1000 });
+        expect(raiseBounds(100, 90, 110, false)).toEqual({ minRaise: 110, maxRaise: 100 });
     });
 });
 

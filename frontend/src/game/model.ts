@@ -3,7 +3,6 @@ import type { CardView } from "./cards.js";
 import type { LobbyTable } from "./lobby.js";
 import type { GameState, PlayerId } from "./state.js";
 
-export const POLL_INTERVAL_MS = 1000;
 export const MAX_LOGS = 100;
 
 export type Screen = "menu" | "createGame" | "joinGame" | "inGame";
@@ -48,13 +47,41 @@ export interface BettingUIState {
 }
 
 export function newBettingUi(playerChips: number, callAmount: number, minRaise: number): BettingUIState {
+    const maxRaise = Math.max(playerChips, 0);
     return {
         selectedAction: "call",
-        raiseAmount: minRaise,
+        raiseAmount: Math.min(Math.max(minRaise, 0), maxRaise),
         callAmount,
         minRaise,
-        maxRaise: playerChips,
+        maxRaise,
     };
+}
+
+/** Another seat has put their last chips in and still has a live bet. */
+export function facingAllIn(chips: Chips, playerId: PlayerId): boolean {
+    return ([1, 2, 3] as const).some(
+        (id) => id !== playerId && getChips(chips, id) === 0 && getCurrentBet(chips, id) > 0,
+    );
+}
+
+/**
+ * Chips this player may put in above a call.
+ * A full raise uses the table's minimum. Facing an all-in, a player who still
+ * has more chips than the call can raise any amount up to their stack. The
+ * chain accepts that bet; it does not have to be a full minimum raise.
+ */
+export function raiseBounds(
+    playerChips: number,
+    callAmount: number,
+    fullMinRaise: number,
+    opponentAllIn: boolean,
+): { minRaise: number; maxRaise: number } {
+    const maxRaise = playerChips;
+    let minRaise = fullMinRaise;
+    if (opponentAllIn && playerChips > callAmount && fullMinRaise > playerChips) {
+        minRaise = Math.min(playerChips, callAmount + 1);
+    }
+    return { minRaise, maxRaise };
 }
 
 export function selectNextAction(ui: BettingUIState): BettingUIState {
@@ -82,10 +109,7 @@ export function decreaseRaise(ui: BettingUIState): BettingUIState {
 }
 
 export function setAllIn(ui: BettingUIState): BettingUIState {
-    if (ui.selectedAction !== "raise") {
-        return ui;
-    }
-    return { ...ui, raiseAmount: ui.maxRaise };
+    return { ...ui, selectedAction: "raise", raiseAmount: ui.maxRaise };
 }
 
 export function setRaise(ui: BettingUIState, amount: number): BettingUIState {
@@ -221,10 +245,6 @@ export function logActionComplete(model: GameModel): void {
     if (last?.status === "pending") {
         model.logs = [...model.logs.slice(0, -1), { ...last, status: "done" }];
     }
-}
-
-export function shouldPoll(model: GameModel, now: number = Date.now()): boolean {
-    return now - model.lastPollTime >= POLL_INTERVAL_MS;
 }
 
 export function updateEliminatedPlayers(model: GameModel, playersOutBitmap: number): void {
